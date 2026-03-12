@@ -1,25 +1,35 @@
-import streamlit as st
+# 1. 필수 라이브러리 설치 (google-genai 제거, 순수 requests로 대체!)
+!pip install -q requests urllib3
+
 import json
+import re
 import requests
 import urllib.parse
 import time
 import sys
 from datetime import datetime, timezone
 
-# 🚜 페이지 기본 설정 (가장 위에 와야 함)
-st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="centered")
+# 💡 코랩 고질병(ASCII 인코딩 에러) 완벽 치료용 '강제 UTF-8' 처방전!
+import locale
+def getpreferredencoding(do_setlocale=True):
+    return "UTF-8"
+locale.getpreferredencoding = getpreferredencoding
 
-# ==========================================
-# 🔑 1. API 키 및 토큰 설정 (🔥 보안 금고 사용! 🔥)
-# ==========================================
+# 터미널 출력 시 특수문자(이모지, ™ 등) 깨짐 방지
 try:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-    NOTION_TOKEN = st.secrets["NOTION_TOKEN"]
-except KeyError:
-    st.error("🚨 스트림릿 Secrets 금고에 API 키가 설정되지 않았습니다! 배포 설정(Advanced settings)을 확인해주세요.")
-    st.stop()
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 
-NOTION_DATABASE_ID = "321fa327f28680dc8df5fe92fab193bf" # 데이터베이스 ID는 노출되어도 키가 없으면 안전합니다.
+print("🚜 [스팀 사용자 평가 탈곡기] 가동을 시작합니다.\n")
+
+# ==========================================
+# 🔑 1. API 키 및 토큰 설정
+# ==========================================
+GEMINI_API_KEY = "여기에_제미나이_API_키_넣기"
+NOTION_TOKEN = "여기에_노션_토큰_넣기"
+NOTION_DATABASE_ID = "321fa327f28680dc8df5fe92fab193bf" 
 
 # ==========================================
 # 🌐 2. 언어 매핑 & 스팀 등급 9단계 사전
@@ -60,7 +70,8 @@ def calculate_custom_score(pos_ratio, total):
 # ==========================================
 # 🎮 3. 스팀 게임 검색 
 # ==========================================
-def get_steam_game_info(game_input):
+def get_steam_game_info():
+    game_input = input("👉 게임 영문명 또는 App ID(예: 3564740) 입력: ").strip()
     if game_input.isdigit():
         app_id = game_input
         details_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean"
@@ -72,15 +83,18 @@ def get_steam_game_info(game_input):
         res = requests.get(f"https://store.steampowered.com/api/storesearch/?term={game_input}&l=korean&cc=KR").json()
         if not res.get('items'): 
             return None, None, None
-        app_id = str(res['items'][0]['id'])
-        exact_name = res['items'][0]['name']
+        app_id, exact_name = res['items'][0]['id'], res['items'][0]['name']
         
     try: 
         release_date = datetime.strptime(requests.get(f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean").json()[str(app_id)]['data']['release_date']['date'], "%Y년 %m월 %d일").strftime("%Y-%m-%d")
     except: 
         release_date = "2024-01-01"
         
+    # 특수문자(™ 등)가 터미널이나 API에 에러를 일으키는 것을 방지하기 위해 정제
     safe_exact_name = exact_name.encode('utf-8', 'ignore').decode('utf-8')
+    
+    print(f"\n✅ 타겟: [{safe_exact_name}] (출시일: {release_date})")
+    print("🚀 [전체 누적] 및 [최근 30일] 데이터를 자동으로 분리 수집합니다.")
     return app_id, safe_exact_name, release_date
 
 # ==========================================
@@ -99,6 +113,7 @@ def fetch_review_list(app_id, day_range=None):
         res = requests.get(url).json()
         if not res.get('reviews'): break
         for r in res['reviews']:
+            # 리뷰 텍스트 특수문자 에러 방지 처리
             safe_review_text = r['review'][:400].replace('\n', ' ').encode('utf-8', 'ignore').decode('utf-8')
             reviews.append({
                 "language": r['language'], 
@@ -114,6 +129,8 @@ def fetch_review_list(app_id, day_range=None):
     return reviews, pos_count
 
 def fetch_steam_reviews(app_id):
+    print("\n📥 스팀 글로벌 리뷰 통계 수집 중...")
+    
     total_lang_counts = {}
     all_time_total_reviews = 0
     for lang in LANG_MAP.keys():
@@ -128,7 +145,10 @@ def fetch_steam_reviews(app_id):
     summary_all = requests.get(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all").json().get('query_summary', {})
     score_all = summary_all.get('review_score', 0)
 
+    print("📥 [전체 누적] 유용한 리뷰 500개 수집 중...")
     reviews_all, pos_all = fetch_review_list(app_id, day_range=None)
+    
+    print("📥 [최근 30일] 유용한 리뷰 500개 수집 중...")
     reviews_recent, pos_recent = fetch_review_list(app_id, day_range=30)
     
     recent_total_sampled = len(reviews_recent)
@@ -166,7 +186,7 @@ def fetch_steam_reviews(app_id):
     return filtered_reviews_all, filtered_reviews_recent, store_stats
 
 # ==========================================
-# 🧠 5. AI 리뷰 분석 (REST API 통신)
+# 🧠 5. AI 리뷰 분석 (순수 requests API 호출로 변경하여 인코딩 에러 원천 차단!)
 # ==========================================
 def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_stats, user_feedback=""):
     top_langs_str = ", ".join([f"{get_lang_name(k)}: {v:,}개" for k, v in sorted(store_stats['total_lang_counts'].items(), key=lambda x: x[1], reverse=True)[:7]])
@@ -245,12 +265,14 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
     }
     
     try:
+        # SDK를 거치지 않고 직접 UTF-8 바이트로 인코딩해서 쏴버림! (ASCII 에러 원천 차단)
         res = requests.post(url, headers=headers, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
         res.raise_for_status()
         result_data = res.json()
         
         if "candidates" not in result_data or not result_data["candidates"]:
-            return None, "AI 응답이 비어있습니다."
+            print(f"\n🚨 AI 응답이 비어있습니다.")
+            return None
             
         raw_text = result_data['candidates'][0]['content']['parts'][0]['text'].strip()
         
@@ -258,11 +280,14 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         code_marker = "`" * 3
         if raw_text.startswith(json_marker): raw_text = raw_text[7:-3].strip()
         elif raw_text.startswith(code_marker): raw_text = raw_text[3:-3].strip()
-        return json.loads(raw_text), None
+        return json.loads(raw_text)
         
     except Exception as e: 
         safe_error = str(e).encode('utf-8', 'ignore').decode('utf-8')
-        return None, safe_error
+        print(f"\n🚨 파싱 에러 상세 원인: {safe_error}")
+        if 'res' in locals():
+            print(f"🚨 API 응답 에러 상세: {res.text[:200]}")
+        return None
 
 # ==========================================
 # 🗑️ 6-1. 노션 이전 페이지 삭제
@@ -271,6 +296,7 @@ def delete_notion_page(page_id):
     url = f"https://api.notion.com/v1/pages/{page_id}"
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": "2022-06-28"}
     requests.patch(url, headers=headers, json={"archived": True})
+    print("🗑️ (이전 초안 노션 페이지는 휴지통으로 이동했습니다.)")
 
 # ==========================================
 # 📝 6-2. 노션 업로드
@@ -283,8 +309,8 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data):
             "icon": {"emoji": "🤖"}, 
             "color": "blue_background", 
             "rich_text": [
-                {"text": {"content": "[스팀 사용자 리뷰 분석기]"}, "annotations": {"bold": True, "color": "blue"}},
-                {"text": {"content": "를 통해 작성되었습니다.\n해당 봇은 특정 게임에 대한 사용자 리뷰를 취합하고, 사용자 리뷰 데이터를 바탕으로 글로벌 유저 민심의 흐름과 특이사항 도출을 목적으로 설계되었습니다.\n"}},
+                {"text": {"content": "[스팀 사용자 리뷰 탈곡봇]"}, "annotations": {"bold": True, "color": "blue"}},
+                {"text": {"content": "을 통해 작성되었습니다.\n해당 봇은 특정 게임에 대한 사용자 리뷰를 취합하고, 사용자 리뷰 데이터를 바탕으로 글로벌 유저 민심의 흐름과 특이사항 도출을 목적으로 설계되었습니다.\n"}},
                 {
                     "text": {"content": f"👉 {game_name} 스팀 사용자 리뷰 바로가기", "link": {"url": f"https://steamcommunity.com/app/{app_id}/reviews/"}}, 
                     "annotations": {"bold": True, "color": "blue", "underline": True}
@@ -315,7 +341,8 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data):
     
     create_res = requests.post(create_url, headers=headers, data=json.dumps(create_data))
     if create_res.status_code != 200:
-        return None, create_res.text
+        print(f"\n❌ 페이지 생성 실패: {create_res.text}")
+        return None
         
     page_id = create_res.json()['id']
     
@@ -382,6 +409,7 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data):
         
     children_blocks.append({"object": "block", "type": "divider", "divider": {}})
     
+    # 🌐 전 세계 누적 리뷰 작성 언어 비중 (Table)
     children_blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 누적 리뷰 작성 언어 비중"}}]}})
     children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"총 누적 리뷰 수: {store_stats['all_total']:,}개 (전체 언어 취합 기준)"}, "annotations": {"bold": True, "color": "gray"}}]}})
     
@@ -435,7 +463,7 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data):
     children_blocks.append({"object": "block", "type": "divider", "divider": {}})
     children_blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌍 국가별 세부 평가 분석 (TOP 3 + 한국)"}}]}})
     
-    total_samples = 1000 
+    total_samples = 1000 # All (500) + Recent (500)
     children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"수집된 유용한 리뷰 {total_samples}여 개 중 가장 많은 비중을 차지하는 국가 TOP 3와 한국에서의 항목별 주요 평가 내용입니다."}, "annotations": {"color": "gray"}}]}})
     
     for country in ai_data.get('country_analysis', []):
@@ -455,150 +483,61 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data):
             
         children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": " "}}]}})
 
+    # Chunking 로직 (100개 블록씩 쪼개기)
     append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
     for i in range(0, len(children_blocks), 100):
         chunk = children_blocks[i:i+100]
         patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": chunk}))
         if patch_res.status_code != 200:
-            return page_id, f"블록 업로드 중 일부 실패: {patch_res.text}"
+            print(f"\n❌ 블록 업로드 중 일부 실패: {patch_res.text}")
         time.sleep(0.5) 
         
-    return page_id, None
-
+    print(f"\n✅ 노션 업로드 완료! (확인하러 가기 👉 https://notion.so/{page_id.replace('-', '')})")
+    return page_id
 
 # ==========================================
-# 🚀 7. 스트림릿 웹 앱 메인 UI 구축
+# 🚀 7. 대망의 실행 루프!
 # ==========================================
-def main():
-    st.title("🚜 스팀 사용자 평가 탈곡기")
-    st.markdown("스팀 게임의 사용자 리뷰를 분석하여 주목할만한 포인트를 노션으로 자동 추출합니다.")
-    st.divider()
-
-    # --- 상태 관리(Session State) 초기화 ---
-    if "step" not in st.session_state:
-        st.session_state.step = 0  # 0: 입력창, 1: 피드백 창, 2: 완료 창
-        st.session_state.page_id = None
-        st.session_state.app_id = None
-        st.session_state.game_name = None
-        st.session_state.reviews_all = None
-        st.session_state.reviews_recent = None
-        st.session_state.store_stats = None
-
-    # [STEP 0] 데이터 입력 및 분석 시작
-    if st.session_state.step == 0:
-        game_input = st.text_input("👉 분석할 게임의 영문명 또는 App ID를 입력하세요 (예: 3564740)")
-        
-        if st.button("🚀 데이터 탈곡 시작", use_container_width=True, type="primary"):
-            if not game_input:
-                st.warning("게임을 입력해주세요!")
-                return
+try:
+    app_id, game_name, release_date = get_steam_game_info()
+    if app_id:
+        reviews_all, reviews_recent, store_stats = fetch_steam_reviews(app_id)
+        if reviews_all or reviews_recent:
+            feedback = ""
+            current_page_id = None
             
-            with st.status("스팀 데이터를 탈곡하고 있습니다... 🌾", expanded=True) as status:
-                st.write("🔍 스팀 상점 데이터 검색 중...")
-                app_id, game_name, release_date = get_steam_game_info(game_input)
-                if not app_id:
-                    status.update(label="검색 실패", state="error")
-                    st.error("게임을 찾을 수 없습니다. 영문명이나 App ID를 확인해주세요.")
-                    return
+            while True:
+                print(f"\n🧠 AI가 {'추가 피드백을 반영하여 다시 ' if feedback else '올타임 & 최근 30일 여론을 분리하여 ' }요약 중입니다...")
+                insights = analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats, feedback)
                 
-                st.session_state.app_id = app_id
-                st.session_state.game_name = game_name
-
-                st.write("📥 스팀 글로벌 리뷰 데이터 수집 중...")
-                reviews_all, reviews_recent, store_stats = fetch_steam_reviews(app_id)
-                st.session_state.reviews_all = reviews_all
-                st.session_state.reviews_recent = reviews_recent
-                st.session_state.store_stats = store_stats
-
-                st.write("🧠 AI가 올타임 & 최근 30일 여론을 분석 중입니다... (약 20초 소요)")
-                insights, err = analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats)
-                if err:
-                    status.update(label="AI 분석 실패", state="error")
-                    st.error(f"AI 분석 중 에러가 발생했습니다: {err}")
-                    return
-
-                st.write("📝 노션 리포트 초안 생성 중...")
-                page_id, err_notion = upload_to_notion(app_id, game_name, store_stats, insights)
-                if not page_id:
-                    status.update(label="노션 업로드 실패", state="error")
-                    st.error(f"노션 업로드 중 에러가 발생했습니다: {err_notion}")
-                    return
-
-                st.session_state.page_id = page_id
-                st.session_state.step = 1
-                status.update(label="✅ 리포트 초안 작성 완료!", state="complete")
-            st.rerun()
-
-    # [STEP 1] 노션 확인 및 피드백 수정
-    elif st.session_state.step == 1:
-        st.success("✅ 노션 리포트 초안이 성공적으로 생성되었습니다!")
-        page_url = f"https://notion.so/{st.session_state.page_id.replace('-', '')}"
-        
-        st.markdown(f"""
-        ### 👀 생성된 리포트 확인하기
-        **[👉 여기를 클릭하여 노션 리포트 초안 보기]({page_url})**
-        """)
-        st.info("리포트 내용을 확인하신 후, 마음에 드시면 '최종 승인'을 누르시고, 수정이 필요하다면 아래에 피드백을 입력해주세요.")
-
-        st.divider()
-        st.subheader("🛠️ 리포트 추가 피드백")
-        feedback = st.text_area("AI에게 반영할 추가 피드백을 적어주세요 (예: 한국어 최적화 불만 부분을 더 구체적으로 써줘)")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🚀 피드백 반영하여 재작성", use_container_width=True):
-                if not feedback.strip():
-                    st.warning("피드백 내용을 입력해주세요.")
-                else:
-                    with st.status("피드백을 반영하여 다시 탈곡 중입니다... 🌾", expanded=True) as status:
-                        st.write("🗑️ 기존 노션 초안 페이지 삭제 중...")
-                        delete_notion_page(st.session_state.page_id)
-
-                        st.write("🧠 AI가 피드백을 반영하여 재분석 중입니다...")
-                        insights, err = analyze_with_gemini(
-                            st.session_state.game_name, 
-                            st.session_state.reviews_all, 
-                            st.session_state.reviews_recent, 
-                            st.session_state.store_stats, 
-                            feedback
-                        )
-                        if err:
-                            status.update(label="AI 분석 실패", state="error")
-                            st.error(f"AI 분석 중 에러가 발생했습니다: {err}")
-                            st.stop()
-
-                        st.write("📝 수정된 노션 리포트 업로드 중...")
-                        new_page_id, err_notion = upload_to_notion(
-                            st.session_state.app_id, 
-                            st.session_state.game_name, 
-                            st.session_state.store_stats, 
-                            insights
-                        )
-                        st.session_state.page_id = new_page_id
-                        status.update(label="✅ 재작성 완료!", state="complete")
-                    st.rerun()
-
-        with col2:
-            if st.button("✅ 리포트 최종 승인 (완료)", type="primary", use_container_width=True):
-                st.session_state.step = 2
-                st.rerun()
-
-    # [STEP 2] 완료 화면
-    elif st.session_state.step == 2:
-        st.balloons()
-        st.success("🎉 최종 리포트 작성이 완벽하게 끝났습니다! 수고하셨습니다.")
-        page_url = f"https://notion.so/{st.session_state.page_id.replace('-', '')}"
-        
-        st.markdown(f"""
-        ### 📄 완성된 최종 리포트
-        **[👉 최종 노션 리포트 보러 가기]({page_url})**
-        """)
-        
-        st.divider()
-        if st.button("🔄 새로운 게임 분석하기"):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.rerun()
-
-if __name__ == "__main__":
-    main()
+                if insights:
+                    if current_page_id:
+                        delete_notion_page(current_page_id)
+                        
+                    current_page_id = upload_to_notion(app_id, game_name, store_stats, insights)
+                    
+                    if not current_page_id: break
+                        
+                    print("\n" + "="*60)
+                    print("👀 [노션 확인 시간!] 노션에 업로드된 리포트 초안을 확인해 주세요.")
+                    print("👉 내용이 확정되었다면: '고' 라고 입력 후 엔터!")
+                    print("👉 수정이 필요하다면: 예) '한국어 최적화 불만 부분을 더 구체적으로 써줘' 처럼 피드백을 입력 후 엔터!")
+                    
+                    user_decision = input("\n입력: ").strip()
+                    
+                    if user_decision == '고':
+                        print("\n🚀 최종 승인 완료! 리포트 작성이 완료되었습니다.")
+                        break
+                    else:
+                        feedback = user_decision
+                        print(f"\n🔄 피드백 접수 완료! [{feedback}] 내용을 반영하여 리포트를 재작성합니다.")
+                        
+                else: 
+                    print("\n🚨 데이터 파싱 중 에러가 발생했습니다. 다시 실행해 주세요.")
+                    break
+        else: 
+            print("\n🤷‍♀️ 분석할 데이터가 없습니다.")
+except Exception as e:
+    # 예기치 못한 에러 출력 시 ASCII 에러 방지
+    safe_e = str(e).encode('utf-8', 'ignore').decode('utf-8')
+    print(f"\n🚨 실행 중 에러 발생: {safe_e}")
