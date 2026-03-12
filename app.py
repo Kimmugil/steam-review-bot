@@ -8,23 +8,22 @@ from datetime import datetime
 # ==========================================
 # 🚀 0. 앱 메타데이터 및 버전 정보
 # ==========================================
-APP_VERSION = "v2.0.2"
+APP_VERSION = "v2.0.3"
 UPDATE_HISTORY = """
+**[v2.0.3] - 2026.03.12**
+- 🎨 **UI/UX 대폭 개선:** - 리뷰 원문 토글(접기/펼치기) 적용으로 가독성 향상
+  - 사이드바에 통합 리포트 노션 DB 다이렉트 링크 추가
+  - 최신 공지/패치노트 임베드 디자인 개선 및 요약 방식(글머리 기호) 변경
+- 📊 **누락 데이터 복구:** 국가별 누적 리뷰 비중(표) 및 영어권 편향 안내 텍스트 복구
+
 **[v2.0.2] - 2026.03.12**
-- 🛡️ **신뢰도 패치 및 최적화:** AI 배경정보 학습 프롬프트 워딩 정제 (신뢰도 향상) 및 내부 코드 로직 최적화
+- 🛡️ **신뢰도 패치 및 최적화:** AI 배경정보 학습 프롬프트 워딩 정제 및 내부 로직 최적화
 
 **[v2.0.1] - 2026.03.12**
 - 🛡️ **AI 팩트체크 강화:** 배경정보 학습 시 유저 사견/루머 배제 지시 추가
-- 🚧 **예외 처리:** 게임 배경지식 데이터가 없을 경우 무리한 추론 방지 및 스팀 데이터 집중 지시
 
 **[v2.0.0] - 2026.03.12**
-- 🧠 **AI 배경정보 선행 학습:** 분석 전 게임의 배경정보를 자체 학습하도록 프롬프트 업데이트
-- 📰 **최신 업데이트 뉴스 연동:** 스팀 최신 패치노트/공지를 불러와 AI가 요약 및 노션 임베드
-- ⏳ **스마트 분석 기간 도입:** 게임 출시일 기준으로 최근 동향 기간(3일/7일/30일) 자동 조절
-- 💡 **UI/UX 개선:** App ID 입력 가이드 추가, 피드백 시 기존 리포트 삭제 안내 추가
-
-**[v1.0.0] - 2026.03.08**
-- 🚜 스팀 사용자 평가 탈곡기 최초 배포
+- 🧠 **AI 배경정보 선행 학습 & 스팀 뉴스 연동 기능 추가**
 """
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="centered")
@@ -40,6 +39,8 @@ except KeyError:
     st.stop()
 
 NOTION_DATABASE_ID = "321fa327f28680dc8df5fe92fab193bf"
+# 무길이의 공개 노션 사이트 링크
+NOTION_PUBLISH_URL = f"https://childlike-binder-ad2.notion.site/{NOTION_DATABASE_ID}"
 
 # ==========================================
 # 🌐 2. 글로벌 설정 사전
@@ -232,7 +233,7 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
       "final_summary_all": ["전체 올타임 여론 요약 1", "요약 2"],
       "final_summary_recent": ["{recent_label} 기준 최근 주요 여론 요약 1", "요약 2"],
       "ai_issue_pick": ["AI 발견 최근 특이 동향 1"],
-      "news_summary": "제공된 [최신 게임 업데이트/공지] 내용의 핵심 요약 및 이것이 유저 여론에 미칠 영향 분석 (최대 2줄. 만약 제공된 뉴스가 없다면 '최근 업데이트 내역을 찾을 수 없습니다.' 라고 작성)",
+      "news_summary": ["제공된 뉴스의 핵심 요약 1", "핵심 요약 2 (배열 형태로 작성. 뉴스가 없으면 빈 배열 [] 반환)"],
       "global_category_summary": [
         {{ "category": "[긍정평가] 콘텐츠 관련 평가", "summary": ["요약 1", "요약 2"] }},
         {{ "category": "[부정평가] 최적화 관련 평가", "summary": ["요약 1", "요약 2"] }}
@@ -259,7 +260,6 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         res.raise_for_status()
         raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
         
-        # 이전 에러의 주범이었던 파싱 로직을 안전하게 수정!
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:-3].strip()
         elif raw_text.startswith("```"):
@@ -332,13 +332,19 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
     for issue in ai_data.get('ai_issue_pick', []):
         children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": issue}}]}})
     
+    # 공지사항/패치노트 섹션: 리스팅 형태로 분리!
     if news_title:
         children_blocks.extend([
             {"object": "block", "type": "divider", "divider": {}},
-            {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "📢 최신 게임 공지/패치노트 동향"}}]}},
-            {"object": "block", "type": "bookmark", "bookmark": {"url": news_url}},
-            {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "📰"}, "color": "purple_background", "rich_text": [{"text": {"content": ai_data.get('news_summary', '')}}]}}
+            {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "📢 최신 게임 공지/패치노트"}}]}},
+            {"object": "block", "type": "callout", "callout": {
+                "icon": {"emoji": "🔗"}, 
+                "color": "gray_background", 
+                "rich_text": [{"text": {"content": news_title, "link": {"url": news_url}}, "annotations": {"bold": True, "underline": True}}]
+            }}
         ])
+        for news_line in ai_data.get('news_summary', []):
+            children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": news_line}}]}})
 
     children_blocks.extend([
         {"object": "block", "type": "divider", "divider": {}},
@@ -352,10 +358,41 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
         
     children_blocks.append({"object": "block", "type": "divider", "divider": {}})
     children_blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 누적 리뷰 작성 언어 비중"}}]}})
-    children_blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🌍"}, "color": "gray_background", "rich_text": [{"text": {"content": ai_data.get('language_analysis', '')}}]}})
+    children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"총 누적 리뷰 수: {store_stats['all_total']:,}개 (전체 언어 취합 기준)"}, "annotations": {"bold": True, "color": "gray"}}]}})
     
+    # 누락되었던 언어 비중 표 복구!
+    table_rows = [
+        {"type": "table_row", "table_row": {"cells": [
+            [{"text": {"content": "순위"}, "annotations": {"bold": True, "color": "gray"}}], 
+            [{"text": {"content": "언어"}, "annotations": {"bold": True, "color": "gray"}}], 
+            [{"text": {"content": "누적 리뷰 수"}, "annotations": {"bold": True, "color": "gray"}}], 
+            [{"text": {"content": "비중"}, "annotations": {"bold": True, "color": "gray"}}]
+        ]}}
+    ]
+    
+    sorted_langs = sorted(store_stats['total_lang_counts'].items(), key=lambda x: x[1], reverse=True)[:10]
+    total_all_langs = store_stats['all_total']
+    for idx, (lang_code, count) in enumerate(sorted_langs):
+        ratio = (count / total_all_langs) * 100 if total_all_langs > 0 else 0
+        table_rows.append({"type": "table_row", "table_row": {"cells": [
+            [{"text": {"content": f"{idx+1}위"}}], 
+            [{"text": {"content": get_lang_name(lang_code)}}], 
+            [{"text": {"content": f"{count:,}개"}}], 
+            [{"text": {"content": f"{ratio:.1f}%"}}]
+        ]}})
+        
+    children_blocks.append({"object": "block", "type": "table", "table": {"table_width": 4, "has_column_header": True, "has_row_header": False, "children": table_rows}})
+    
+    # 누락되었던 영어권 편향 안내 텍스트 복구!
+    children_blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🌍"}, "color": "blue_background", "rich_text": [{"text": {"content": ai_data.get('language_analysis', '언어 분석 코멘트 없음')}}]}})
+    disclaimer_text = "언어 비중 표는 표본이 아닌 '스팀에 등록된 전체 리뷰'를 대상으로 구성되었습니다. 스팀 특성상 비영어권 유저들도 다수에게 의견을 전달하기 위해 공용어인 '영어'로 작성하는 경향이 있어 실제 플레이 유저 비례보다 영어 리뷰 비중이 높게 나타날 수 있습니다."
+    children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": disclaimer_text}, "annotations": {"italic": True, "color": "gray"}}]}})
+
     children_blocks.append({"object": "block", "type": "divider", "divider": {}})
     children_blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌍 국가별 세부 평가 분석 (TOP 3 + 한국)"}}]}})
+    # 섹션 하단 배경 설명 추가!
+    children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "가장 많은 평가가 입력된 언어 상위 3개와 한국의 주요 평가에 대해 정리합니다."}, "annotations": {"color": "gray"}}]}})
+    
     for country in ai_data.get('country_analysis', []):
         children_blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"🚩 {country.get('language', '')}"}, "annotations": {"color": "purple", "bold": True}}]}})
         for cat in country.get('categories', []):
@@ -363,7 +400,16 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
             children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": cat.get('name', '')}, "annotations": {"bold": True, "color": color}}]}})
             for line in cat.get('summary', []):
                 children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
-            children_blocks.append({"object": "block", "type": "quote", "quote": {"rich_text": [{"text": {"content": cat.get('quote', '')}, "annotations": {"color": "gray"}}]}})
+            
+            # 유저 평가 원문을 토글(접기) 블록 안으로 쏙!
+            children_blocks.append({
+                "object": "block", 
+                "type": "toggle", 
+                "toggle": {
+                    "rich_text": [{"text": {"content": "👀 실제 유저 평가 원문 보기"}, "annotations": {"color": "gray"}}], 
+                    "children": [{"object": "block", "type": "quote", "quote": {"rich_text": [{"text": {"content": cat.get('quote', '')}, "annotations": {"color": "gray"}}]}}]
+                }
+            })
             
     append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
     for i in range(0, len(children_blocks), 100):
@@ -377,6 +423,11 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
 # ==========================================
 def main():
     with st.sidebar:
+        # 무길이가 원했던 "어디서나 접근 가능한" 글로벌 DB 링크 버튼 추가!
+        st.markdown("### 📚 통합 리포트 열람")
+        st.link_button("👉 노션 데이터베이스 보러가기", NOTION_PUBLISH_URL, use_container_width=True)
+        st.divider()
+        
         st.markdown(f"### ⚙️ 시스템 정보\n**버전:** `{APP_VERSION}`")
         with st.expander("🛠️ 업데이트 이력 (Changelog)"):
             st.markdown(UPDATE_HISTORY)
@@ -454,7 +505,8 @@ def main():
         st.divider()
         
         st.subheader("🛠️ 리포트 추가 피드백")
-        st.warning("🚨 **[안내]** 피드백을 반영하여 재생성할 경우, 기존에 생성된 노션 페이지는 자동으로 휴지통으로 이동되고 새로운 페이지로 교체됩니다. 당황하지 마세요!")
+        # "당황하지 마세요" 삭제 및 문구 정제!
+        st.warning("🚨 **[안내]** 피드백을 반영하여 재생성할 경우, 기존에 생성된 노션 페이지는 자동으로 휴지통으로 이동되고 새로운 페이지로 교체됩니다.")
         
         feedback = st.text_area("AI에게 반영할 추가 피드백을 적어주세요", placeholder="예: 한국어 최적화 불만 부분을 더 구체적으로 써줘")
 
