@@ -277,7 +277,7 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
     {review_text}
     """
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.3}}
     
     try:
@@ -673,5 +673,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
