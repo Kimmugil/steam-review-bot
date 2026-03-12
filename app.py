@@ -8,22 +8,22 @@ from datetime import datetime
 # ==========================================
 # 🚀 0. 앱 메타데이터 및 버전 정보
 # ==========================================
-APP_VERSION = "v2.0.8"
+APP_VERSION = "v2.0.9"
 UPDATE_HISTORY = """
+**[v2.0.9] - 2026.03.13**
+- 🔍 **신규 기능:** 스팀 상점 외부 접속 없이 앱 내부에서 바로 App ID를 찾을 수 있는 '검색 도우미' 기능 추가
+- 💡 **UI/UX 개선:** 메인 입력창을 App ID 전용으로 명확히 안내하여 분석 오류 최소화
+
 **[v2.0.8] - 2026.03.13**
-- ✨ **신규 기능:** 화면 상단 스텝(Step) 인디케이터 추가로 현재 진행 상황 직관화
-- 🎨 **UI 개선:** 결과 링크 강조 UI에서 불필요하게 큰 부가 텍스트 축소 및 여백 조정
-- 🧠 **AI 프롬프트 최적화:** 한국어 리뷰의 경우 중복되는 한국어 번역 과정 패스 지시
-- 🐛 **예외 처리:** 패치노트가 이미지로만 구성되어 텍스트 요약이 불가능할 경우 "상세 내용은 위 링크를 확인해주세요"로 전문적인 대체 문구 출력 적용
+- ✨ **신규 기능:** 화면 상단 스텝(Step) 인디케이터 추가
+- 🎨 **UI 개선:** 결과 링크 강조 UI 텍스트 축소 및 여백 조정
+- 🧠 **AI 프롬프트 최적화:** 한국어 리뷰 번역 패스 및 이미지 패치노트 예외 처리
 
 **[v2.0.7] - 2026.03.13**
-- 🎨 **UI/UX 전면 개편:** 스텝별 직관성 강화 (What은 강조하고 Why는 토글로 숨기는 정보 위계 적용)
+- 🎨 **UI/UX 전면 개편:** 스텝별 직관성 강화
 
 **[v2.0.6] - 2026.03.13**
-- 🐛 **AI 로직 픽스:** 뉴스 요약 출력 및 세부 평가 카테고리 무제한 도출 강제 적용
-
-**[v2.0.5] - 2026.03.13**
-- ⏳ **UX 개선:** 데이터 탈곡 시각적 진행률(Progress) 게이지 바 추가
+- 🐛 **AI 로직 픽스:** 뉴스 요약 및 세부 평가 카테고리 강제 도출
 """
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="centered")
@@ -97,6 +97,20 @@ def get_steam_game_info(game_input):
         release_date = datetime(2020, 1, 1)
         
     return app_id, exact_name, release_date
+
+def search_steam_app_id(query):
+    """새로 추가된 App ID 검색 도우미 함수"""
+    search_url = f"https://store.steampowered.com/api/storesearch/?term={query}&l=korean&cc=KR"
+    try:
+        res = requests.get(search_url).json()
+        if res.get('items'):
+            results = []
+            for item in res['items'][:5]: # 상위 5개 결과만
+                results.append({"name": item['name'], "id": item['id']})
+            return results
+    except:
+        pass
+    return []
 
 def fetch_latest_news(app_id):
     url = f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json"
@@ -359,7 +373,6 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
         if isinstance(news_summary_data, str):
             news_summary_data = [news_summary_data]
             
-        # 💡 우아한 예외 처리: 배열이 비어있거나, 내용이 없으면 전문적인 대체 문구 출력
         if news_summary_data and any(line.strip() for line in news_summary_data):
             for news_line in news_summary_data:
                 if news_line.strip():
@@ -439,7 +452,6 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
 # 🚀 6. 스트림릿 UI (진행도 표시 함수 추가)
 # ==========================================
 def render_step_indicator(current_step):
-    """화면 상단에 현재 진행 단계를 예쁘게 표시해주는 함수"""
     steps = ["정보 입력", "검수 및 피드백", "분석 완료"]
     cols = st.columns(3)
     for i, col in enumerate(cols):
@@ -468,21 +480,37 @@ def main():
         st.session_state.step = 0
         st.session_state.update({"page_id": None, "app_id": None, "game_name": None, "reviews_all": None, "reviews_recent": None, "store_stats": None, "recent_label": None, "smart_reason": None, "news_data": None})
 
-    # 상단 공통 스텝 인디케이터 렌더링
     render_step_indicator(st.session_state.step)
 
     # ==========================================
     # [STEP 0] 데이터 입력 및 분석 시작
     # ==========================================
     if st.session_state.step == 0:
-        game_input = st.text_input("게임의 영문명 또는 App ID를 입력하세요", placeholder="예: 3564740 또는 Helldivers 2")
+        st.subheader("Step 1. 분석할 게임 입력")
         
-        with st.expander("💡 왜 App ID 입력을 권장하나요? (클릭해서 읽어보기)"):
-            st.markdown("- 스팀 상점 주소(`store.steampowered.com/app/123450/`)의 **숫자(`123450`)**가 App ID입니다.\n- 게임 이름이 흔하거나 겹칠 경우 엉뚱한 게임이 검색될 수 있어, 정확한 타겟팅을 위해 App ID를 권장합니다.")
+        # 🔍 신규 기능: App ID 검색 도우미
+        with st.expander("🔍 App ID 검색 도우미 (이름으로 찾기)"):
+            search_query = st.text_input("게임 이름을 입력하고 검색해보세요", placeholder="예: helldivers 2")
+            if st.button("게임 검색하기", use_container_width=True):
+                if search_query:
+                    results = search_steam_app_id(search_query)
+                    if results:
+                        st.markdown("👇 찾으시는 게임의 **ID 숫자**를 복사해서 아래 메인 입력창에 넣어주세요!")
+                        for item in results:
+                            # st.code를 사용하면 쉽게 복사할 수 있음!
+                            st.code(f"{item['id']} ({item['name']})", language="text")
+                    else:
+                        st.warning("해당 이름으로 검색된 게임이 없습니다. 스팀 상점에서 영문명을 확인해보세요.")
+                else:
+                    st.warning("검색할 게임 이름을 입력해주세요.")
+        
+        # 메인 입력창은 확실하게 ID를 넣도록 안내 수정
+        st.markdown("---")
+        game_input = st.text_input("👉 찾으신 App ID를 숫자로 입력하세요", placeholder="예: 3564740")
         
         if st.button("🚀 데이터 탈곡 시작", use_container_width=True, type="primary"):
             if not game_input:
-                st.warning("게임을 입력해주세요!")
+                st.warning("App ID를 입력해주세요!")
                 return
             
             with st.status("스팀 데이터를 탈곡하고 있습니다... 🌾 (약 60초 소요)", expanded=True) as status:
@@ -542,7 +570,6 @@ def main():
         st.markdown("#### 1. 생성된 리포트 초안 확인하기")
         page_url = f"https://notion.so/{st.session_state.page_id.replace('-', '')}"
         
-        # 큰 텍스트는 줄이고, 버튼(링크)만 직관적이고 크게!
         st.markdown(f"""
         <div style="padding: 20px; border-radius: 10px; background-color: #f0f2f6; text-align: center; margin-bottom: 20px;">
             <a href="{page_url}" target="_blank" style="font-size: 1.5em; text-decoration: none; color: #0066cc; font-weight: bold;">
