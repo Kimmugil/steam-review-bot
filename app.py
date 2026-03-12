@@ -15,13 +15,6 @@ UPDATE_HISTORY = """
 
 **[v2.0.4] - 2026.03.13**
 - 🐛 **버그 픽스:** 뉴스/공지사항 요약 시 글머리 기호 누락 현상 수정 (데이터 타입 예외 처리)
-- 🧠 **프롬프트 강화:** 국가별 세부 평가 분석 시 [긍정]/[부정] 카테고리가 복합적으로 도출되도록 지시
-
-**[v2.0.3] - 2026.03.12**
-- 🎨 **UI/UX 개선:** 리뷰 원문 토글 적용, 통합 리포트 링크 추가, 표 누락 수정
-"""
-**[v2.0.4] - 2026.03.13**
-- 🐛 **버그 픽스:** 뉴스/공지사항 요약 시 글머리 기호 누락 현상 수정 (데이터 타입 예외 처리)
 - 🧠 **프롬프트 강화:** 국가별 세부 평가 분석 시 [긍정]/[부정] 카테고리가 복합적으로(다수) 도출되도록 강제 지시
 
 **[v2.0.3] - 2026.03.12**
@@ -344,7 +337,6 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
     for issue in ai_data.get('ai_issue_pick', []):
         children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": issue}}]}})
     
-    # 공지사항/패치노트 섹션: 리스팅 형태로 분리 (데이터 타입 검증 로직 추가)
     if news_title:
         children_blocks.extend([
             {"object": "block", "type": "divider", "divider": {}},
@@ -356,7 +348,6 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
             }}
         ])
         
-        # AI가 배열 대신 통짜 문자열로 줬을 경우를 대비한 안전 장치
         news_summary_data = ai_data.get('news_summary', [])
         if isinstance(news_summary_data, str):
             news_summary_data = [news_summary_data]
@@ -465,7 +456,6 @@ def main():
                 return
             
             with st.status("스팀 데이터를 탈곡하고 있습니다... 🌾 (약 60초 소요)", expanded=True) as status:
-                # 🚀 진행률 바 초기화
                 progress_bar = st.progress(0)
                 
                 st.write("🔍 1/5: 게임 정보 및 출시일 분석 중...")
@@ -539,7 +529,6 @@ def main():
                     st.error("피드백 내용을 입력해주세요.")
                 else:
                     with st.status("피드백을 반영하여 다시 탈곡 중입니다... 🌾", expanded=True) as status:
-                        # 🚀 피드백 재생성 진행률 바 추가
                         feedback_progress = st.progress(0)
                         
                         st.write("🗑️ 1/3: 기존 노션 초안 페이지 삭제 중...")
