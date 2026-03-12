@@ -1,38 +1,48 @@
-# 1. 필수 라이브러리 설치 (google-genai 제거, 순수 requests로 대체!)
-!pip install -q requests urllib3
-
+import streamlit as st
 import json
-import re
 import requests
 import urllib.parse
 import time
-import sys
-from datetime import datetime, timezone
+from datetime import datetime
 
-# 💡 코랩 고질병(ASCII 인코딩 에러) 완벽 치료용 '강제 UTF-8' 처방전!
-import locale
-def getpreferredencoding(do_setlocale=True):
-    return "UTF-8"
-locale.getpreferredencoding = getpreferredencoding
+# ==========================================
+# 🚀 0. 앱 메타데이터 및 버전 정보
+# ==========================================
+APP_VERSION = "v2.0.2"
+UPDATE_HISTORY = """
+**[v2.0.2] - 2026.03.12**
+- 🛡️ **신뢰도 패치 및 최적화:** AI 배경정보 학습 프롬프트 워딩 정제 (신뢰도 향상) 및 내부 코드 로직 최적화
 
-# 터미널 출력 시 특수문자(이모지, ™ 등) 깨짐 방지
-try:
-    if hasattr(sys.stdout, 'reconfigure'):
-        sys.stdout.reconfigure(encoding='utf-8')
-except Exception:
-    pass
+**[v2.0.1] - 2026.03.12**
+- 🛡️ **AI 팩트체크 강화:** 배경정보 학습 시 유저 사견/루머 배제 지시 추가
+- 🚧 **예외 처리:** 게임 배경지식 데이터가 없을 경우 무리한 추론 방지 및 스팀 데이터 집중 지시
 
-print("🚜 [스팀 사용자 평가 탈곡기] 가동을 시작합니다.\n")
+**[v2.0.0] - 2026.03.12**
+- 🧠 **AI 배경정보 선행 학습:** 분석 전 게임의 배경정보를 자체 학습하도록 프롬프트 업데이트
+- 📰 **최신 업데이트 뉴스 연동:** 스팀 최신 패치노트/공지를 불러와 AI가 요약 및 노션 임베드
+- ⏳ **스마트 분석 기간 도입:** 게임 출시일 기준으로 최근 동향 기간(3일/7일/30일) 자동 조절
+- 💡 **UI/UX 개선:** App ID 입력 가이드 추가, 피드백 시 기존 리포트 삭제 안내 추가
+
+**[v1.0.0] - 2026.03.08**
+- 🚜 스팀 사용자 평가 탈곡기 최초 배포
+"""
+
+st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="centered")
 
 # ==========================================
 # 🔑 1. API 키 및 토큰 설정
 # ==========================================
-GEMINI_API_KEY = "여기에_제미나이_API_키_넣기"
-NOTION_TOKEN = "여기에_노션_토큰_넣기"
-NOTION_DATABASE_ID = "321fa327f28680dc8df5fe92fab193bf" 
+try:
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+    NOTION_TOKEN = st.secrets["NOTION_TOKEN"]
+except KeyError:
+    st.error("🚨 스트림릿 Secrets 금고에 API 키가 설정되지 않았습니다! 배포 설정(Advanced settings)을 확인해주세요.")
+    st.stop()
+
+NOTION_DATABASE_ID = "321fa327f28680dc8df5fe92fab193bf"
 
 # ==========================================
-# 🌐 2. 언어 매핑 & 스팀 등급 9단계 사전
+# 🌐 2. 글로벌 설정 사전
 # ==========================================
 LANG_MAP = {
     "koreana": "🇰🇷 한국어", "english": "🇺🇸 영어", "schinese": "🇨🇳 중국어(간체)", 
@@ -41,98 +51,107 @@ LANG_MAP = {
     "portuguese": "🇵🇹 포르투갈어", "brazilian": "🇧🇷 포르투갈어(브라질)", "polish": "🇵🇱 폴란드어"
 }
 
+SCORE_MAP = {
+    1: "압도적으로 부정적", 2: "매우 부정적", 3: "부정적", 4: "대체로 부정적",
+    5: "복합적", 6: "대체로 긍정적", 7: "긍정적", 8: "매우 긍정적", 9: "압도적으로 긍정적"
+}
+
 def get_lang_name(lang_code):
     return LANG_MAP.get(lang_code, f"🏳️ {lang_code}")
 
-SCORE_MAP = {
-    1: "압도적으로 부정적 (Overwhelmingly Negative)", 
-    2: "매우 부정적 (Very Negative)", 
-    3: "부정적 (Negative)", 
-    4: "대체로 부정적 (Mostly Negative)",
-    5: "복합적 (Mixed)", 
-    6: "대체로 긍정적 (Mostly Positive)", 
-    7: "긍정적 (Positive)", 
-    8: "매우 긍정적 (Very Positive)", 
-    9: "압도적으로 긍정적 (Overwhelmingly Positive)"
-}
-
 def calculate_custom_score(pos_ratio, total):
-    if total == 0: return "평가 없음 (최근 30일 리뷰 없음)"
-    if pos_ratio >= 0.95: return "압도적으로 긍정적 (Overwhelmingly Positive)"
-    elif pos_ratio >= 0.80: return "매우 긍정적 (Very Positive)"
-    elif pos_ratio >= 0.70: return "대체로 긍정적 (Mostly Positive)"
-    elif pos_ratio >= 0.40: return "복합적 (Mixed)"
-    elif pos_ratio >= 0.20: return "대체로 부정적 (Mostly Negative)"
-    elif pos_ratio >= 0.01: return "매우 부정적 (Very Negative)"
-    elif pos_ratio == 0: return "압도적으로 부정적 (Overwhelmingly Negative)"
-    return "평가 없음"
+    if total == 0: return "평가 없음"
+    if pos_ratio >= 0.95: return "압도적으로 긍정적"
+    elif pos_ratio >= 0.80: return "매우 긍정적"
+    elif pos_ratio >= 0.70: return "대체로 긍정적"
+    elif pos_ratio >= 0.40: return "복합적"
+    elif pos_ratio >= 0.20: return "대체로 부정적"
+    elif pos_ratio >= 0.01: return "매우 부정적"
+    return "압도적으로 부정적"
 
 # ==========================================
-# 🎮 3. 스팀 게임 검색 
+# 🎮 3. 스팀 데이터 수집 엔진
 # ==========================================
-def get_steam_game_info():
-    game_input = input("👉 게임 영문명 또는 App ID(예: 3564740) 입력: ").strip()
-    if game_input.isdigit():
-        app_id = game_input
-        details_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean"
-        res = requests.get(details_url).json()
-        if not res or str(app_id) not in res or not res[str(app_id)]['success']: 
-            return None, None, None
-        exact_name = res[str(app_id)]['data']['name']
-    else:
-        res = requests.get(f"https://store.steampowered.com/api/storesearch/?term={game_input}&l=korean&cc=KR").json()
-        if not res.get('items'): 
-            return None, None, None
-        app_id, exact_name = res['items'][0]['id'], res['items'][0]['name']
-        
-    try: 
-        release_date = datetime.strptime(requests.get(f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean").json()[str(app_id)]['data']['release_date']['date'], "%Y년 %m월 %d일").strftime("%Y-%m-%d")
-    except: 
-        release_date = "2024-01-01"
-        
-    # 특수문자(™ 등)가 터미널이나 API에 에러를 일으키는 것을 방지하기 위해 정제
-    safe_exact_name = exact_name.encode('utf-8', 'ignore').decode('utf-8')
+def get_steam_game_info(game_input):
+    """게임 이름이나 App ID로 기본 정보와 출시일을 가져옵니다."""
+    app_id = game_input if game_input.isdigit() else None
     
-    print(f"\n✅ 타겟: [{safe_exact_name}] (출시일: {release_date})")
-    print("🚀 [전체 누적] 및 [최근 30일] 데이터를 자동으로 분리 수집합니다.")
-    return app_id, safe_exact_name, release_date
-
-# ==========================================
-# 📥 4. 스팀 리뷰 데이터 수집 
-# ==========================================
-def fetch_review_list(app_id, day_range=None):
-    reviews = []
-    base_url = f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=all&language=all&num_per_page=100&purchase_type=all"
-    if day_range:
-        base_url += f"&day_range={day_range}"
+    if not app_id:
+        res = requests.get(f"https://store.steampowered.com/api/storesearch/?term={game_input}&l=korean&cc=KR").json()
+        if not res.get('items'): return None, None, None
+        app_id = str(res['items'][0]['id'])
+    
+    details_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean"
+    res = requests.get(details_url).json()
+    
+    if not res or str(app_id) not in res or not res[str(app_id)]['success']: 
+        return None, None, None
         
-    pos_count = 0
+    game_data = res[str(app_id)]['data']
+    exact_name = game_data['name'].encode('utf-8', 'ignore').decode('utf-8')
+    
+    try: 
+        raw_date = game_data['release_date']['date']
+        clean_date = raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", "")
+        release_date = datetime.strptime(clean_date, "%Y-%m-%d")
+    except: 
+        release_date = datetime(2020, 1, 1) # 파싱 실패 시 기본값
+        
+    return app_id, exact_name, release_date
+
+def fetch_latest_news(app_id):
+    """최신 패치노트나 공지사항을 가져옵니다."""
+    url = f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=3&maxlength=2000&format=json"
+    try:
+        news_items = requests.get(url).json().get('appnews', {}).get('newsitems', [])
+        for item in news_items:
+            title_lower = item.get('title', '').lower()
+            if item.get('feed_type') == 1 or 'update' in title_lower or 'patch' in title_lower:
+                return item['title'], item['contents'], item['url']
+        if news_items:
+            return news_items[0]['title'], news_items[0]['contents'], news_items[0]['url']
+    except: pass
+    return None, None, None
+
+def get_smart_period(release_date):
+    """출시일 기반으로 분석 기간을 스마트하게 설정합니다."""
+    days_since = (datetime.now() - release_date).days
+    if days_since < 3:
+        return None, "전체 주요 동향", "출시 3일 미만으로 데이터가 적어 '전체 동향 대비 주요 동향' 위주로 분석했습니다."
+    elif days_since < 7:
+        return 3, "최근 3일 동향", "출시 7일 미만인 초기 게임이므로 '최근 3일 내 동향'을 기준으로 민심을 분석했습니다."
+    elif days_since < 30:
+        return 7, "최근 7일 동향", "출시 30일 미만의 신작이므로 '최근 7일 내 동향'을 기준으로 민심을 분석했습니다."
+    return 30, "최근 30일 동향", "출시 30일 이상 경과하여 '최근 30일 내 동향'을 기준으로 민심을 분석했습니다."
+
+def fetch_review_list(app_id, day_range=None):
+    """스팀 API를 순회하며 리뷰 리스트를 추출합니다."""
+    reviews, pos_count = [], 0
+    base_url = f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=all&language=all&num_per_page=100&purchase_type=all"
+    if day_range: base_url += f"&day_range={day_range}"
+        
     cursor = "*"
     for _ in range(5): 
-        url = base_url + f"&cursor={urllib.parse.quote(cursor)}"
-        res = requests.get(url).json()
+        res = requests.get(base_url + f"&cursor={urllib.parse.quote(cursor)}").json()
         if not res.get('reviews'): break
         for r in res['reviews']:
-            # 리뷰 텍스트 특수문자 에러 방지 처리
-            safe_review_text = r['review'][:400].replace('\n', ' ').encode('utf-8', 'ignore').decode('utf-8')
             reviews.append({
                 "language": r['language'], 
                 "is_positive": r['voted_up'],
                 "playtime": round(r['author'].get('playtime_at_review', 0) / 60, 1),
                 "steam_id": str(r['author'].get('steamid', '익명'))[-4:],
-                "review": safe_review_text
+                "review": r['review'][:400].replace('\n', ' ').encode('utf-8', 'ignore').decode('utf-8')
             })
             if r['voted_up']: pos_count += 1
-            
         cursor = res.get('cursor', '*')
         if not cursor: break
     return reviews, pos_count
 
-def fetch_steam_reviews(app_id):
-    print("\n📥 스팀 글로벌 리뷰 통계 수집 중...")
-    
+def fetch_steam_reviews(app_id, recent_days_val):
+    """전체 리뷰와 최근 리뷰 데이터를 획득하고 정제합니다."""
     total_lang_counts = {}
     all_time_total_reviews = 0
+    
     for lang in LANG_MAP.keys():
         try:
             res = requests.get(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all").json()
@@ -143,95 +162,82 @@ def fetch_steam_reviews(app_id):
         except: pass
             
     summary_all = requests.get(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all").json().get('query_summary', {})
-    score_all = summary_all.get('review_score', 0)
-
-    print("📥 [전체 누적] 유용한 리뷰 500개 수집 중...")
-    reviews_all, pos_all = fetch_review_list(app_id, day_range=None)
     
-    print("📥 [최근 30일] 유용한 리뷰 500개 수집 중...")
-    reviews_recent, pos_recent = fetch_review_list(app_id, day_range=30)
+    reviews_all, _ = fetch_review_list(app_id, day_range=None)
+    reviews_recent, pos_recent = fetch_review_list(app_id, day_range=recent_days_val) if recent_days_val else (reviews_all, sum(1 for r in reviews_all if r['is_positive']))
     
-    recent_total_sampled = len(reviews_recent)
-    pos_ratio_recent = pos_recent / recent_total_sampled if recent_total_sampled > 0 else 0
-    recent_custom_desc = calculate_custom_score(pos_ratio_recent, recent_total_sampled)
+    recent_total = len(reviews_recent)
+    recent_custom_desc = calculate_custom_score(pos_recent / recent_total if recent_total > 0 else 0, recent_total)
     
     store_stats = {
-        "all_desc": SCORE_MAP.get(score_all, "평가 없음"),
+        "all_desc": SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음"),
         "all_total": all_time_total_reviews,
         "recent_desc": recent_custom_desc,
-        "recent_total": recent_total_sampled, 
+        "recent_total": recent_total, 
         "total_lang_counts": total_lang_counts 
     }
         
     lang_counts_combined = {}
     for r in reviews_all + reviews_recent:
         lang_counts_combined[r['language']] = lang_counts_combined.get(r['language'], 0) + 1
-    
+        
     top_langs_keys = [l[0] for l in sorted(lang_counts_combined.items(), key=lambda x: x[1], reverse=True)[:3]]
     if "koreana" not in top_langs_keys and "koreana" in lang_counts_combined:
         top_langs_keys.append("koreana")
     
-    filtered_reviews_all = {lang: [] for lang in top_langs_keys}
-    for r in reviews_all:
-        if r['language'] in top_langs_keys and len(filtered_reviews_all[r['language']]) < 20:
-            sentiment = "👍 추천" if r['is_positive'] else "👎 비추천"
-            filtered_reviews_all[r['language']].append(f"[{sentiment} | ⏱️ {r['playtime']}시간 | 👤 ID: ****{r['steam_id']}] {r['review']}")
+    def filter_reviews(review_list):
+        filtered = {lang: [] for lang in top_langs_keys}
+        for r in review_list:
+            if r['language'] in top_langs_keys and len(filtered[r['language']]) < 20:
+                filtered[r['language']].append(f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: **{r['steam_id']}] {r['review']}")
+        return filtered
 
-    filtered_reviews_recent = {lang: [] for lang in top_langs_keys}
-    for r in reviews_recent:
-        if r['language'] in top_langs_keys and len(filtered_reviews_recent[r['language']]) < 20:
-            sentiment = "👍 추천" if r['is_positive'] else "👎 비추천"
-            filtered_reviews_recent[r['language']].append(f"[{sentiment} | ⏱️ {r['playtime']}시간 | 👤 ID: ****{r['steam_id']}] {r['review']}")
-
-    return filtered_reviews_all, filtered_reviews_recent, store_stats
+    return filter_reviews(reviews_all), filter_reviews(reviews_recent), store_stats
 
 # ==========================================
-# 🧠 5. AI 리뷰 분석 (순수 requests API 호출로 변경하여 인코딩 에러 원천 차단!)
+# 🧠 4. AI 리뷰 분석 (Gemini API)
 # ==========================================
-def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_stats, user_feedback=""):
+def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_stats, recent_label, news_data, user_feedback=""):
     top_langs_str = ", ".join([f"{get_lang_name(k)}: {v:,}개" for k, v in sorted(store_stats['total_lang_counts'].items(), key=lambda x: x[1], reverse=True)[:7]])
     
-    review_text = "==== [전체 누적 평가 주요 리뷰 (All-time)] ====\n"
+    review_text = "==== [전체 누적 평가 주요 리뷰] ====\n"
     for lang, revs in review_data_all.items():
-        if revs: review_text += f"\n🌍 [언어: {get_lang_name(lang)}]\n" + "\n".join(revs)
+        if revs: review_text += f"\n🌍 [{get_lang_name(lang)}]\n" + "\n".join(revs)
         
-    review_text += "\n\n==== [최근 30일 평가 주요 리뷰 (Recent 30 days)] ====\n"
+    review_text += f"\n\n==== [{recent_label} 주요 리뷰] ====\n"
     for lang, revs in review_data_recent.items():
-        if revs: review_text += f"\n🌍 [언어: {get_lang_name(lang)}]\n" + "\n".join(revs)
+        if revs: review_text += f"\n🌍 [{get_lang_name(lang)}]\n" + "\n".join(revs)
         
+    news_title, news_contents, _ = news_data
+    news_text = f"\n[최신 게임 업데이트/공지]\n- 제목: {news_title}\n- 내용: {news_contents[:1000]}" if news_title else ""
     feedback_instruction = f"\n\n🚨 [사용자 추가 피드백!! 반드시 최우선으로 반영할 것!]:\n{user_feedback}\n" if user_feedback else ""
         
     prompt = f"""
     넌 글로벌 게임 사업 PM이야. '{game_name}'의 스팀 유저 평가 데이터야.{feedback_instruction}
     
+    🎯 [필수 선행 지시사항]: 
+    분석을 시작하기 전, 반드시 해당 게임에 대한 포괄적인 배경지식, 세계관, 개발사, 핵심 특징 등을 너의 사전 학습된 데이터에서 스스로 검색하여 인지하고, 이를 바탕으로 리뷰의 맥락(왜 이런 불만/호평이 나오는지)을 더 깊게 해석해. 
+    🚨 [주의]: 검색된 정보 중 유저의 주관적인 사견이나 검증되지 않은 루머는 철저히 배제하고 오직 '객관적 팩트' 위주로만 참고할 것. 만약 해당 게임에 대한 정보가 충분하지 않다면 무리해서 추측하지 말고, 즉시 제공된 스팀 데이터 분석에만 집중해.
+    
     [통계 데이터]
     - 전체 누적 평가: {store_stats['all_desc']}
-    - 최근 30일 민심: {store_stats['recent_desc']}
-    - 전 세계 누적 리뷰 언어 비중: {top_langs_str}
+    - {recent_label} 민심: {store_stats['recent_desc']}
+    - 누적 리뷰 언어 비중: {top_langs_str}
+    {news_text}
     
     ⚠️ 작성 규칙:
-    1. 마크다운 기호(**, # 등) 절대 금지.
-    2. 요약 배열(summary) 요소는 간결하게 작성할 것.
-    3. [중요] 카테고리 요약 시, 해당 카테고리가 긍정적인 내용이면 카테고리명 앞에 "[긍정평가]", 부정적인 내용이면 "[부정평가]"를 반드시 붙일 것.
-    4. [순서 엄수] global_category_summary 및 country_analysis의 카테고리 배열을 작성할 때 무조건 '[긍정평가]' 항목들을 먼저 모두 나열하고, 그 뒤에 '[부정평가]' 항목들을 나열할 것.
-    5. [번역 엄수] 한국어가 아닌 언어(영어, 중국어 등)의 리뷰 원문을 인용할 때는 원문만 달랑 쓰지 말고, 반드시 아래 예시처럼 [원문]과 [한국어 번역]을 모두 기재할 것. 절대 누락 금지. (단, 한국어 리뷰인 경우 번역 생략 가능)
-    6. [인용 원칙] quote 란에는 해당 카테고리의 요약을 가장 완벽하게 대변하는 찐 유저 평가 1개만 엄선할 것.
+    1. 마크다운 기호(**, # 등) 금지. 요약은 간결하게 작성.
+    2. global_category_summary 작성 시, [긍정평가] 항목을 모두 먼저 쓰고 그 뒤에 [부정평가] 항목 나열.
+    3. 한국어가 아닌 타 언어 리뷰 인용 시, [원문]과 [한국어 번역] 필수 기재.
     
     {{
-      "critic_one_liner": "게임의 현재 여론과 핵심 맹점을 짚어주는 담백하고 센스 있는 한줄평 (과도한 비유나 오글거리는 감성은 빼고, 객관적 사실 기반에 약간의 위트만 섞어서 1문장으로 작성)",
-      "sentiment_analysis": "전체 누적 평가({store_stats['all_desc']})와 최근 30일 민심({store_stats['recent_desc']})을 비교하여, 왜 이런 차이나 흐름이 발생하는지 분석하는 코멘트 (1~2줄)",
-      "language_analysis": "언어 비중 데이터를 바탕으로 이 게임의 주요 흥행 국가 및 특징을 짚어주고, 영어 리뷰 비중이 높은 이유 등을 포함하여 분석하는 코멘트 (1~2줄)",
-      "final_summary_all": [
-        "전체 누적 평가 데이터를 바탕으로 한 올타임 주요 여론 요약 1",
-        "요약 2"
-      ],
-      "final_summary_recent": [
-        "최근 30일 평가 데이터를 바탕으로 한 최근 주요 여론 요약 1 (전체와 비교해 최근 불만/호평이 집중된 부분)",
-        "요약 2"
-      ],
-      "ai_issue_pick": [
-        "AI 발견 최근 특이 동향 1"
-      ],
+      "critic_one_liner": "게임 여론과 핵심 맹점을 짚어주는 담백하고 위트있는 한줄평 (1문장)",
+      "sentiment_analysis": "전체 누적 평가와 {recent_label} 민심을 비교 분석하는 코멘트 (1~2줄)",
+      "language_analysis": "주요 흥행 국가 및 특징, 영어 비중이 높은 이유 등 분석 (1~2줄)",
+      "final_summary_all": ["전체 올타임 여론 요약 1", "요약 2"],
+      "final_summary_recent": ["{recent_label} 기준 최근 주요 여론 요약 1", "요약 2"],
+      "ai_issue_pick": ["AI 발견 최근 특이 동향 1"],
+      "news_summary": "제공된 [최신 게임 업데이트/공지] 내용의 핵심 요약 및 이것이 유저 여론에 미칠 영향 분석 (최대 2줄. 만약 제공된 뉴스가 없다면 '최근 업데이트 내역을 찾을 수 없습니다.' 라고 작성)",
       "global_category_summary": [
         {{ "category": "[긍정평가] 콘텐츠 관련 평가", "summary": ["요약 1", "요약 2"] }},
         {{ "category": "[부정평가] 최적화 관련 평가", "summary": ["요약 1", "요약 2"] }}
@@ -240,11 +246,7 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         {{
           "language": "🇰🇷 한국어 등 (국기 포함)",
           "categories": [
-            {{
-              "name": "[긍정평가] 콘텐츠 관련 평가",
-              "summary": ["해당 국가 평가 요약 1", "요약 2"],
-              "quote": "[👍 추천 | ⏱️ 15.2시간 | 👤 ID: ****1234]\\n[원문] (한국어가 아닌 경우 원문 작성)\\n[한국어 번역] (한국어 번역본 작성, 절대 누락하지 말 것)"
-            }}
+            {{ "name": "[긍정평가] 콘텐츠 관련 평가", "summary": ["요약 1"], "quote": "[👍 | ⏱️ 15h | ID: **1234]\\n[원문] (타언어)\\n[한국어 번역]" }}
           ]
         }}
       ]
@@ -255,289 +257,10 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
     """
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
-    headers = {'Content-Type': 'application/json'}
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "temperature": 0.3
-        }
-    }
+    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.3}}
     
     try:
-        # SDK를 거치지 않고 직접 UTF-8 바이트로 인코딩해서 쏴버림! (ASCII 에러 원천 차단)
-        res = requests.post(url, headers=headers, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+        res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
         res.raise_for_status()
-        result_data = res.json()
-        
-        if "candidates" not in result_data or not result_data["candidates"]:
-            print(f"\n🚨 AI 응답이 비어있습니다.")
-            return None
-            
-        raw_text = result_data['candidates'][0]['content']['parts'][0]['text'].strip()
-        
-        json_marker = "`" * 3 + "json"
-        code_marker = "`" * 3
-        if raw_text.startswith(json_marker): raw_text = raw_text[7:-3].strip()
-        elif raw_text.startswith(code_marker): raw_text = raw_text[3:-3].strip()
-        return json.loads(raw_text)
-        
-    except Exception as e: 
-        safe_error = str(e).encode('utf-8', 'ignore').decode('utf-8')
-        print(f"\n🚨 파싱 에러 상세 원인: {safe_error}")
-        if 'res' in locals():
-            print(f"🚨 API 응답 에러 상세: {res.text[:200]}")
-        return None
-
-# ==========================================
-# 🗑️ 6-1. 노션 이전 페이지 삭제
-# ==========================================
-def delete_notion_page(page_id):
-    url = f"https://api.notion.com/v1/pages/{page_id}"
-    headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": "2022-06-28"}
-    requests.patch(url, headers=headers, json={"archived": True})
-    print("🗑️ (이전 초안 노션 페이지는 휴지통으로 이동했습니다.)")
-
-# ==========================================
-# 📝 6-2. 노션 업로드
-# ==========================================
-def upload_to_notion(app_id, game_name, store_stats, ai_data):
-    bot_info_callout = {
-        "object": "block", 
-        "type": "callout", 
-        "callout": {
-            "icon": {"emoji": "🤖"}, 
-            "color": "blue_background", 
-            "rich_text": [
-                {"text": {"content": "[스팀 사용자 리뷰 탈곡봇]"}, "annotations": {"bold": True, "color": "blue"}},
-                {"text": {"content": "을 통해 작성되었습니다.\n해당 봇은 특정 게임에 대한 사용자 리뷰를 취합하고, 사용자 리뷰 데이터를 바탕으로 글로벌 유저 민심의 흐름과 특이사항 도출을 목적으로 설계되었습니다.\n"}},
-                {
-                    "text": {"content": f"👉 {game_name} 스팀 사용자 리뷰 바로가기", "link": {"url": f"https://steamcommunity.com/app/{app_id}/reviews/"}}, 
-                    "annotations": {"bold": True, "color": "blue", "underline": True}
-                }
-            ]
-        }
-    }
-    
-    info_text = (
-        f"💡 리뷰 추출 기준 안내\n"
-        f"스팀의 전체 리뷰 수는 방대하지만, 본 리포트는 글로벌 민심을 입체적으로 분석하기 위해 '전체 기간 유용한 평가 500개'와 '최근 30일 유용한 평가 500개'를 각각 추출하여 총 1,000여 개의 핵심 리뷰를 기반으로 요약했습니다."
-    )
-    
-    criteria_callout = {
-        "object": "block", 
-        "type": "callout", 
-        "callout": {"icon": {"emoji": "ℹ️"}, "color": "gray_background", "rich_text": [{"text": {"content": info_text}}]}
-    }
-    
-    page_title = f"[{datetime.now().strftime('%Y-%m-%d')}] {game_name} 스팀 평가 요약"
-    create_url = "https://api.notion.com/v1/pages"
-    headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Content-Type": "application/json", "Notion-Version": "2022-06-28"}
-    
-    create_data = {
-        "parent": {"database_id": NOTION_DATABASE_ID},
-        "properties": {"이름": {"title": [{"text": {"content": page_title}}]}}
-    }
-    
-    create_res = requests.post(create_url, headers=headers, data=json.dumps(create_data))
-    if create_res.status_code != 200:
-        print(f"\n❌ 페이지 생성 실패: {create_res.text}")
-        return None
-        
-    page_id = create_res.json()['id']
-    
-    children_blocks = [
-        {
-            "object": "block", 
-            "type": "toggle", 
-            "toggle": {
-                "rich_text": [{"text": {"content": "ℹ️ 봇 안내 및 리뷰 추출 기준 (클릭해서 펼치기)"}, "annotations": {"color": "gray", "bold": True}}],
-                "children": [bot_info_callout, criteria_callout]
-            }
-        },
-        {"object": "block", "type": "divider", "divider": {}},
-        
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🤖 AI의 한줄평"}}]}},
-        {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"❝ {ai_data.get('critic_one_liner', '한줄평이 없습니다.')} ❞"}, "annotations": {"color": "blue"}}]}},
-        {"object": "block", "type": "divider", "divider": {}},
-        
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "📊 스팀 민심 온도계"}}]}},
-        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
-            {"text": {"content": f"📈 전체 누적 평가: {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)\n"}},
-            {"text": {"content": f"🔥 최근 30일 민심: {store_stats['recent_desc']} (분석 표본 {store_stats['recent_total']:,}개)"}, "annotations": {"bold": True, "color": "red"}}
-        ]}},
-        {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "💬"}, "color": "blue_background", "rich_text": [{"text": {"content": ai_data.get('sentiment_analysis', '분석 코멘트 없음')}}]}},
-        
-        {"object": "block", "type": "divider", "divider": {}},
-        
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🎯 전 국가 망라 최종 요약"}}]}},
-        
-        {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "📈 [전체 누적 평가 주요 여론]"}, "annotations": {"color": "blue", "bold": True}}]}}
-    ]
-    
-    for summary_line in ai_data.get('final_summary_all', []):
-        children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": summary_line}}]}})
-        
-    children_blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🔥 [최근 30일 평가 주요 여론]"}, "annotations": {"color": "red", "bold": True}}]}})
-    
-    for summary_line in ai_data.get('final_summary_recent', []):
-        children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": summary_line}}]}})
-    
-    children_blocks.extend([
-        {"object": "block", "type": "divider", "divider": {}},
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🚨 [AI 이슈 픽] 체크포인트"}}]}},
-        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "* AI가 최근 수집된 리뷰들을 분석하여 감지한 주요 특이사항 및 돌발 이슈입니다."}, "annotations": {"italic": True, "color": "gray"}}]}}
-    ])
-    
-    for issue in ai_data.get('ai_issue_pick', []):
-        children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": issue}}]}})
-        
-    children_blocks.extend([
-        {"object": "block", "type": "divider", "divider": {}},
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "📁 카테고리별 종합 평가"}}]}}
-    ])
-    
-    for cat in ai_data.get('global_category_summary', []):
-        cat_name = cat.get('category', '')
-        color = "default"
-        if "[긍정" in cat_name: color = "blue"
-        elif "[부정" in cat_name: color = "red"
-        
-        children_blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": cat_name}, "annotations": {"color": color}}]}})
-        for line in cat.get('summary', []):
-            children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
-        
-    children_blocks.append({"object": "block", "type": "divider", "divider": {}})
-    
-    # 🌐 전 세계 누적 리뷰 작성 언어 비중 (Table)
-    children_blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 누적 리뷰 작성 언어 비중"}}]}})
-    children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"총 누적 리뷰 수: {store_stats['all_total']:,}개 (전체 언어 취합 기준)"}, "annotations": {"bold": True, "color": "gray"}}]}})
-    
-    table_rows = []
-    
-    table_rows.append({
-        "type": "table_row", 
-        "table_row": {
-            "cells": [
-                [{"text": {"content": "순위"}, "annotations": {"bold": True, "color": "gray"}}], 
-                [{"text": {"content": "언어"}, "annotations": {"bold": True, "color": "gray"}}], 
-                [{"text": {"content": "누적 리뷰 수"}, "annotations": {"bold": True, "color": "gray"}}], 
-                [{"text": {"content": "비중"}, "annotations": {"bold": True, "color": "gray"}}]
-            ]
-        }
-    })
-    
-    sorted_langs = sorted(store_stats['total_lang_counts'].items(), key=lambda x: x[1], reverse=True)[:10]
-    total_all_langs = store_stats['all_total']
-    
-    for idx, (lang_code, count) in enumerate(sorted_langs):
-        ratio = (count / total_all_langs) * 100 if total_all_langs > 0 else 0
-        table_rows.append({
-            "type": "table_row", 
-            "table_row": {
-                "cells": [
-                    [{"text": {"content": f"{idx+1}위"}}], 
-                    [{"text": {"content": get_lang_name(lang_code)}}], 
-                    [{"text": {"content": f"{count:,}개"}}], 
-                    [{"text": {"content": f"{ratio:.1f}%"}}]
-                ]
-            }
-        })
-        
-    children_blocks.append({
-        "object": "block", 
-        "type": "table", 
-        "table": {
-            "table_width": 4, 
-            "has_column_header": True, 
-            "has_row_header": False, 
-            "children": table_rows
-        }
-    })
-    
-    children_blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🌍"}, "color": "blue_background", "rich_text": [{"text": {"content": ai_data.get('language_analysis', '언어 비중 코멘트 없음')}}]}})
-    
-    disclaimer_text = "언어 비중 표는 표본이 아닌 '스팀에 등록된 전체 리뷰'를 대상으로 구성되었습니다. 또한 스팀 특성상 비영어권 유저들도 다수에게 의견을 전달하기 위해 공용어인 '영어'로 작성하는 경향이 있어 실제 플레이 유저 비례보다 영어 리뷰 비중이 높게 나타납니다."
-    children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": disclaimer_text}, "annotations": {"italic": True, "color": "gray"}}]}})
-    
-    children_blocks.append({"object": "block", "type": "divider", "divider": {}})
-    children_blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌍 국가별 세부 평가 분석 (TOP 3 + 한국)"}}]}})
-    
-    total_samples = 1000 # All (500) + Recent (500)
-    children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"수집된 유용한 리뷰 {total_samples}여 개 중 가장 많은 비중을 차지하는 국가 TOP 3와 한국에서의 항목별 주요 평가 내용입니다."}, "annotations": {"color": "gray"}}]}})
-    
-    for country in ai_data.get('country_analysis', []):
-        children_blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"🚩 {country.get('language', '')}"}, "annotations": {"color": "purple", "bold": True}}]}})
-        
-        for cat in country.get('categories', []):
-            cat_name = cat.get('name', '')
-            color = "default"
-            if "[긍정" in cat_name: color = "blue"
-            elif "[부정" in cat_name: color = "red"
-                
-            children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": cat_name}, "annotations": {"bold": True, "color": color}}]}})
-            for line in cat.get('summary', []):
-                children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
-            
-            children_blocks.append({"object": "block", "type": "quote", "quote": {"rich_text": [{"text": {"content": cat.get('quote', '')}, "annotations": {"color": "gray"}}]}})
-            
-        children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": " "}}]}})
-
-    # Chunking 로직 (100개 블록씩 쪼개기)
-    append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
-    for i in range(0, len(children_blocks), 100):
-        chunk = children_blocks[i:i+100]
-        patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": chunk}))
-        if patch_res.status_code != 200:
-            print(f"\n❌ 블록 업로드 중 일부 실패: {patch_res.text}")
-        time.sleep(0.5) 
-        
-    print(f"\n✅ 노션 업로드 완료! (확인하러 가기 👉 https://notion.so/{page_id.replace('-', '')})")
-    return page_id
-
-# ==========================================
-# 🚀 7. 대망의 실행 루프!
-# ==========================================
-try:
-    app_id, game_name, release_date = get_steam_game_info()
-    if app_id:
-        reviews_all, reviews_recent, store_stats = fetch_steam_reviews(app_id)
-        if reviews_all or reviews_recent:
-            feedback = ""
-            current_page_id = None
-            
-            while True:
-                print(f"\n🧠 AI가 {'추가 피드백을 반영하여 다시 ' if feedback else '올타임 & 최근 30일 여론을 분리하여 ' }요약 중입니다...")
-                insights = analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats, feedback)
-                
-                if insights:
-                    if current_page_id:
-                        delete_notion_page(current_page_id)
-                        
-                    current_page_id = upload_to_notion(app_id, game_name, store_stats, insights)
-                    
-                    if not current_page_id: break
-                        
-                    print("\n" + "="*60)
-                    print("👀 [노션 확인 시간!] 노션에 업로드된 리포트 초안을 확인해 주세요.")
-                    print("👉 내용이 확정되었다면: '고' 라고 입력 후 엔터!")
-                    print("👉 수정이 필요하다면: 예) '한국어 최적화 불만 부분을 더 구체적으로 써줘' 처럼 피드백을 입력 후 엔터!")
-                    
-                    user_decision = input("\n입력: ").strip()
-                    
-                    if user_decision == '고':
-                        print("\n🚀 최종 승인 완료! 리포트 작성이 완료되었습니다.")
-                        break
-                    else:
-                        feedback = user_decision
-                        print(f"\n🔄 피드백 접수 완료! [{feedback}] 내용을 반영하여 리포트를 재작성합니다.")
-                        
-                else: 
-                    print("\n🚨 데이터 파싱 중 에러가 발생했습니다. 다시 실행해 주세요.")
-                    break
-        else: 
-            print("\n🤷‍♀️ 분석할 데이터가 없습니다.")
-except Exception as e:
-    # 예기치 못한 에러 출력 시 ASCII 에러 방지
-    safe_e = str(e).encode('utf-8', 'ignore').decode('utf-8')
-    print(f"\n🚨 실행 중 에러 발생: {safe_e}")
+        raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        if raw_text.startswith("
