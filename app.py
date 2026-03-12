@@ -8,20 +8,20 @@ from datetime import datetime
 # ==========================================
 # 🚀 0. 앱 메타데이터 및 버전 정보
 # ==========================================
-APP_VERSION = "v2.0.10"
+APP_VERSION = "v2.0.12"
 UPDATE_HISTORY = """
-**[v2.0.10] - 2026.03.13**
-- 🎨 **UI 위계 조정:** App ID 메인 입력창을 상단으로 올리고 검색 도우미를 보조 수단(옵션)으로 명확히 분리
-- 📅 **데이터 고도화:** 최신 게임 공지/패치노트 임베드 시 해당 게시글의 '업데이트 날짜' 표기 추가
+**[v2.0.12] - 2026.03.13**
+- ⏳ **UX 디테일 개선:** 전체 로딩 시간(60초) 안내를 삭제하고, 각 진행 스텝별 세부 예상 소요 시간을 회색 텍스트로 추가하여 대기 시간의 지루함 완화
 
-**[v2.0.9] - 2026.03.13**
-- 🔍 **신규 기능:** 앱 내부 App ID 검색 도우미 기능 추가
+**[v2.0.11] - 2026.03.13**
+- 🗑️ **UI 간소화:** 혼선을 주던 검색 도우미 기능 삭제 및 App ID 전용 입력 강제 적용
+
+**[v2.0.10] - 2026.03.13**
+- 🎨 **UI 위계 조정:** App ID 메인 입력창을 상단으로 올리고 보조 수단 분리
+- 📅 **데이터 고도화:** 최신 게임 공지/패치노트 임베드 시 업데이트 날짜 표기 추가
 
 **[v2.0.8] - 2026.03.13**
 - ✨ **신규 기능:** 스텝(Step) 인디케이터 추가, 한국어 리뷰 번역 패스 적용, 이미지 패치노트 예외 처리
-
-**[v2.0.7] - 2026.03.13**
-- 🎨 **UI/UX 전면 개편:** 스텝별 직관성 강화
 """
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="centered")
@@ -71,20 +71,19 @@ def calculate_custom_score(pos_ratio, total):
 # 🎮 3. 스팀 데이터 수집 엔진
 # ==========================================
 def get_steam_game_info(game_input):
-    app_id = game_input if game_input.isdigit() else None
+    app_id = str(game_input).strip()
     
-    if not app_id:
-        res = requests.get(f"https://store.steampowered.com/api/storesearch/?term={game_input}&l=korean&cc=KR").json()
-        if not res.get('items'): return None, None, None
-        app_id = str(res['items'][0]['id'])
+    # 확실하게 App ID(숫자)만 받도록 강제
+    if not app_id.isdigit():
+        return None, None, None
     
     details_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean"
     res = requests.get(details_url).json()
     
-    if not res or str(app_id) not in res or not res[str(app_id)]['success']: 
+    if not res or app_id not in res or not res[app_id]['success']: 
         return None, None, None
         
-    game_data = res[str(app_id)]['data']
+    game_data = res[app_id]['data']
     exact_name = game_data['name'].encode('utf-8', 'ignore').decode('utf-8')
     
     try: 
@@ -95,19 +94,6 @@ def get_steam_game_info(game_input):
         release_date = datetime(2020, 1, 1)
         
     return app_id, exact_name, release_date
-
-def search_steam_app_id(query):
-    search_url = f"https://store.steampowered.com/api/storesearch/?term={query}&l=korean&cc=KR"
-    try:
-        res = requests.get(search_url).json()
-        if res.get('items'):
-            results = []
-            for item in res['items'][:5]: 
-                results.append({"name": item['name'], "id": item['id']})
-            return results
-    except:
-        pass
-    return []
 
 def fetch_latest_news(app_id):
     url = f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json"
@@ -462,7 +448,7 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
     return page_id
 
 # ==========================================
-# 🚀 6. 스트림릿 UI (진행도 표시 함수 추가)
+# 🚀 6. 스트림릿 UI (진행도 표시 함수)
 # ==========================================
 def render_step_indicator(current_step):
     steps = ["정보 입력", "검수 및 피드백", "분석 완료"]
@@ -501,26 +487,8 @@ def main():
     if st.session_state.step == 0:
         st.subheader("Step 1. 분석할 게임의 App ID 입력")
         
-        # 1순위 핵심 액션(What)을 가장 위로 배치!
         game_input = st.text_input("👉 스팀 App ID를 숫자로 입력하세요", placeholder="예: 3564740")
-        
-        # Why와 보조 수단은 한 톤 낮춰서 바로 아래에 배치
-        st.caption("💡 **App ID 찾는 법:** 스팀 상점 페이지 주소(`store.steampowered.com/app/123450/`)의 숫자 부분입니다. 직접 스팀에서 확인하시거나, 아래 검색 도우미를 활용하세요.")
-        
-        with st.expander("🔍 (옵션) 게임 이름으로 App ID 검색하기"):
-            search_query = st.text_input("게임 이름을 입력하고 검색해보세요", placeholder="예: helldivers 2")
-            if st.button("게임 검색하기", use_container_width=True):
-                if search_query:
-                    results = search_steam_app_id(search_query)
-                    if results:
-                        st.markdown("👇 찾으시는 게임의 **ID 숫자**를 복사해서 위 메인 입력창에 넣어주세요!")
-                        for item in results:
-                            st.code(f"{item['id']} ({item['name']})", language="text")
-                    else:
-                        st.warning("해당 이름으로 검색된 게임이 없습니다. 스팀 상점에서 영문명을 확인해보세요.")
-                else:
-                    st.warning("검색할 게임 이름을 입력해주세요.")
-        
+        st.caption("💡 **App ID 찾는 법:** 스팀 상점 페이지 접속 시 주소창(`store.steampowered.com/app/123450/`)에 있는 **숫자** 부분입니다.")
         st.markdown("---")
         
         if st.button("🚀 데이터 탈곡 시작", use_container_width=True, type="primary"):
@@ -528,14 +496,14 @@ def main():
                 st.warning("App ID를 입력해주세요!")
                 return
             
-            with st.status("스팀 데이터를 탈곡하고 있습니다... 🌾 (약 60초 소요)", expanded=True) as status:
+            with st.status("스팀 데이터를 탈곡하고 있습니다... 🌾", expanded=True) as status:
                 progress_bar = st.progress(0)
                 
-                st.write("🔍 1/5: 게임 정보 및 출시일 분석 중...")
+                st.write("🔍 1/5: 게임 정보 및 출시일 분석 중... :gray[(약 2초 소요)]")
                 app_id, game_name, release_date = get_steam_game_info(game_input)
                 if not app_id:
                     status.update(label="검색 실패", state="error")
-                    st.error("게임을 찾을 수 없습니다. App ID를 확인해주세요.")
+                    st.error("입력하신 App ID로 게임을 찾을 수 없습니다. 숫자만 정확히 입력했는지 확인해주세요.")
                     return
                 progress_bar.progress(10)
                 
@@ -543,7 +511,7 @@ def main():
                 st.write(f"📅 출시일 기반 스마트 분석 적용: **[{recent_label}]** 기준")
                 progress_bar.progress(20)
                 
-                st.write("📰 2/5: 스팀 최신 업데이트 뉴스/공지 수집 중...")
+                st.write("📰 2/5: 스팀 최신 업데이트 뉴스/공지 수집 중... :gray[(약 3초 소요)]")
                 news_data = fetch_latest_news(app_id)
                 if news_data and news_data[0]:
                     st.write(f"  👉 [발견된 공지]: {news_data[0]} ({news_data[3]})")
@@ -552,12 +520,12 @@ def main():
                 st.session_state.update({"app_id": app_id, "game_name": game_name, "recent_label": recent_label, "smart_reason": smart_reason, "news_data": news_data})
                 progress_bar.progress(30)
 
-                st.write("📥 3/5: 스팀 글로벌 리뷰 데이터 수집 중...")
+                st.write("📥 3/5: 스팀 글로벌 리뷰 데이터 수집 중... :gray[(약 15초 소요)]")
                 reviews_all, reviews_recent, store_stats = fetch_steam_reviews(app_id, recent_days_val)
                 st.session_state.update({"reviews_all": reviews_all, "reviews_recent": reviews_recent, "store_stats": store_stats})
                 progress_bar.progress(50)
 
-                st.write("🧠 4/5: AI가 게임 배경정보와 팩트를 교차 검증하며 다차원 분석 중입니다... (가장 오래 걸려요!)")
+                st.write("🧠 4/5: AI가 게임 배경정보와 팩트를 교차 검증하며 다차원 분석 중입니다... :gray[(가장 오래 걸려요! 약 30~40초 소요)]")
                 insights, err = analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats, recent_label, news_data)
                 if err:
                     status.update(label="AI 분석 실패", state="error")
@@ -565,7 +533,7 @@ def main():
                     return
                 progress_bar.progress(80)
 
-                st.write("📝 5/5: 노션 리포트 생성 및 임베드 중...")
+                st.write("📝 5/5: 노션 리포트 생성 및 임베드 중... :gray[(약 5초 소요)]")
                 page_id = upload_to_notion(app_id, game_name, store_stats, insights, recent_label, smart_reason, news_data)
                 if not page_id:
                     status.update(label="노션 업로드 실패", state="error")
@@ -608,11 +576,11 @@ def main():
                     with st.status("피드백을 반영하여 다시 탈곡 중입니다... 🌾", expanded=True) as status:
                         feedback_progress = st.progress(0)
                         
-                        st.write("🗑️ 1/3: 기존 노션 초안 페이지 삭제 중...")
+                        st.write("🗑️ 1/3: 기존 노션 초안 페이지 삭제 중... :gray[(약 2초 소요)]")
                         delete_notion_page(st.session_state.page_id)
                         feedback_progress.progress(20)
 
-                        st.write("🧠 2/3: AI가 피드백을 반영하여 재분석 중입니다... (약 60초 소요)")
+                        st.write("🧠 2/3: AI가 피드백을 반영하여 재분석 중입니다... :gray[(약 30~40초 소요)]")
                         insights, err = analyze_with_gemini(
                             st.session_state.game_name, st.session_state.reviews_all, st.session_state.reviews_recent, 
                             st.session_state.store_stats, st.session_state.recent_label, st.session_state.news_data, feedback
@@ -623,7 +591,7 @@ def main():
                             st.stop()
                         feedback_progress.progress(70)
 
-                        st.write("📝 3/3: 수정된 노션 리포트 업로드 중...")
+                        st.write("📝 3/3: 수정된 노션 리포트 업로드 중... :gray[(약 5초 소요)]")
                         new_page_id = upload_to_notion(
                             st.session_state.app_id, st.session_state.game_name, st.session_state.store_stats, 
                             insights, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data
