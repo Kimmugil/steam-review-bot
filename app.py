@@ -3,28 +3,30 @@ import json
 import requests
 import urllib.parse
 import time
+import pandas as pd
 from datetime import datetime
 
 # ==========================================
 # 🚀 0. 앱 메타데이터 및 버전 정보
 # ==========================================
-APP_VERSION = "v2.0.12"
+APP_VERSION = "v2.1.0"
 UPDATE_HISTORY = """
+**[v2.1.0] - 2026.03.13 (✨ 메이저 업데이트)**
+- ⏱️ **신규 분석:** '플레이타임별 민심 분리 분석' 추가 (뉴비 vs 코어 유저 여론 비교)
+- 📊 **UI 대시보드:** 스트림릿 결과 화면 내 데이터 시각화(차트 및 메트릭) 기능 추가
+
 **[v2.0.12] - 2026.03.13**
-- ⏳ **UX 디테일 개선:** 전체 로딩 시간(60초) 안내를 삭제하고, 각 진행 스텝별 세부 예상 소요 시간을 회색 텍스트로 추가하여 대기 시간의 지루함 완화
+- ⏳ **UX 디테일 개선:** 각 진행 스텝별 세부 예상 소요 시간 표기
 
 **[v2.0.11] - 2026.03.13**
 - 🗑️ **UI 간소화:** 혼선을 주던 검색 도우미 기능 삭제 및 App ID 전용 입력 강제 적용
 
 **[v2.0.10] - 2026.03.13**
 - 🎨 **UI 위계 조정:** App ID 메인 입력창을 상단으로 올리고 보조 수단 분리
-- 📅 **데이터 고도화:** 최신 게임 공지/패치노트 임베드 시 업데이트 날짜 표기 추가
-
-**[v2.0.8] - 2026.03.13**
-- ✨ **신규 기능:** 스텝(Step) 인디케이터 추가, 한국어 리뷰 번역 패스 적용, 이미지 패치노트 예외 처리
+- 📅 **데이터 고도화:** 공지/패치노트 임베드 시 업데이트 날짜 표기 추가
 """
 
-st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="centered")
+st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="wide")
 
 # ==========================================
 # 🔑 1. API 키 및 토큰 설정
@@ -73,7 +75,6 @@ def calculate_custom_score(pos_ratio, total):
 def get_steam_game_info(game_input):
     app_id = str(game_input).strip()
     
-    # 확실하게 App ID(숫자)만 받도록 강제
     if not app_id.isdigit():
         return None, None, None
     
@@ -105,7 +106,6 @@ def fetch_latest_news(app_id):
             return None, None, None, None
             
         def parse_item(item):
-            # API에서 제공하는 timestamp를 YYYY-MM-DD 포맷으로 변환
             date_str = datetime.fromtimestamp(item.get('date', 0)).strftime('%Y-%m-%d')
             return item['title'], item.get('contents', ''), item['url'], date_str
 
@@ -240,8 +240,9 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
     1. 마크다운 기호(**, # 등) 금지. 요약은 간결하게 작성.
     2. global_category_summary 작성 시, [긍정평가] 항목을 모두 먼저 쓰고 그 뒤에 [부정평가] 항목 나열.
     3. 리뷰 인용(quote) 시, 타 언어는 [원문]과 [한국어 번역]을 필수 기재할 것. **단, 원래 '한국어'로 작성된 리뷰인 경우 번역 과정은 무조건 패스하고 [원문]만 작성할 것.**
-    4. [매우 중요] 국가별 세부 평가(country_analysis) 작성 시, 해당 국가 리뷰에 등장하는 **모든 주요 [긍정평가]/[부정평가] 카테고리를 제한 없이 최대한 많이 배열로 도출할 것.** (예시에 2개만 있다고 2개만 출력하면 절대 안 됨. 불만/호평 요소가 4~5개면 4~5개 전부 배열에 담을 것). 긍정 먼저, 부정 나중 순서 유지.
+    4. [매우 중요] 국가별 세부 평가(country_analysis) 작성 시, 해당 국가 리뷰에 등장하는 **모든 주요 [긍정평가]/[부정평가] 카테고리를 제한 없이 최대한 많이 배열로 도출할 것.**
     5. news_summary는 제공된 [최신 게임 업데이트/공지] 내용의 핵심만 3~4개의 배열(List) 형태 요약문으로 반환할 것. (만약 내용이 너무 짧거나 없어 요약이 불가능하다면 빈 배열 []을 반환할 것)
+    6. [✨신규 기능: 플레이타임별 분석] 리뷰 데이터에 기재된 '⏱️ Xh' (플레이타임)을 집중 분석하여, 상대적으로 10시간 미만의 '뉴비' 유저들이 느끼는 장단점과 100시간 이상(또는 해당 게임에서 플레이타임이 가장 긴 편인) '코어 유저(썩은물)'들이 느끼는 장단점과 불만을 명확히 분리해서 요약할 것.
     
     {{
       "critic_one_liner": "게임 여론과 핵심 맹점을 짚어주는 담백하고 위트있는 한줄평 (1문장)",
@@ -251,6 +252,10 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
       "final_summary_recent": ["{recent_label} 기준 최근 주요 여론 요약 1", "요약 2"],
       "ai_issue_pick": ["AI 발견 최근 특이 동향 1"],
       "news_summary": ["공지/업데이트의 가장 중요한 핵심 요약 1", "핵심 요약 2", "핵심 요약 3"],
+      "playtime_analysis": {{
+        "newbie": ["10시간 미만 뉴비 유저들의 주요 여론 요약 1", "요약 2"],
+        "core": ["100시간 이상 코어 유저들의 주요 여론 요약 1", "요약 2"]
+      }},
       "global_category_summary": [
         {{ "category": "[긍정평가] 콘텐츠 관련 평가", "summary": ["요약 1", "요약 2"] }},
         {{ "category": "[부정평가] 최적화 관련 평가", "summary": ["요약 1", "요약 2"] }}
@@ -260,7 +265,7 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
           "language": "🇰🇷 한국어 등 (국기 포함)",
           "categories": [
             {{ "name": "[긍정평가] 콘텐츠 관련 평가", "summary": ["요약 1"], "quote": "[👍 | ⏱️ 15h | ID: **1234]\\n[원문] (해당 언어 원문)\\n[한국어 번역] (해당 언어가 한국어라면 이 줄은 생략)" }},
-            {{ "name": "[부정평가] 버그 및 최적화 평가", "summary": ["요약 1"], "quote": "[👎 | ⏱️ 2h | ID: **5678]\\n[원문] (해당 언어 원문)\\n[한국어 번역] (해당 언어가 한국어라면 이 줄은 생략)" }}
+            {{ "name": "[부정평가] 버그 및 최적화 평가", "summary": ["요약 1"], "quote": "[👎 | ⏱️ 150h | ID: **5678]\\n[원문] (해당 언어 원문)\\n[한국어 번역] (해당 언어가 한국어라면 이 줄은 생략)" }}
           ]
         }}
       ]
@@ -347,6 +352,22 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
     for summary_line in ai_data.get('final_summary_recent', []):
         children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": summary_line}}]}})
     
+    # ✨ 신규 기능: 플레이타임별 여론 분석 노션 임베드
+    playtime_data = ai_data.get('playtime_analysis', {})
+    if playtime_data:
+        children_blocks.extend([
+            {"object": "block", "type": "divider", "divider": {}},
+            {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "⏱️ 플레이타임별 주요 민심 (뉴비 vs 썩은물)"}}]}}
+        ])
+        
+        children_blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🌱 뉴비 (10시간 미만) 여론"}, "annotations": {"color": "green", "bold": True}}]}})
+        for line in playtime_data.get('newbie', ["데이터가 부족합니다."]):
+            children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
+            
+        children_blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "💀 썩은물 (코어 유저) 여론"}, "annotations": {"color": "purple", "bold": True}}]}})
+        for line in playtime_data.get('core', ["데이터가 부족합니다."]):
+            children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
+
     children_blocks.extend([
         {"object": "block", "type": "divider", "divider": {}},
         {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🚨 [AI 이슈 픽] 체크포인트"}}]}},
@@ -451,7 +472,7 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
 # 🚀 6. 스트림릿 UI (진행도 표시 함수)
 # ==========================================
 def render_step_indicator(current_step):
-    steps = ["정보 입력", "검수 및 피드백", "분석 완료"]
+    steps = ["정보 입력", "데이터 시각화 및 검수", "분석 완료"]
     cols = st.columns(3)
     for i, col in enumerate(cols):
         if i < current_step:
@@ -547,10 +568,34 @@ def main():
             st.rerun()
 
     # ==========================================
-    # [STEP 1] 노션 확인 및 피드백 수정
+    # [STEP 1] 노션 확인 및 피드백 수정 (+ 데이터 대시보드)
     # ==========================================
     elif st.session_state.step == 1:
-        st.markdown("#### 1. 생성된 리포트 초안 확인하기")
+        st.subheader("Step 2. 데이터 시각화 및 리포트 검수")
+        
+        # ✨ 신규 기능: 데이터 대시보드 시각화
+        st.markdown("### 📊 핵심 데이터 대시보드")
+        
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            st.metric(label="전체 누적 평가", value=st.session_state.store_stats['all_desc'], delta=f"총 {st.session_state.store_stats['all_total']:,}개 리뷰", delta_color="off")
+        with col_m2:
+            st.metric(label=f"{st.session_state.recent_label} 평가", value=st.session_state.store_stats['recent_desc'], delta=f"표본 {st.session_state.store_stats['recent_total']:,}개 추출", delta_color="off")
+        
+        st.markdown("##### 🌐 글로벌 리뷰 언어 비중 (Top 10)")
+        
+        # 차트용 데이터 프레임 생성
+        sorted_langs = sorted(st.session_state.store_stats['total_lang_counts'].items(), key=lambda x: x[1], reverse=True)[:10]
+        df_langs = pd.DataFrame({
+            "언어": [get_lang_name(k) for k, v in sorted_langs],
+            "리뷰 수": [v for k, v in sorted_langs]
+        })
+        # 스트림릿 내장 바 차트로 깔끔하게 시각화
+        st.bar_chart(df_langs, x="언어", y="리뷰 수", color="#0066cc")
+        
+        st.divider()
+        
+        st.markdown("#### 1. 생성된 노션 리포트 초안 확인")
         page_url = f"https://notion.so/{st.session_state.page_id.replace('-', '')}"
         
         st.markdown(f"""
@@ -562,7 +607,7 @@ def main():
         """, unsafe_allow_html=True)
         
         st.markdown("#### 2. 리포트 수정 또는 완료 선택")
-        feedback = st.text_area("내용 수정이 필요하다면 아래에 피드백을 자유롭게 적어주세요. (완벽하다면 바로 최종 승인 클릭!)", placeholder="예: 한국어 최적화 불만 부분을 더 구체적으로 써줘")
+        feedback = st.text_area("내용 수정이 필요하다면 아래에 피드백을 자유롭게 적어주세요. (완벽하다면 바로 최종 승인 클릭!)", placeholder="예: 뉴비 유저들 여론 중에서 시스템 불만 요소를 더 자세하게 써줘")
         
         with st.expander("💡 피드백 기능 이용 시 주의사항 (클릭해서 읽어보기)"):
             st.markdown("- AI가 놓친 포인트나 추가로 강조하고 싶은 내용을 지시할 수 있습니다.\n- **[주의]** 피드백을 반영하여 리포트를 재작성할 경우, 기존 노션 페이지는 자동으로 휴지통으로 이동되고 새로운 페이지로 교체됩니다.")
