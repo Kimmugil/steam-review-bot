@@ -8,24 +8,19 @@ from datetime import datetime
 # ==========================================
 # 🚀 0. 앱 메타데이터 및 버전 정보
 # ==========================================
-APP_VERSION = "v2.0.5"
+APP_VERSION = "v2.0.7"
 UPDATE_HISTORY = """
+**[v2.0.7] - 2026.03.13**
+- 🎨 **UI/UX 전면 개편:** 스텝별 직관성 강화 (What은 강조하고 Why는 토글로 숨기는 정보 위계 적용)
+
+**[v2.0.6] - 2026.03.13**
+- 🐛 **AI 로직 픽스:** 뉴스 요약 출력 및 세부 평가 카테고리 무제한 도출 강제 적용
+
 **[v2.0.5] - 2026.03.13**
-- ⏳ **UX 개선:** 데이터 탈곡 및 AI 분석 과정에 시각적인 진행률(Progress) 게이지 바 추가
+- ⏳ **UX 개선:** 데이터 탈곡 시각적 진행률(Progress) 게이지 바 추가
 
 **[v2.0.4] - 2026.03.13**
-- 🐛 **버그 픽스:** 뉴스/공지사항 요약 시 글머리 기호 누락 현상 수정 (데이터 타입 예외 처리)
-- 🧠 **프롬프트 강화:** 국가별 세부 평가 분석 시 [긍정]/[부정] 카테고리가 복합적으로(다수) 도출되도록 강제 지시
-
-**[v2.0.3] - 2026.03.12**
-- 🎨 **UI/UX 대폭 개선:** 리뷰 원문 토글 적용, 통합 리포트 다이렉트 링크 추가
-- 📊 **누락 데이터 복구:** 국가별 누적 리뷰 비중(표) 및 안내 텍스트 복구
-
-**[v2.0.2] - 2026.03.12**
-- 🛡️ **신뢰도 패치 및 최적화:** AI 배경정보 학습 프롬프트 워딩 정제 및 내부 로직 최적화
-
-**[v2.0.0] - 2026.03.12**
-- 🧠 **AI 배경정보 선행 학습 & 스팀 뉴스 연동 기능 추가**
+- 🐛 **버그 픽스:** 뉴스 요약 시 글머리 기호 누락 예외 처리
 """
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="centered")
@@ -41,7 +36,6 @@ except KeyError:
     st.stop()
 
 NOTION_DATABASE_ID = "321fa327f28680dc8df5fe92fab193bf"
-# 무길이의 공개 노션 사이트 링크
 NOTION_PUBLISH_URL = f"https://childlike-binder-ad2.notion.site/{NOTION_DATABASE_ID}"
 
 # ==========================================
@@ -102,16 +96,26 @@ def get_steam_game_info(game_input):
     return app_id, exact_name, release_date
 
 def fetch_latest_news(app_id):
-    url = f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=3&maxlength=2000&format=json"
+    url = f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json"
     try:
-        news_items = requests.get(url).json().get('appnews', {}).get('newsitems', [])
+        res = requests.get(url, timeout=5).json()
+        news_items = res.get('appnews', {}).get('newsitems', [])
+        
+        if not news_items:
+            return None, None, None
+            
         for item in news_items:
             title_lower = item.get('title', '').lower()
-            if item.get('feed_type') == 1 or 'update' in title_lower or 'patch' in title_lower:
-                return item['title'], item['contents'], item['url']
-        if news_items:
-            return news_items[0]['title'], news_items[0]['contents'], news_items[0]['url']
-    except: pass
+            if 'update' in title_lower or 'patch' in title_lower or '패치' in title_lower or '업데이트' in title_lower:
+                return item['title'], item.get('contents', ''), item['url']
+                
+        for item in news_items:
+            if item.get('feed_type') == 1:
+                return item['title'], item.get('contents', ''), item['url']
+                
+        return news_items[0]['title'], news_items[0].get('contents', ''), news_items[0]['url']
+    except:
+        pass
     return None, None, None
 
 def get_smart_period(release_date):
@@ -207,7 +211,7 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         if revs: review_text += f"\n🌍 [{get_lang_name(lang)}]\n" + "\n".join(revs)
         
     news_title, news_contents, _ = news_data
-    news_text = f"\n[최신 게임 업데이트/공지]\n- 제목: {news_title}\n- 내용: {news_contents[:1000]}" if news_title else ""
+    news_text = f"\n[최신 게임 업데이트/공지]\n- 제목: {news_title}\n- 내용: {news_contents[:1500]}" if news_title else "제공된 최신 뉴스가 없습니다."
     feedback_instruction = f"\n\n🚨 [사용자 추가 피드백!! 반드시 최우선으로 반영할 것!]:\n{user_feedback}\n" if user_feedback else ""
         
     prompt = f"""
@@ -227,8 +231,8 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
     1. 마크다운 기호(**, # 등) 금지. 요약은 간결하게 작성.
     2. global_category_summary 작성 시, [긍정평가] 항목을 모두 먼저 쓰고 그 뒤에 [부정평가] 항목 나열.
     3. 한국어가 아닌 타 언어 리뷰 인용 시, [원문]과 [한국어 번역] 필수 기재.
-    4. [필수] 국가별 세부 평가(country_analysis) 작성 시, 단순히 1개의 카테고리만 적지 말고 해당 국가 유저들의 [긍정평가]와 [부정평가] 카테고리를 최소 2개 이상 복합적으로 도출해서 배열로 담을 것. (긍정 먼저, 부정 나중 순서 유지)
-    5. news_summary 항목은 반드시 1개 이상의 요약을 담은 배열(List of Strings) 형태로 반환할 것.
+    4. [매우 중요] 국가별 세부 평가(country_analysis) 작성 시, 해당 국가 리뷰에 등장하는 **모든 주요 [긍정평가]/[부정평가] 카테고리를 제한 없이 최대한 많이 배열로 도출할 것.** (예시에 2개만 있다고 2개만 출력하면 절대 안 됨. 불만/호평 요소가 4~5개면 4~5개 전부 배열에 담을 것). 긍정 먼저, 부정 나중 순서 유지.
+    5. news_summary는 제공된 [최신 게임 업데이트/공지] 내용의 핵심만 3~4개의 배열(List) 형태 요약문으로 반환할 것.
     
     {{
       "critic_one_liner": "게임 여론과 핵심 맹점을 짚어주는 담백하고 위트있는 한줄평 (1문장)",
@@ -237,7 +241,7 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
       "final_summary_all": ["전체 올타임 여론 요약 1", "요약 2"],
       "final_summary_recent": ["{recent_label} 기준 최근 주요 여론 요약 1", "요약 2"],
       "ai_issue_pick": ["AI 발견 최근 특이 동향 1"],
-      "news_summary": ["제공된 뉴스의 핵심 요약 1", "핵심 요약 2 (배열 형태로 작성. 뉴스가 없으면 빈 배열 [] 반환)"],
+      "news_summary": ["공지/업데이트의 가장 중요한 핵심 요약 1", "핵심 요약 2", "핵심 요약 3"],
       "global_category_summary": [
         {{ "category": "[긍정평가] 콘텐츠 관련 평가", "summary": ["요약 1", "요약 2"] }},
         {{ "category": "[부정평가] 최적화 관련 평가", "summary": ["요약 1", "요약 2"] }}
@@ -247,6 +251,8 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
           "language": "🇰🇷 한국어 등 (국기 포함)",
           "categories": [
             {{ "name": "[긍정평가] 콘텐츠 관련 평가", "summary": ["요약 1"], "quote": "[👍 | ⏱️ 15h | ID: **1234]\\n[원문] (타언어)\\n[한국어 번역]" }},
+            {{ "name": "[긍정평가] 시스템 관련 평가", "summary": ["요약 1"], "quote": "[👍 | ⏱️ 5h | ID: **9876]\\n[원문] (타언어)\\n[한국어 번역]" }},
+            {{ "name": "[부정평가] 서버 상태 불만", "summary": ["요약 1"], "quote": "[👎 | ⏱️ 1h | ID: **4567]\\n[원문] (타언어)\\n[한국어 번역]" }},
             {{ "name": "[부정평가] 버그 및 최적화 평가", "summary": ["요약 1"], "quote": "[👎 | ⏱️ 2h | ID: **5678]\\n[원문] (타언어)\\n[한국어 번역]" }}
           ]
         }}
@@ -352,9 +358,12 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
         if isinstance(news_summary_data, str):
             news_summary_data = [news_summary_data]
             
-        for news_line in news_summary_data:
-            if news_line.strip():
-                children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": news_line}}]}})
+        if news_summary_data:
+            for news_line in news_summary_data:
+                if news_line.strip():
+                    children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": news_line}}]}})
+        else:
+            children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "제공된 뉴스 요약 내용이 없습니다.", "annotations": {"color": "gray"}}}]}})
 
     children_blocks.extend([
         {"object": "block", "type": "divider", "divider": {}},
@@ -445,10 +454,16 @@ def main():
         st.session_state.step = 0
         st.session_state.update({"page_id": None, "app_id": None, "game_name": None, "reviews_all": None, "reviews_recent": None, "store_stats": None, "recent_label": None, "smart_reason": None, "news_data": None})
 
+    # ==========================================
+    # [STEP 0] 데이터 입력 및 분석 시작
+    # ==========================================
     if st.session_state.step == 0:
-        game_input = st.text_input("👉 분석할 게임의 영문명 또는 App ID를 입력하세요", placeholder="예: 3564740 또는 Helldivers 2")
+        st.subheader("Step 1. 분석할 게임 입력")
+        game_input = st.text_input("게임의 영문명 또는 App ID를 입력하세요", placeholder="예: 3564740 또는 Helldivers 2")
         
-        st.info("💡 **App ID란?** 스팀 상점 페이지 주소(`store.steampowered.com/app/123450/`)에서 숫자 부분(`123450`)을 의미합니다. 정확한 타겟팅을 위해 App ID 입력을 권장합니다.")
+        # Why(이유)는 토글로 숨겨서 UI를 깔끔하게 유지!
+        with st.expander("💡 왜 App ID 입력을 권장하나요? (클릭해서 읽어보기)"):
+            st.markdown("- 스팀 상점 주소(`store.steampowered.com/app/123450/`)의 **숫자(`123450`)**가 App ID입니다.\n- 게임 이름이 흔하거나 겹칠 경우 엉뚱한 게임이 검색될 수 있어, 정확한 타겟팅을 위해 App ID를 권장합니다.")
         
         if st.button("🚀 데이터 탈곡 시작", use_container_width=True, type="primary"):
             if not game_input:
@@ -472,6 +487,10 @@ def main():
                 
                 st.write("📰 2/5: 스팀 최신 업데이트 뉴스/공지 수집 중...")
                 news_data = fetch_latest_news(app_id)
+                if news_data and news_data[0]:
+                    st.write(f"  👉 [발견된 공지]: {news_data[0]}")
+                else:
+                    st.write("  👉 스팀 최신 뉴스를 찾을 수 없습니다.")
                 st.session_state.update({"app_id": app_id, "game_name": game_name, "recent_label": recent_label, "smart_reason": smart_reason, "news_data": news_data})
                 progress_bar.progress(30)
 
@@ -501,30 +520,32 @@ def main():
                 status.update(label="✅ 리포트 초안 작성 완료!", state="complete")
             st.rerun()
 
+    # ==========================================
+    # [STEP 1] 노션 확인 및 피드백 수정
+    # ==========================================
     elif st.session_state.step == 1:
-        st.success("🎉 노션 리포트 초안이 성공적으로 생성되었습니다!")
+        st.subheader("Step 2. 리포트 검수 및 피드백")
         page_url = f"https://notion.so/{st.session_state.page_id.replace('-', '')}"
         
         st.markdown(f"""
         <div style="padding: 20px; border-radius: 10px; background-color: #f0f2f6; text-align: center; margin-bottom: 20px;">
-            <h3 style="margin-top:0;">👀 생성된 리포트 확인하기</h3>
+            <h3 style="margin-top:0;">👀 1. 생성된 리포트 초안 확인하기</h3>
             <a href="{page_url}" target="_blank" style="font-size: 1.5em; text-decoration: none; color: #0066cc; font-weight: bold;">
-                👉 [여기]를 클릭하여 노션 리포트 열기
+                👉 여기를 클릭하여 노션 리포트 열기
             </a>
         </div>
         """, unsafe_allow_html=True)
         
-        st.info("리포트 내용을 확인하신 후, 마음에 드시면 '최종 승인'을 누르시고, 수정이 필요하다면 아래에 피드백을 입력해주세요.")
-        st.divider()
+        st.markdown("#### ✍️ 2. 리포트 수정 또는 완료 선택")
+        feedback = st.text_area("내용 수정이 필요하다면 아래에 피드백을 자유롭게 적어주세요. (완벽하다면 바로 최종 승인 클릭!)", placeholder="예: 한국어 최적화 불만 부분을 더 구체적으로 써줘")
         
-        st.subheader("🛠️ 리포트 추가 피드백")
-        st.warning("🚨 **[안내]** 피드백을 반영하여 재생성할 경우, 기존에 생성된 노션 페이지는 자동으로 휴지통으로 이동되고 새로운 페이지로 교체됩니다.")
-        
-        feedback = st.text_area("AI에게 반영할 추가 피드백을 적어주세요", placeholder="예: 한국어 최적화 불만 부분을 더 구체적으로 써줘")
+        # 삭제 안내 경고문도 읽고 싶은 사람만 열어보게 깔끔하게 숨김!
+        with st.expander("💡 피드백 기능 이용 시 주의사항 (클릭해서 읽어보기)"):
+            st.markdown("- AI가 놓친 포인트나 추가로 강조하고 싶은 내용을 지시할 수 있습니다.\n- **[주의]** 피드백을 반영하여 리포트를 재작성할 경우, 기존 노션 페이지는 자동으로 휴지통으로 이동되고 새로운 페이지로 교체됩니다.")
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🚀 피드백 반영하여 재작성", use_container_width=True):
+            if st.button("🔄 피드백 반영하여 재작성", use_container_width=True):
                 if not feedback.strip():
                     st.error("피드백 내용을 입력해주세요.")
                 else:
@@ -562,14 +583,17 @@ def main():
                 st.session_state.step = 2
                 st.rerun()
 
+    # ==========================================
+    # [STEP 2] 완료 화면
+    # ==========================================
     elif st.session_state.step == 2:
         st.balloons()
-        st.success("🎉 최종 리포트 작성이 완벽하게 끝났습니다! 수고하셨습니다.")
+        st.subheader("🎉 분석 완료!")
         page_url = f"https://notion.so/{st.session_state.page_id.replace('-', '')}"
         
         st.markdown(f"""
         <div style="padding: 20px; border-radius: 10px; background-color: #e8f5e9; text-align: center; margin-bottom: 20px;">
-            <h3 style="margin-top:0; color: #2e7d32;">📄 완성된 최종 리포트</h3>
+            <h3 style="margin-top:0; color: #2e7d32;">📄 완벽하게 작성된 최종 리포트</h3>
             <a href="{page_url}" target="_blank" style="font-size: 1.5em; text-decoration: none; color: #2e7d32; font-weight: bold;">
                 👉 최종 노션 리포트 보러 가기
             </a>
