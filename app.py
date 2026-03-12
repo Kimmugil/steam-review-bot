@@ -8,20 +8,20 @@ from datetime import datetime
 # ==========================================
 # 🚀 0. 앱 메타데이터 및 버전 정보
 # ==========================================
-APP_VERSION = "v2.1.2"
+APP_VERSION = "v2.1.1"
 UPDATE_HISTORY = """
-**[v2.1.2] - 2026.03.13**
-- ✨ **분석 고도화:** 플레이타임별 분석(뉴비 vs 코어) 시, 두 그룹 간의 '공통된 동향' 및 '상반된 시각'을 교차 분석하여 인사이트 박스로 제공하는 기능 추가
-
 **[v2.1.1] - 2026.03.13**
-- 🗑️ **UX 간소화:** 불필요한 스트림릿 내 데이터 시각화 차트 제거
-- 📝 **워딩 개선:** '코어 유저'로 워딩 순화 및 동적 기준 시간 표시
+- 🗑️ **UX 간소화:** 노션 리포트에 집중하기 위해 불필요한 스트림릿 내 데이터 시각화 차트 제거
+- 📝 **워딩 및 데이터 개선:** '썩은물' 워딩을 '코어 유저'로 순화 및 해당 게임의 평균 플레이타임(기준 시간)을 동적으로 도출하여 표시
 
 **[v2.1.0] - 2026.03.13 (✨ 메이저 업데이트)**
 - ⏱️ **신규 분석:** '플레이타임별 민심 분리 분석' 추가 (뉴비 vs 코어 유저 여론 비교)
 
 **[v2.0.12] - 2026.03.13**
 - ⏳ **UX 디테일 개선:** 각 진행 스텝별 세부 예상 소요 시간 표기
+
+**[v2.0.11] - 2026.03.13**
+- 🗑️ **UI 간소화:** 혼선을 주던 검색 도우미 기능 삭제 및 App ID 전용 입력 강제 적용
 """
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="wide")
@@ -238,10 +238,9 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
     1. 마크다운 기호(**, # 등) 금지. 요약은 간결하게 작성.
     2. global_category_summary 작성 시, [긍정평가] 항목을 모두 먼저 쓰고 그 뒤에 [부정평가] 항목 나열.
     3. 리뷰 인용(quote) 시, 타 언어는 [원문]과 [한국어 번역]을 필수 기재할 것. **단, 원래 '한국어'로 작성된 리뷰인 경우 번역 과정은 무조건 패스하고 [원문]만 작성할 것.**
-    4. [매우 중요] 국가별 세부 평가(country_analysis) 작성 시, 해당 국가 리뷰에 등장하는 **모든 주요 [긍정평가]/[부정평가] 카테고리를 제한 없이 최대한 많이 배열로 도출할 것.** (예시에 2개만 있다고 2개만 출력하면 절대 안 됨. 불만/호평 요소가 4~5개면 4~5개 전부 배열에 담을 것). 긍정 먼저, 부정 나중 순서 유지.
+    4. [매우 중요] 국가별 세부 평가(country_analysis) 작성 시, 해당 국가 리뷰에 등장하는 **모든 주요 [긍정평가]/[부정평가] 카테고리를 제한 없이 최대한 많이 배열로 도출할 것.**
     5. news_summary는 제공된 [최신 게임 업데이트/공지] 내용의 핵심만 3~4개의 배열(List) 형태 요약문으로 반환할 것. (만약 내용이 너무 짧거나 없어 요약이 불가능하다면 빈 배열 []을 반환할 것)
     6. [✨신규 기능: 플레이타임별 분석] 리뷰 데이터에 기재된 '⏱️ Xh' (플레이타임)을 집중 분석하여, 상대적으로 플레이타임이 짧은 '뉴비' 유저와 가장 긴 편인 '코어 유저'의 여론을 분리할 것. 각 게임의 특성을 고려하여 합당한 기준 시간(예: 뉴비 10시간 미만, 코어 유저 150시간 이상 등)을 산정하고, 이를 `newbie_title`과 `core_title`에 직접 기재할 것 (예: '💀 코어 유저 (100시간 이상) 여론').
-    7. [✨신규 기능: 그룹간 교차 분석] 뉴비 유저와 코어 유저 사이에 공통적으로 나타나는 의견이나, 반대로 확연히 극명하게 갈리는 상반된 평가가 있다면 교차 비교하여 `comparison_insights` 배열에 요약할 것. (특별한 공통/상반 동향이 없다면 빈 배열 [] 반환)
     
     {{
       "critic_one_liner": "게임 여론과 핵심 맹점을 짚어주는 담백하고 위트있는 한줄평 (1문장)",
@@ -252,7 +251,6 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
       "ai_issue_pick": ["AI 발견 최근 특이 동향 1"],
       "news_summary": ["공지/업데이트의 가장 중요한 핵심 요약 1", "핵심 요약 2", "핵심 요약 3"],
       "playtime_analysis": {{
-        "comparison_insights": ["뉴비와 코어 유저 모두 공통적으로 불만을 가지는 요소 요약", "뉴비는 긍정적이지만 코어 유저는 부정적으로 평가하는 상반된 시각 요약"],
         "newbie_title": "🌱 뉴비 (XX시간 미만) 여론",
         "newbie_summary": ["주요 여론 요약 1", "요약 2"],
         "core_title": "💀 코어 유저 (XX시간 이상) 여론",
@@ -354,30 +352,13 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
     for summary_line in ai_data.get('final_summary_recent', []):
         children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": summary_line}}]}})
     
-    # ✨ 신규 기능: 플레이타임별 여론 분석 노션 임베드 및 교차 분석
+    # ✨ 신규 기능: 플레이타임별 여론 분석 노션 임베드 (동적 타이틀 적용)
     playtime_data = ai_data.get('playtime_analysis', {})
     if playtime_data:
         children_blocks.extend([
             {"object": "block", "type": "divider", "divider": {}},
-            {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "⏱️ 플레이타임별 주요 민심 교차 분석"}}]}}
+            {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "⏱️ 플레이타임별 주요 민심 (뉴비 vs 코어 유저)"}}]}}
         ])
-        
-        # 공통/상반 동향 인사이트 추가
-        comparison_insights = playtime_data.get('comparison_insights', [])
-        if comparison_insights and any(isinstance(line, str) and line.strip() for line in comparison_insights):
-            insight_text = "\n".join([line for line in comparison_insights if isinstance(line, str) and line.strip()])
-            children_blocks.append({
-                "object": "block", 
-                "type": "callout", 
-                "callout": {
-                    "icon": {"emoji": "⚖️"},
-                    "color": "gray_background",
-                    "rich_text": [
-                        {"text": {"content": "📊 핵심 교차 인사이트\n"}, "annotations": {"bold": True, "color": "gray"}},
-                        {"text": {"content": insight_text}}
-                    ]
-                }
-            })
         
         newbie_title = playtime_data.get('newbie_title', '🌱 뉴비 여론')
         children_blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": newbie_title}, "annotations": {"color": "green", "bold": True}}]}})
