@@ -8,22 +8,20 @@ from datetime import datetime
 # ==========================================
 # 🚀 0. 앱 메타데이터 및 버전 정보
 # ==========================================
-APP_VERSION = "v2.0.9"
+APP_VERSION = "v2.0.10"
 UPDATE_HISTORY = """
+**[v2.0.10] - 2026.03.13**
+- 🎨 **UI 위계 조정:** App ID 메인 입력창을 상단으로 올리고 검색 도우미를 보조 수단(옵션)으로 명확히 분리
+- 📅 **데이터 고도화:** 최신 게임 공지/패치노트 임베드 시 해당 게시글의 '업데이트 날짜' 표기 추가
+
 **[v2.0.9] - 2026.03.13**
-- 🔍 **신규 기능:** 스팀 상점 외부 접속 없이 앱 내부에서 바로 App ID를 찾을 수 있는 '검색 도우미' 기능 추가
-- 💡 **UI/UX 개선:** 메인 입력창을 App ID 전용으로 명확히 안내하여 분석 오류 최소화
+- 🔍 **신규 기능:** 앱 내부 App ID 검색 도우미 기능 추가
 
 **[v2.0.8] - 2026.03.13**
-- ✨ **신규 기능:** 화면 상단 스텝(Step) 인디케이터 추가
-- 🎨 **UI 개선:** 결과 링크 강조 UI 텍스트 축소 및 여백 조정
-- 🧠 **AI 프롬프트 최적화:** 한국어 리뷰 번역 패스 및 이미지 패치노트 예외 처리
+- ✨ **신규 기능:** 스텝(Step) 인디케이터 추가, 한국어 리뷰 번역 패스 적용, 이미지 패치노트 예외 처리
 
 **[v2.0.7] - 2026.03.13**
 - 🎨 **UI/UX 전면 개편:** 스텝별 직관성 강화
-
-**[v2.0.6] - 2026.03.13**
-- 🐛 **AI 로직 픽스:** 뉴스 요약 및 세부 평가 카테고리 강제 도출
 """
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="centered")
@@ -99,13 +97,12 @@ def get_steam_game_info(game_input):
     return app_id, exact_name, release_date
 
 def search_steam_app_id(query):
-    """새로 추가된 App ID 검색 도우미 함수"""
     search_url = f"https://store.steampowered.com/api/storesearch/?term={query}&l=korean&cc=KR"
     try:
         res = requests.get(search_url).json()
         if res.get('items'):
             results = []
-            for item in res['items'][:5]: # 상위 5개 결과만
+            for item in res['items'][:5]: 
                 results.append({"name": item['name'], "id": item['id']})
             return results
     except:
@@ -119,21 +116,26 @@ def fetch_latest_news(app_id):
         news_items = res.get('appnews', {}).get('newsitems', [])
         
         if not news_items:
-            return None, None, None
+            return None, None, None, None
             
+        def parse_item(item):
+            # API에서 제공하는 timestamp를 YYYY-MM-DD 포맷으로 변환
+            date_str = datetime.fromtimestamp(item.get('date', 0)).strftime('%Y-%m-%d')
+            return item['title'], item.get('contents', ''), item['url'], date_str
+
         for item in news_items:
             title_lower = item.get('title', '').lower()
             if 'update' in title_lower or 'patch' in title_lower or '패치' in title_lower or '업데이트' in title_lower:
-                return item['title'], item.get('contents', ''), item['url']
+                return parse_item(item)
                 
         for item in news_items:
             if item.get('feed_type') == 1:
-                return item['title'], item.get('contents', ''), item['url']
+                return parse_item(item)
                 
-        return news_items[0]['title'], news_items[0].get('contents', ''), news_items[0]['url']
+        return parse_item(news_items[0])
     except:
         pass
-    return None, None, None
+    return None, None, None, None
 
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
@@ -227,8 +229,12 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
     for lang, revs in review_data_recent.items():
         if revs: review_text += f"\n🌍 [{get_lang_name(lang)}]\n" + "\n".join(revs)
         
-    news_title, news_contents, _ = news_data
-    news_text = f"\n[최신 게임 업데이트/공지]\n- 제목: {news_title}\n- 내용: {news_contents[:1500]}" if news_title else "제공된 최신 뉴스가 없습니다."
+    if news_data:
+        news_title, news_contents, news_url, news_date = news_data
+    else:
+        news_title, news_contents, news_url, news_date = None, None, None, None
+
+    news_text = f"\n[최신 게임 업데이트/공지]\n- 업로드 날짜: {news_date}\n- 제목: {news_title}\n- 내용: {news_contents[:1500]}" if news_title else "제공된 최신 뉴스가 없습니다."
     feedback_instruction = f"\n\n🚨 [사용자 추가 피드백!! 반드시 최우선으로 반영할 것!]:\n{user_feedback}\n" if user_feedback else ""
         
     prompt = f"""
@@ -304,7 +310,11 @@ def delete_notion_page(page_id):
     requests.patch(url, headers=headers, json={"archived": True})
 
 def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smart_reason, news_data):
-    news_title, _, news_url = news_data
+    if news_data:
+        news_title, _, news_url, news_date = news_data
+    else:
+        news_title, news_url, news_date = None, None, None
+
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Content-Type": "application/json", "Notion-Version": "2022-06-28"}
 
     bot_info_callout = {
@@ -365,7 +375,10 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
             {"object": "block", "type": "callout", "callout": {
                 "icon": {"emoji": "🔗"}, 
                 "color": "gray_background", 
-                "rich_text": [{"text": {"content": news_title, "link": {"url": news_url}}, "annotations": {"bold": True, "underline": True}}]
+                "rich_text": [
+                    {"text": {"content": f"[{news_date}] ", "link": None}, "annotations": {"bold": True, "color": "gray"}},
+                    {"text": {"content": news_title, "link": {"url": news_url}}, "annotations": {"bold": True, "underline": True}}
+                ]
             }}
         ])
         
@@ -486,27 +499,29 @@ def main():
     # [STEP 0] 데이터 입력 및 분석 시작
     # ==========================================
     if st.session_state.step == 0:
-        st.subheader("Step 1. 분석할 게임 입력")
+        st.subheader("Step 1. 분석할 게임의 App ID 입력")
         
-        # 🔍 신규 기능: App ID 검색 도우미
-        with st.expander("🔍 App ID 검색 도우미 (이름으로 찾기)"):
+        # 1순위 핵심 액션(What)을 가장 위로 배치!
+        game_input = st.text_input("👉 스팀 App ID를 숫자로 입력하세요", placeholder="예: 3564740")
+        
+        # Why와 보조 수단은 한 톤 낮춰서 바로 아래에 배치
+        st.caption("💡 **App ID 찾는 법:** 스팀 상점 페이지 주소(`store.steampowered.com/app/123450/`)의 숫자 부분입니다. 직접 스팀에서 확인하시거나, 아래 검색 도우미를 활용하세요.")
+        
+        with st.expander("🔍 (옵션) 게임 이름으로 App ID 검색하기"):
             search_query = st.text_input("게임 이름을 입력하고 검색해보세요", placeholder="예: helldivers 2")
             if st.button("게임 검색하기", use_container_width=True):
                 if search_query:
                     results = search_steam_app_id(search_query)
                     if results:
-                        st.markdown("👇 찾으시는 게임의 **ID 숫자**를 복사해서 아래 메인 입력창에 넣어주세요!")
+                        st.markdown("👇 찾으시는 게임의 **ID 숫자**를 복사해서 위 메인 입력창에 넣어주세요!")
                         for item in results:
-                            # st.code를 사용하면 쉽게 복사할 수 있음!
                             st.code(f"{item['id']} ({item['name']})", language="text")
                     else:
                         st.warning("해당 이름으로 검색된 게임이 없습니다. 스팀 상점에서 영문명을 확인해보세요.")
                 else:
                     st.warning("검색할 게임 이름을 입력해주세요.")
         
-        # 메인 입력창은 확실하게 ID를 넣도록 안내 수정
         st.markdown("---")
-        game_input = st.text_input("👉 찾으신 App ID를 숫자로 입력하세요", placeholder="예: 3564740")
         
         if st.button("🚀 데이터 탈곡 시작", use_container_width=True, type="primary"):
             if not game_input:
@@ -531,7 +546,7 @@ def main():
                 st.write("📰 2/5: 스팀 최신 업데이트 뉴스/공지 수집 중...")
                 news_data = fetch_latest_news(app_id)
                 if news_data and news_data[0]:
-                    st.write(f"  👉 [발견된 공지]: {news_data[0]}")
+                    st.write(f"  👉 [발견된 공지]: {news_data[0]} ({news_data[3]})")
                 else:
                     st.write("  👉 스팀 최신 뉴스를 찾을 수 없습니다.")
                 st.session_state.update({"app_id": app_id, "game_name": game_name, "recent_label": recent_label, "smart_reason": smart_reason, "news_data": news_data})
