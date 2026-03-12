@@ -8,19 +8,28 @@ from datetime import datetime
 # ==========================================
 # 🚀 0. 앱 메타데이터 및 버전 정보
 # ==========================================
-APP_VERSION = "v2.0.3"
+APP_VERSION = "v2.0.5"
 UPDATE_HISTORY = """
+**[v2.0.5] - 2026.03.13**
+- ⏳ **UX 개선:** 데이터 탈곡 및 AI 분석 과정에 시각적인 진행률(Progress) 게이지 바 추가
+
+**[v2.0.4] - 2026.03.13**
+- 🐛 **버그 픽스:** 뉴스/공지사항 요약 시 글머리 기호 누락 현상 수정 (데이터 타입 예외 처리)
+- 🧠 **프롬프트 강화:** 국가별 세부 평가 분석 시 [긍정]/[부정] 카테고리가 복합적으로 도출되도록 지시
+
 **[v2.0.3] - 2026.03.12**
-- 🎨 **UI/UX 대폭 개선:** - 리뷰 원문 토글(접기/펼치기) 적용으로 가독성 향상
-  - 사이드바에 통합 리포트 노션 DB 다이렉트 링크 추가
-  - 최신 공지/패치노트 임베드 디자인 개선 및 요약 방식(글머리 기호) 변경
-- 📊 **누락 데이터 복구:** 국가별 누적 리뷰 비중(표) 및 영어권 편향 안내 텍스트 복구
+- 🎨 **UI/UX 개선:** 리뷰 원문 토글 적용, 통합 리포트 링크 추가, 표 누락 수정
+"""
+**[v2.0.4] - 2026.03.13**
+- 🐛 **버그 픽스:** 뉴스/공지사항 요약 시 글머리 기호 누락 현상 수정 (데이터 타입 예외 처리)
+- 🧠 **프롬프트 강화:** 국가별 세부 평가 분석 시 [긍정]/[부정] 카테고리가 복합적으로(다수) 도출되도록 강제 지시
+
+**[v2.0.3] - 2026.03.12**
+- 🎨 **UI/UX 대폭 개선:** 리뷰 원문 토글 적용, 통합 리포트 다이렉트 링크 추가
+- 📊 **누락 데이터 복구:** 국가별 누적 리뷰 비중(표) 및 안내 텍스트 복구
 
 **[v2.0.2] - 2026.03.12**
 - 🛡️ **신뢰도 패치 및 최적화:** AI 배경정보 학습 프롬프트 워딩 정제 및 내부 로직 최적화
-
-**[v2.0.1] - 2026.03.12**
-- 🛡️ **AI 팩트체크 강화:** 배경정보 학습 시 유저 사견/루머 배제 지시 추가
 
 **[v2.0.0] - 2026.03.12**
 - 🧠 **AI 배경정보 선행 학습 & 스팀 뉴스 연동 기능 추가**
@@ -225,6 +234,8 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
     1. 마크다운 기호(**, # 등) 금지. 요약은 간결하게 작성.
     2. global_category_summary 작성 시, [긍정평가] 항목을 모두 먼저 쓰고 그 뒤에 [부정평가] 항목 나열.
     3. 한국어가 아닌 타 언어 리뷰 인용 시, [원문]과 [한국어 번역] 필수 기재.
+    4. [필수] 국가별 세부 평가(country_analysis) 작성 시, 단순히 1개의 카테고리만 적지 말고 해당 국가 유저들의 [긍정평가]와 [부정평가] 카테고리를 최소 2개 이상 복합적으로 도출해서 배열로 담을 것. (긍정 먼저, 부정 나중 순서 유지)
+    5. news_summary 항목은 반드시 1개 이상의 요약을 담은 배열(List of Strings) 형태로 반환할 것.
     
     {{
       "critic_one_liner": "게임 여론과 핵심 맹점을 짚어주는 담백하고 위트있는 한줄평 (1문장)",
@@ -242,7 +253,8 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         {{
           "language": "🇰🇷 한국어 등 (국기 포함)",
           "categories": [
-            {{ "name": "[긍정평가] 콘텐츠 관련 평가", "summary": ["요약 1"], "quote": "[👍 | ⏱️ 15h | ID: **1234]\\n[원문] (타언어)\\n[한국어 번역]" }}
+            {{ "name": "[긍정평가] 콘텐츠 관련 평가", "summary": ["요약 1"], "quote": "[👍 | ⏱️ 15h | ID: **1234]\\n[원문] (타언어)\\n[한국어 번역]" }},
+            {{ "name": "[부정평가] 버그 및 최적화 평가", "summary": ["요약 1"], "quote": "[👎 | ⏱️ 2h | ID: **5678]\\n[원문] (타언어)\\n[한국어 번역]" }}
           ]
         }}
       ]
@@ -332,7 +344,7 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
     for issue in ai_data.get('ai_issue_pick', []):
         children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": issue}}]}})
     
-    # 공지사항/패치노트 섹션: 리스팅 형태로 분리!
+    # 공지사항/패치노트 섹션: 리스팅 형태로 분리 (데이터 타입 검증 로직 추가)
     if news_title:
         children_blocks.extend([
             {"object": "block", "type": "divider", "divider": {}},
@@ -343,8 +355,15 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
                 "rich_text": [{"text": {"content": news_title, "link": {"url": news_url}}, "annotations": {"bold": True, "underline": True}}]
             }}
         ])
-        for news_line in ai_data.get('news_summary', []):
-            children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": news_line}}]}})
+        
+        # AI가 배열 대신 통짜 문자열로 줬을 경우를 대비한 안전 장치
+        news_summary_data = ai_data.get('news_summary', [])
+        if isinstance(news_summary_data, str):
+            news_summary_data = [news_summary_data]
+            
+        for news_line in news_summary_data:
+            if news_line.strip():
+                children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": news_line}}]}})
 
     children_blocks.extend([
         {"object": "block", "type": "divider", "divider": {}},
@@ -360,7 +379,6 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
     children_blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 누적 리뷰 작성 언어 비중"}}]}})
     children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"총 누적 리뷰 수: {store_stats['all_total']:,}개 (전체 언어 취합 기준)"}, "annotations": {"bold": True, "color": "gray"}}]}})
     
-    # 누락되었던 언어 비중 표 복구!
     table_rows = [
         {"type": "table_row", "table_row": {"cells": [
             [{"text": {"content": "순위"}, "annotations": {"bold": True, "color": "gray"}}], 
@@ -383,14 +401,12 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
         
     children_blocks.append({"object": "block", "type": "table", "table": {"table_width": 4, "has_column_header": True, "has_row_header": False, "children": table_rows}})
     
-    # 누락되었던 영어권 편향 안내 텍스트 복구!
     children_blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🌍"}, "color": "blue_background", "rich_text": [{"text": {"content": ai_data.get('language_analysis', '언어 분석 코멘트 없음')}}]}})
     disclaimer_text = "언어 비중 표는 표본이 아닌 '스팀에 등록된 전체 리뷰'를 대상으로 구성되었습니다. 스팀 특성상 비영어권 유저들도 다수에게 의견을 전달하기 위해 공용어인 '영어'로 작성하는 경향이 있어 실제 플레이 유저 비례보다 영어 리뷰 비중이 높게 나타날 수 있습니다."
     children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": disclaimer_text}, "annotations": {"italic": True, "color": "gray"}}]}})
 
     children_blocks.append({"object": "block", "type": "divider", "divider": {}})
     children_blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌍 국가별 세부 평가 분석 (TOP 3 + 한국)"}}]}})
-    # 섹션 하단 배경 설명 추가!
     children_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "가장 많은 평가가 입력된 언어 상위 3개와 한국의 주요 평가에 대해 정리합니다."}, "annotations": {"color": "gray"}}]}})
     
     for country in ai_data.get('country_analysis', []):
@@ -401,7 +417,6 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
             for line in cat.get('summary', []):
                 children_blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
             
-            # 유저 평가 원문을 토글(접기) 블록 안으로 쏙!
             children_blocks.append({
                 "object": "block", 
                 "type": "toggle", 
@@ -423,7 +438,6 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
 # ==========================================
 def main():
     with st.sidebar:
-        # 무길이가 원했던 "어디서나 접근 가능한" 글로벌 DB 링크 버튼 추가!
         st.markdown("### 📚 통합 리포트 열람")
         st.link_button("👉 노션 데이터베이스 보러가기", NOTION_PUBLISH_URL, use_container_width=True)
         st.divider()
@@ -451,38 +465,47 @@ def main():
                 return
             
             with st.status("스팀 데이터를 탈곡하고 있습니다... 🌾 (약 60초 소요)", expanded=True) as status:
-                st.write("🔍 게임 정보 및 출시일 분석 중...")
+                # 🚀 진행률 바 초기화
+                progress_bar = st.progress(0)
+                
+                st.write("🔍 1/5: 게임 정보 및 출시일 분석 중...")
                 app_id, game_name, release_date = get_steam_game_info(game_input)
                 if not app_id:
                     status.update(label="검색 실패", state="error")
                     st.error("게임을 찾을 수 없습니다. App ID를 확인해주세요.")
                     return
+                progress_bar.progress(10)
                 
                 recent_days_val, recent_label, smart_reason = get_smart_period(release_date)
                 st.write(f"📅 출시일 기반 스마트 분석 적용: **[{recent_label}]** 기준")
+                progress_bar.progress(20)
                 
-                st.write("📰 스팀 최신 업데이트 뉴스/공지 수집 중...")
+                st.write("📰 2/5: 스팀 최신 업데이트 뉴스/공지 수집 중...")
                 news_data = fetch_latest_news(app_id)
                 st.session_state.update({"app_id": app_id, "game_name": game_name, "recent_label": recent_label, "smart_reason": smart_reason, "news_data": news_data})
+                progress_bar.progress(30)
 
-                st.write("📥 스팀 글로벌 리뷰 데이터 수집 중...")
+                st.write("📥 3/5: 스팀 글로벌 리뷰 데이터 수집 중...")
                 reviews_all, reviews_recent, store_stats = fetch_steam_reviews(app_id, recent_days_val)
                 st.session_state.update({"reviews_all": reviews_all, "reviews_recent": reviews_recent, "store_stats": store_stats})
+                progress_bar.progress(50)
 
-                st.write("🧠 AI가 게임 배경정보와 팩트를 교차 검증하며 다차원 분석 중입니다... (약 60초 소요)")
+                st.write("🧠 4/5: AI가 게임 배경정보와 팩트를 교차 검증하며 다차원 분석 중입니다... (가장 오래 걸려요!)")
                 insights, err = analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats, recent_label, news_data)
                 if err:
                     status.update(label="AI 분석 실패", state="error")
                     st.error(f"AI 분석 중 에러가 발생했습니다: {err}")
                     return
+                progress_bar.progress(80)
 
-                st.write("📝 노션 리포트 생성 및 임베드 중...")
+                st.write("📝 5/5: 노션 리포트 생성 및 임베드 중...")
                 page_id, err_notion = upload_to_notion(app_id, game_name, store_stats, insights, recent_label, smart_reason, news_data)
                 if not page_id:
                     status.update(label="노션 업로드 실패", state="error")
                     st.error(f"노션 에러: {err_notion}")
                     return
-
+                
+                progress_bar.progress(100)
                 st.session_state.page_id = page_id
                 st.session_state.step = 1
                 status.update(label="✅ 리포트 초안 작성 완료!", state="complete")
@@ -505,7 +528,6 @@ def main():
         st.divider()
         
         st.subheader("🛠️ 리포트 추가 피드백")
-        # "당황하지 마세요" 삭제 및 문구 정제!
         st.warning("🚨 **[안내]** 피드백을 반영하여 재생성할 경우, 기존에 생성된 노션 페이지는 자동으로 휴지통으로 이동되고 새로운 페이지로 교체됩니다.")
         
         feedback = st.text_area("AI에게 반영할 추가 피드백을 적어주세요", placeholder="예: 한국어 최적화 불만 부분을 더 구체적으로 써줘")
@@ -517,10 +539,14 @@ def main():
                     st.error("피드백 내용을 입력해주세요.")
                 else:
                     with st.status("피드백을 반영하여 다시 탈곡 중입니다... 🌾", expanded=True) as status:
-                        st.write("🗑️ 기존 노션 초안 페이지 삭제 중...")
+                        # 🚀 피드백 재생성 진행률 바 추가
+                        feedback_progress = st.progress(0)
+                        
+                        st.write("🗑️ 1/3: 기존 노션 초안 페이지 삭제 중...")
                         delete_notion_page(st.session_state.page_id)
+                        feedback_progress.progress(20)
 
-                        st.write("🧠 AI가 피드백을 반영하여 재분석 중입니다... (약 60초 소요)")
+                        st.write("🧠 2/3: AI가 피드백을 반영하여 재분석 중입니다... (약 60초 소요)")
                         insights, err = analyze_with_gemini(
                             st.session_state.game_name, st.session_state.reviews_all, st.session_state.reviews_recent, 
                             st.session_state.store_stats, st.session_state.recent_label, st.session_state.news_data, feedback
@@ -529,12 +555,15 @@ def main():
                             status.update(label="AI 분석 실패", state="error")
                             st.error(f"AI 에러: {err}")
                             st.stop()
+                        feedback_progress.progress(70)
 
-                        st.write("📝 수정된 노션 리포트 업로드 중...")
+                        st.write("📝 3/3: 수정된 노션 리포트 업로드 중...")
                         new_page_id, err_notion = upload_to_notion(
                             st.session_state.app_id, st.session_state.game_name, st.session_state.store_stats, 
                             insights, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data
                         )
+                        feedback_progress.progress(100)
+                        
                         st.session_state.page_id = new_page_id
                         status.update(label="✅ 재작성 완료!", state="complete")
                     st.rerun()
