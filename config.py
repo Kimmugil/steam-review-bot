@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import requests
 from config import APP_VERSION, UPDATE_HISTORY, NOTION_PUBLISH_URL, GEMINI_API_KEY, NOTION_TOKEN
