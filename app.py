@@ -83,7 +83,7 @@ def main():
                     st.session_state.update({"reviews_all": reviews_all, "reviews_recent": reviews_recent, "store_stats": store_stats})
                     progress_bar.progress(50)
 
-                    st.write("🧠 4/5: AI 다차원 분석 중... (오래 걸려요!)")
+                    st.write("🧠 4/5: AI 다차원 분석 중... (40~60초 가량 소요됩니다. 어쩌면 조금 더 걸릴수도 있어요...)")
                     insights, err = analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats, recent_label, news_data)
                     if err: raise Exception(err)
                     progress_bar.progress(80)
@@ -172,4 +172,5 @@ def main():
             st.rerun()
 
 if __name__ == "__main__":
+
     main()
