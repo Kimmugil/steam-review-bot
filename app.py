@@ -175,7 +175,10 @@ def main():
             for country in ins.get('country_analysis', []):
                 st.markdown(f"**🚩 {country.get('language')}**")
                 for c_cat in country.get('categories', []):
-                    st.write(f"- **{c_cat.get('name')}**: {', '.join(c_cat.get('summary', []))}")
+                    # 리스트 형태의 summary를 문자열로 변환하여 출력하도록 수정
+                    st.markdown(f"- **{c_cat.get('name')}**")
+                    for summary_line in c_cat.get('summary', []):
+                        st.write(f"  - {summary_line}")
 
         st.divider(); feedback = st.text_area("수정이 필요한가요? 피드백을 적어주세요.")
         c1, c2 = st.columns(2)
