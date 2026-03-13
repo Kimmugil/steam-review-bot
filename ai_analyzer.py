@@ -79,3 +79,17 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
             
 
     return json.loads(raw_text), None
+
+
+    except requests.exceptions.HTTPError as e:
+        # 💡 보안 패치 1: HTTP 에러 발생 시 URL 노출을 막고 상태 코드만 안전하게 전달
+        if e.response.status_code == 429:
+            return None, "429 Client Error"
+        return None, f"API 통신 에러 (코드: {e.response.status_code})"
+
+    except Exception as e: 
+        # 💡 보안 패치 2: 만약 다른 알 수 없는 에러에 API 키가 섞여 있다면 `********` 로 강제 마스킹!
+        error_msg = str(e)
+        if GEMINI_API_KEY and GEMINI_API_KEY in error_msg:
+            error_msg = error_msg.replace(GEMINI_API_KEY, "********")
+        return None, error_msg
