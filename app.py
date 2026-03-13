@@ -1,6 +1,10 @@
+# app.py
 import streamlit as st
 import requests
-from config import APP_VERSION, UPDATE_HISTORY, NOTION_PUBLISH_URL, GEMINI_API_KEY, NOTION_TOKEN
+import random
+import time
+import threading
+from config import APP_VERSION, UPDATE_HISTORY, NOTION_PUBLISH_URL, GEMINI_API_KEY, NOTION_TOKEN, WAITING_MESSAGES
 from steam_api import get_steam_game_info, fetch_latest_news, get_smart_period, fetch_steam_reviews
 from ai_analyzer import analyze_with_gemini
 from notion_exporter import upload_to_notion, delete_notion_page
@@ -8,7 +12,7 @@ from notion_exporter import upload_to_notion, delete_notion_page
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="wide")
 
 if not GEMINI_API_KEY or not NOTION_TOKEN:
-    st.error("🚨 스트림릿 Secrets 금고에 API 키가 설정되지 않았어! 배포 설정(Advanced settings)을 확인해줘.")
+    st.error("🚨 스트림릿 Secrets 금고에 API 키가 설정되지 않았어! 배포 설정 확인해줘.")
     st.stop()
 
 def render_step_indicator(current_step):
@@ -24,11 +28,10 @@ def render_step_indicator(current_step):
     st.divider()
 
 def handle_api_error(e):
-    """💡 에러 코드별 사용자 친화적 메시지 출력 (429 중점)"""
     if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 429:
-        st.error("🚨 **[429 Client Error: Too Many Requests]**\n\n토큰 발행량이 최대에 달했거나 단시간에 너무 많은 요청이 발생했어!\n\n**대응 방안:**\n1. 약 1~2분 정도 충분히 기다린 뒤에 다시 시도해줘.\n2. 계속해서 문제가 발생한다면 관리자에게 에러 코드를 전달해줘!")
+        st.error("🚨 **[429 Client Error: Too Many Requests]**\n\n토큰 발행량이 최대에 달했거나 단시간에 너무 많은 요청이 발생했어!\n\n1~2분 뒤 다시 시도하거나 관리자에게 말해줘.")
     else:
-        st.error(f"🚨 일시적인 API 통신 에러가 발생했어: {e}\n\n잠시 후 다시 시도해줘!")
+        st.error(f"🚨 API 통신 에러 발생: {e}")
 
 def main():
     with st.sidebar:
@@ -39,7 +42,7 @@ def main():
         with st.expander("🛠️ 업데이트 이력 (Changelog)"): st.markdown(UPDATE_HISTORY)
 
     st.title("🚜 스팀 사용자 평가 탈곡기")
-    st.markdown("스팀 게임의 글로벌 리뷰, 최신 뉴스, 배경정보를 종합 분석하여 노션으로 추출합니다.")
+    st.markdown("스팀 게임의 글로벌 리뷰를 분석하여 노션 리포트를 생성합니다.")
     
     if "step" not in st.session_state:
         st.session_state.step = 0
@@ -52,7 +55,16 @@ def main():
     # ==========================
     if st.session_state.step == 0:
         st.subheader("Step 1. 분석할 게임의 App ID 입력")
+        
         game_input = st.text_input("👉 스팀 App ID를 숫자로 입력하세요", placeholder="예: 3564740")
+        
+        # 📖 무길이가 요청한 App ID 찾는 법 설명 보강
+        with st.expander("❓ 스팀 App ID가 뭔가요? (찾는 방법)", expanded=True):
+            st.markdown("""
+            1. 브라우저에서 스팀 상점 페이지에 접속합니다.
+            2. 주소창의 URL을 확인합니다. (예: `https://store.steampowered.com/app/123450/Portal_2/`)
+            3. `/app/` 다음에 나오는 **숫자(`123450`)**가 바로 App ID입니다!
+            """)
         
         if st.button("🚀 데이터 탈곡 시작", use_container_width=True, type="primary"):
             if not game_input:
@@ -65,9 +77,7 @@ def main():
                     st.write("🔍 1/5: 게임 정보 분석 중...")
                     app_id, game_name, release_date = get_steam_game_info(game_input)
                     if not app_id:
-                        status.update(label="검색 실패", state="error")
-                        st.error("입력하신 App ID로 게임을 찾을 수 없어. 숫자만 정확히 썼는지 확인해줘!")
-                        return
+                        status.update(label="검색 실패", state="error"); return
                     progress_bar.progress(10)
                     
                     recent_days_val, recent_label, smart_reason = get_smart_period(release_date)
@@ -83,9 +93,21 @@ def main():
                     st.session_state.update({"reviews_all": reviews_all, "reviews_recent": reviews_recent, "store_stats": store_stats})
                     progress_bar.progress(50)
 
-                    st.write("🧠 4/5: AI 다차원 분석 중... (40~60초 가량 소요됩니다. 어쩌면 조금 더 걸릴수도 있어요...)")
+                    # ⏳ 4/5 단계: AI 분석 (여기가 제일 길다!)
+                    st.write("🧠 4/5: AI 다차원 분석 중... (가장 오래 걸리는 구간입니다)")
+                    
+                    # 💡 무길이가 요청한 전광판 메시지 표시용 슬롯
+                    ticker_placeholder = st.empty()
+                    
+                    # 분석이 진행되는 동안 랜덤 메시지를 하나 띄워줌
+                    # (HTTP 요청 중이라 실시간 변경은 어렵지만, 시작할 때 유머러스한 문구를 보여줌)
+                    ticker_placeholder.info(f"💡 {random.choice(WAITING_MESSAGES)}")
+                    
                     insights, err = analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats, recent_label, news_data)
                     if err: raise Exception(err)
+                    
+                    # 분석 끝나면 전광판 지우기
+                    ticker_placeholder.empty()
                     progress_bar.progress(80)
 
                     st.write("📝 5/5: 노션 리포트 생성 중...")
@@ -97,8 +119,8 @@ def main():
                     status.update(label="✅ 리포트 초안 작성 완료!", state="complete")
                     st.rerun()
 
-                except requests.exceptions.RequestException as e:
-                    status.update(label="통신 에러 발생", state="error")
+                except Exception as e:
+                    status.update(label="에러 발생", state="error")
                     handle_api_error(e)
                 except Exception as e:
                     status.update(label="에러 발생", state="error")
@@ -174,3 +196,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
