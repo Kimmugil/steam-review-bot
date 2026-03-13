@@ -9,7 +9,8 @@ from steam_api import get_lang_name
 def delete_notion_page(page_id):
     url = f"https://api.notion.com/v1/pages/{page_id}"
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": "2022-06-28"}
-    requests.patch(url, headers=headers, json={"archived": True})
+    res = requests.patch(url, headers=headers, json={"archived": True})
+    res.raise_for_status()
 
 def format_sentiment_line(line):
     if line.startswith("[긍정]"):
@@ -77,12 +78,28 @@ def get_category_summary_block(ai_data):
 
 def get_language_ratio_block(store_stats):
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 누적 리뷰 작성 언어 비중"}}]}}, {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"총 누적 리뷰 수: {store_stats['all_total']:,}개"}, "annotations": {"bold": True, "color": "gray"}}]}}]
-    table_rows = [{"type": "table_row", "table_row": {"cells": [[{"text": {"content": "순위"}}, {"text": {"content": "언어"}}, {"text": {"content": "리뷰 수"}}, {"text": {"content": "비중"}}] for _ in range(1)]}}]
+    
+    # 💡 [버그 픽스] 표 데이터 구조 정상화 완료!
+    table_rows = [
+        {"type": "table_row", "table_row": {"cells": [
+            [{"text": {"content": "순위"}, "annotations": {"bold": True, "color": "gray"}}], 
+            [{"text": {"content": "언어"}, "annotations": {"bold": True, "color": "gray"}}], 
+            [{"text": {"content": "리뷰 수"}, "annotations": {"bold": True, "color": "gray"}}], 
+            [{"text": {"content": "비중"}, "annotations": {"bold": True, "color": "gray"}}]
+        ]}}
+    ]
+    
     sorted_langs = sorted(store_stats['total_lang_counts'].items(), key=lambda x: x[1], reverse=True)[:10]
     total_all_langs = store_stats['all_total']
     for idx, (lang_code, count) in enumerate(sorted_langs):
         ratio = (count / total_all_langs) * 100 if total_all_langs > 0 else 0
-        table_rows.append({"type": "table_row", "table_row": {"cells": [[{"text": {"content": f"{idx+1}위"}}, {"text": {"content": get_lang_name(lang_code)}}, {"text": {"content": f"{count:,}개"}}, {"text": {"content": f"{ratio:.1f}%"}}] for _ in range(1)][0]}})
+        table_rows.append({"type": "table_row", "table_row": {"cells": [
+            [{"text": {"content": f"{idx+1}위"}}], 
+            [{"text": {"content": get_lang_name(lang_code)}}], 
+            [{"text": {"content": f"{count:,}개"}}], 
+            [{"text": {"content": f"{ratio:.1f}%"}}]
+        ]}})
+        
     blocks.append({"object": "block", "type": "table", "table": {"table_width": 4, "has_column_header": True, "children": table_rows}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
@@ -103,8 +120,10 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Content-Type": "application/json", "Notion-Version": "2022-06-28"}
     page_title = f"[{datetime.now().strftime('%Y-%m-%d')}] {game_name} 평가 요약"
     create_data = {"parent": {"database_id": NOTION_DATABASE_ID}, "properties": {"이름": {"title": [{"text": {"content": page_title}}]}}}
-    res = requests.post("https://api.notion.com/v1/pages", headers=headers, data=json.dumps(create_data)); res.raise_for_status()
+    res = requests.post("https://api.notion.com/v1/pages", headers=headers, data=json.dumps(create_data))
+    res.raise_for_status()
     page_id = res.json()['id']
+    
     children_blocks = []
     for section in NOTION_SECTION_ORDER:
         if section == "bot_info": children_blocks.extend(get_bot_info_block(game_name, app_id))
@@ -117,7 +136,12 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
         elif section == "category_summary": children_blocks.extend(get_category_summary_block(ai_data))
         elif section == "language_ratio": children_blocks.extend(get_language_ratio_block(store_stats))
         elif section == "country_analysis": children_blocks.extend(get_country_analysis_block(ai_data))
+        
     append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
     for i in range(0, len(children_blocks), 100):
-        requests.patch(append_url, headers=headers, data=json.dumps({"children": children_blocks[i:i+100]})); time.sleep(0.5)
+        # 💡 [버그 픽스] 블록 추가 중 에러가 발생하면 무시하지 않고 바로 알려주도록 변경!
+        patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": children_blocks[i:i+100]}))
+        patch_res.raise_for_status() 
+        time.sleep(0.5)
+        
     return page_id
