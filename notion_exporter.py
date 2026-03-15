@@ -118,13 +118,14 @@ def get_country_analysis_block(ai_data):
 def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smart_reason, news_data):
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Content-Type": "application/json", "Notion-Version": "2022-06-28"}
     
-    # [개선] 노션 제목 및 메타데이터 필드 구성
+    # 시간 및 버전 메타데이터 준비
     now = datetime.now()
-    timestamp_str = now.strftime('%Y-%m-%d %H:%M:%S')
     iso_timestamp = now.strftime('%Y-%m-%dT%H:%M:%S+09:00') # Notion Date 포맷 (GMT+9)
-    page_title = f"[{timestamp_str}][{APP_VERSION}] {game_name} 평가 요약"
     
-    # 💡 [팩트] 노션 DB에 '추출 시점'(Date), '탈곡기 버전'(Text) 컬럼이 있어야 정상 동작함
+    # 💡 [수정] 제목에는 지저분한 정보 다 빼고 게임명만 남김
+    page_title = f"{game_name} 평가 요약"
+    
+    # [팩트] 노션 DB의 '추출 시점'과 '탈곡기 버전' 컬럼에 메타데이터를 정식으로 입력
     create_data = {
         "parent": {"database_id": NOTION_DATABASE_ID}, 
         "properties": {
