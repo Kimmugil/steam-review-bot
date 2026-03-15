@@ -20,7 +20,7 @@ def get_steam_game_info(game_input):
     app_id = str(game_input).strip()
     if not app_id.isdigit(): return None, None, None
     
-    details_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean"
+    details_url = f"[https://store.steampowered.com/api/appdetails?appids=](https://store.steampowered.com/api/appdetails?appids=){app_id}&l=korean"
     res = requests.get(details_url)
     res.raise_for_status()
     data = res.json()
@@ -41,7 +41,7 @@ def get_steam_game_info(game_input):
     return app_id, exact_name, release_date
 
 def fetch_latest_news(app_id):
-    url = f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json"
+    url = f"[https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=](https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=){app_id}&count=5&maxlength=3000&format=json"
     try:
         res = requests.get(url, timeout=5)
         res.raise_for_status()
@@ -55,27 +55,24 @@ def fetch_latest_news(app_id):
 
         for item in news_items:
             title_lower = item.get('title', '').lower()
-            if 'update' in title_lower or 'patch' in title_lower or '패치' in title_lower or '업데이트' in title_lower:
+            if any(kw in title_lower for kw in ['update', 'patch', '패치', '업데이트']):
                 return parse_item(item)
-                
-        for item in news_items:
-            if item.get('feed_type') == 1: return parse_item(item)
-                
+        
         return parse_item(news_items[0])
     except: pass
     return None, None, None, None
 
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
-    if days_since < 3: return None, "전체 주요 동향", "출시 3일 미만으로 데이터가 적어 '전체 동향 대비 주요 동향' 위주로 분석했습니다."
-    elif days_since < 7: return 3, "최근 3일 동향", "출시 7일 미만인 초기 게임이므로 '최근 3일 내 동향'을 기준으로 민심을 분석했습니다."
-    elif days_since < 30: return 7, "최근 7일 동향", "출시 30일 미만의 신작이므로 '최근 7일 내 동향'을 기준으로 민심을 분석했습니다."
-    return 30, "최근 30일 동향", "출시 30일 이상 경과하여 '최근 30일 내 동향'을 기준으로 민심을 분석했습니다."
+    if days_since < 3: return None, "전체 주요 동향", "초기 데이터 기반 분석"
+    elif days_since < 7: return 3, "최근 3일 동향", "출시 초기 집중 분석"
+    elif days_since < 30: return 7, "최근 7일 동향", "신작 초기 안정화 분석"
+    return 30, "최근 30일 동향", "장기 운영 안정성 분석"
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     """특정 언어의 리뷰만 집중적으로 긁어오는 함수"""
     reviews = []
-    base_url = f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=all&language={lang}&num_per_page=100&purchase_type=all"
+    base_url = f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&filter=all&language={lang}&num_per_page=100&purchase_type=all"
     if day_range: base_url += f"&day_range={day_range}"
         
     cursor = "*"
@@ -105,7 +102,7 @@ def fetch_steam_reviews(app_id, recent_days_val):
     # 1. 전체 언어별 리뷰 수 파악
     for lang in LANG_MAP.keys():
         try:
-            res = requests.get(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all")
+            res = requests.get(f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all")
             count = res.json().get('query_summary', {}).get('total_reviews', 0)
             if count > 0:
                 total_lang_counts[lang] = count
@@ -113,14 +110,14 @@ def fetch_steam_reviews(app_id, recent_days_val):
         except: pass
             
     # 2. 전체 누적 평점 요약 가져오기
-    summary_all = requests.get(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all").json().get('query_summary', {})
+    summary_all = requests.get(f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&language=all&num_per_page=0&purchase_type=all").json().get('query_summary', {})
     
     # 3. 최근 동향 평점 요약 가져오기 (정확한 수치 계산용)
     recent_custom_desc = "평가 없음"
     recent_total = 0
     if recent_days_val:
         try:
-            res_recent = requests.get(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&day_range={recent_days_val}&num_per_page=1&purchase_type=all").json()
+            res_recent = requests.get(f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&language=all&day_range={recent_days_val}&num_per_page=1&purchase_type=all").json()
             recent_summary = res_recent.get('query_summary', {})
             recent_total = recent_summary.get('total_reviews', 0)
             recent_pos = recent_summary.get('total_positive', 0)
@@ -146,13 +143,12 @@ def fetch_steam_reviews(app_id, recent_days_val):
         "total_lang_counts": total_lang_counts 
     }
     
-    # 5. 선정된 언어들에 대해서만 정확하게 리뷰 텍스트 수집
+    # 5. 선정된 언어들에 대해서만 정확하게 리뷰 텍스트 수집 (원래대로 20개 유지)
     filtered_all = {lang: [] for lang in top_langs_keys}
     filtered_recent = {lang: [] for lang in top_langs_keys}
     
     for lang in top_langs_keys:
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
-        # AI 토큰 절약을 위해 각 언어별 20개까지만 프롬프트에 담음
         filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: **{r['steam_id']}] {r['review']}" for r in all_revs][:20]
         
         if recent_days_val:
