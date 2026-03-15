@@ -1,31 +1,31 @@
 import streamlit as st
 
-APP_VERSION = "v2.1.6"
+APP_VERSION = "v2.1.5"
 UPDATE_HISTORY = """
-**[v2.1.6] - 2026.03.13**
-- 📝 **워딩 변경:** '국가별 세부 평가' -> '리뷰 작성 언어별 세부 평가'로 명칭 정확화
-- 🐛 **버그 픽스:** 언어 비중 순위표(TOP 3)와 실제 분석되는 리뷰 언어가 불일치하던 현상 완벽 수정
-- 🌐 **번역 강화:** AI가 외국어 리뷰 인용 시 한국어 번역을 누락하지 않도록 프롬프트 통제 강화
-
 **[v2.1.5] - 2026.03.13**
-- 🔗 **URL 파싱:** 스팀 상점 전체 주소를 붙여넣어도 App ID를 자동 추출
-- 👁️ **웹 프리뷰 도입:** 노션 업로드 전 AI 분석 결과를 웹에서 확인 및 승인
-- 🚫 **제로 리뷰 방어:** 리뷰가 0개인 게임(베타 등) 차단 로직 추가
+- 🔗 **URL 파싱:** 스팀 상점 전체 주소를 붙여넣어도 App ID를 자동 추출하도록 개선
+- 👁️ **웹 프리뷰 도입:** 노션 업로드 전 AI 분석 결과를 웹에서 먼저 확인하고 승인하는 프로세스 구축
+- 🚫 **제로 리뷰 방어:** 리뷰가 0개인 게임(베타 등)은 분석 불가 안내 및 사전 차단
+- 🛡️ **환경 설정 강화:** Secrets 로딩 로직을 개선하여 디버깅 편의성 증대
 """
 
-# API 키 설정 (Streamlit Secrets)
-try:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-    NOTION_TOKEN = st.secrets["NOTION_TOKEN"]
-    # 💡 노션 데이터베이스 ID도 시크릿에서 가져오게 변경 (260315)
-    NOTION_DATABASE_ID = st.secrets["NOTION_DATABASE_ID"] 
-except KeyError:
-    GEMINI_API_KEY = None
-    NOTION_TOKEN = None
-    NOTION_DATABASE_ID = None
+# 💡 Secrets에서 안전하게 값을 가져오는 함수
+def get_secret(key, default=None):
+    try:
+        return st.secrets[key]
+    except (KeyError, FileNotFoundError):
+        return default
 
-# 🔗 노션 발행 주소도 ID를 변수로 사용
-NOTION_PUBLISH_URL = f"https://childlike-binder-ad2.notion.site/{NOTION_DATABASE_ID}"
+# API 키 및 설정 로드
+GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
+NOTION_TOKEN = get_secret("NOTION_TOKEN")
+NOTION_DATABASE_ID = get_secret("NOTION_DATABASE_ID")
+
+# 🔗 노션 발행 주소 (ID가 없을 경우를 대비해 안전하게 처리)
+if NOTION_DATABASE_ID:
+    NOTION_PUBLISH_URL = f"https://childlike-binder-ad2.notion.site/{NOTION_DATABASE_ID}"
+else:
+    NOTION_PUBLISH_URL = "https://www.notion.so"
 
 LANG_MAP = {
     "koreana": "🇰🇷 한국어", "english": "🇺🇸 영어", "schinese": "🇨🇳 중국어(간체)", 
@@ -39,33 +39,25 @@ SCORE_MAP = {
     5: "복합적", 6: "대체로 긍정적", 7: "긍정적", 8: "매우 긍정적", 9: "압도적으로 긍정적"
 }
 
-# 💡 노션 출력 순서 제어
+# 노션 출력 순서 제어
 NOTION_SECTION_ORDER = [
-    "bot_info",          # 봇 안내
-    "ai_one_liner",      # AI 한줄평
-    "steam_sentiment",   # 스팀 민심 온도계
-    "global_summary",    # 전 국가 망라 최종 요약
-    "playtime_analysis", # 플레이타임별 주요 민심 교차 분석
-    "ai_issue_pick",     # AI 이슈 픽
-    "news_summary",      # 최신 게임 공지/패치노트
-    "category_summary",  # 카테고리별 종합 평가
-    "language_ratio",    # 누적 리뷰 작성 언어 비중
-    "country_analysis"   # 언어별 세부 평가 분석
+    "bot_info", "ai_one_liner", "steam_sentiment", "global_summary", 
+    "playtime_analysis", "ai_issue_pick", "news_summary", 
+    "category_summary", "language_ratio", "country_analysis"
 ]
 
-# 💡 AI 분석 대기 중 표시될 랜덤 메시지
+# AI 분석 대기 중 표시될 랜덤 메시지
 WAITING_MESSAGES = [
     "AI가 유저들의 매콤한 리뷰를 읽으며 눈물을 닦고 있습니다...",
-    "스팀 사용자 평가를 탈탈탈 탈곡중입니다.",
-    "탈곡기는 계속 돌아가고 있습니다....",
-    "척 추 펴 세 요 ! ! !",
-    "칭따오 한번 꼭 가보세용",
+    "글로벌 민심을 탈탈 털어 황금 인사이트를 고르고 있어요.",
+    "뉴비와 고인물의 싸움을 AI가 말리고 있는 중입니다. 잠시만요!",
+    "스팀 서버에서 리뷰를 300km/h 속도로 탈곡하고 있습니다.",
+    "AI PM이 커피 한 잔 마시며 보고서를 결재하고 있습니다.",
     "국가별 욕설(?)을 걸러내고 핵심 불만 사항을 정리하고 있어요.",
-    "거의 다 됐습니다! 노션에 예쁘게 담는 중이에요.",
+    "거의 다 됐습니다! 웹에서 먼저 보여드릴게요.",
     "분석이 조금 길어지는 건 그만큼 이 게임 여론이 복잡하다는 뜻입니다!",
-    "삐빅.. 삐비비빗.."
+    "전 세계 언어를 번역하느라 AI 뇌가 풀가동 중입니다. 삐-빅."
 ]
 
-# 💡 전광판 메시지 전환 간격 (초 단위)
+# 전광판 메시지 전환 간격 (초 단위)
 TICKER_INTERVAL = 3
-
