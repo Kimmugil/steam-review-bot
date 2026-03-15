@@ -17,11 +17,14 @@ UPDATE_HISTORY = """
 try:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     NOTION_TOKEN = st.secrets["NOTION_TOKEN"]
+    # 💡 노션 데이터베이스 ID도 시크릿에서 가져오게 변경 (260315)
+    NOTION_DATABASE_ID = st.secrets["NOTION_DATABASE_ID"] 
 except KeyError:
     GEMINI_API_KEY = None
     NOTION_TOKEN = None
+    NOTION_DATABASE_ID = None
 
-NOTION_DATABASE_ID = "321fa327f28680dc8df5fe92fab193bf"
+# 🔗 노션 발행 주소도 ID를 변수로 사용
 NOTION_PUBLISH_URL = f"https://childlike-binder-ad2.notion.site/{NOTION_DATABASE_ID}"
 
 LANG_MAP = {
