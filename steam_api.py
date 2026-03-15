@@ -18,7 +18,6 @@ def calculate_custom_score(pos_ratio, total):
     return "압도적으로 부정적"
 
 def sanitize_url(url):
-    # URL 내 제어 문자 및 유니코드 공백 제거 (ASCII 출력 가능 문자만 유지)
     return "".join(char for char in url if 32 <= ord(char) <= 126).strip()
 
 def get_steam_game_info(game_input):
@@ -40,7 +39,6 @@ def get_steam_game_info(game_input):
         
         try: 
             raw_date = game_data['release_date']['date']
-            # 날짜 파싱 안정성 강화
             clean_date = re.sub(r'[^\d\s-]', '', raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", ""))
             release_date = datetime.strptime(clean_date.strip(), "%Y-%m-%d")
         except: 
@@ -74,19 +72,21 @@ def fetch_latest_news(app_id):
 
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
-    if days_since < 3: return None, "전체 주요 동향", "초기 데이터 기반 분석"
-    elif days_since < 7: return 3, "최근 3일 동향", "출시 초기 집중 분석"
-    elif days_since < 30: return 7, "최근 7일 동향", "신작 초기 안정화 분석"
-    return 30, "최근 30일 동향", "장기 운영 안정성 분석"
+    # 💡 [버그 수정] UI에서 '동향 동향'으로 중복 출력되던 문제 해결
+    if days_since < 3: return None, "전체 누적", "초기 데이터 기반 분석"
+    elif days_since < 7: return 3, "최근 3일", "출시 초기 집중 분석"
+    elif days_since < 30: return 7, "최근 7일", "신작 초기 안정화 분석"
+    return 30, "최근 30일", "장기 운영 안정성 분석"
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     reviews = []
-    # 💡 [개선] 'helpful' 순으로 정렬하여 유의미한 샘플 수집 (유저 제안 반영)
-    base_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=all&language={lang}&num_per_page=100&purchase_type=all")
+    # 💡 [버그 수정] 스팀 API는 filter=all 일 때 day_range 파라미터를 씹어버림
+    # 그래서 기간이 지정된 최근 데이터는 filter=recent 옵션을 강제해야 AI 분석이 다르게 나옴
+    filter_type = "recent" if day_range else "all"
+    base_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter={filter_type}&language={lang}&num_per_page=100&purchase_type=all")
     if day_range: base_url += f"&day_range={day_range}"
         
     cursor = "*"
-    # 최대 300개까지만 수집 (성능 및 정확도 균형)
     for _ in range(3): 
         try:
             res = requests.get(base_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=10)
@@ -108,24 +108,13 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
 
 def fetch_steam_reviews(app_id, recent_days_val):
     total_lang_counts = {}
-    recent_total_sum = 0
-    recent_pos_sum = 0
     
-    # 1. 개별 언어별 루프를 통해 정확한 '최근' 데이터 산출
-    # 💡 [팩트] language=all 옵션의 필터링 버그를 우회하기 위해 개별 언어 수치를 직접 합산함
+    # 1. 전체 언어별 누적 리뷰 수 파악
     for lang in LANG_MAP.keys():
         try:
-            # 전체 수치 (테이블용)
             res_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
             all_data = res_all.json().get('query_summary', {})
             total_lang_counts[lang] = all_data.get('total_reviews', 0)
-            
-            # 최근 수치 합산
-            if recent_days_val:
-                res_rec = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&day_range={recent_days_val}&num_per_page=0&purchase_type=all"), timeout=5)
-                rec_data = res_rec.json().get('query_summary', {})
-                recent_total_sum += rec_data.get('total_reviews', 0)
-                recent_pos_sum += rec_data.get('total_positive', 0)
         except: pass
             
     # 2. 전체 누적 평점 요약 (스팀 공식 글로벌 통합 수치 활용)
@@ -134,10 +123,29 @@ def fetch_steam_reviews(app_id, recent_days_val):
     all_time_total_reviews = summary_all.get('total_reviews', 0)
     
     # 3. 최근 동향 데이터 확정
+    recent_total = 0
+    recent_custom_desc = "평가 없음"
+
     if recent_days_val:
-        recent_total = recent_total_sum
-        # 💡 [개선] 합산된 긍정 비율을 바탕으로 직접 평가 점수 계산 (환각 방지)
-        recent_custom_desc = calculate_custom_score(recent_pos_sum / recent_total if recent_total > 0 else 0, recent_total)
+        # 💡 [롤백 완료] 네 요청대로 최근 동향은 최대 500개 샘플을 직접 긁어와서 그걸로 평균을 냄
+        sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&day_range={recent_days_val}&num_per_page=100&purchase_type=all")
+        cursor = "*"
+        pos_count = 0
+        for _ in range(5):
+            try:
+                res = requests.get(sample_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=5)
+                data = res.json()
+                revs = data.get('reviews', [])
+                if not revs: break
+                for r in revs:
+                    if r.get('voted_up'): pos_count += 1
+                    recent_total += 1
+                cursor = data.get('cursor', '*')
+                if not cursor: break
+            except: break
+        
+        if recent_total > 0:
+            recent_custom_desc = calculate_custom_score(pos_count / recent_total, recent_total)
     else:
         recent_total = all_time_total_reviews
         recent_custom_desc = SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음")
