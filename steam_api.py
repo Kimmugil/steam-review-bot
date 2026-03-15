@@ -18,8 +18,7 @@ def calculate_custom_score(pos_ratio, total):
     return "압도적으로 부정적"
 
 def sanitize_url(url):
-    # 💡 [에러 픽스] URL 내 보이지 않는 제어 문자 및 유니코드 공백 원천 차단
-    # ASCII 영역의 출력 가능한 문자만 남기고 모두 제거
+    # URL 내 제어 문자 및 유니코드 공백 제거
     return "".join(char for char in url if 32 <= ord(char) <= 126).strip()
 
 def get_steam_game_info(game_input):
@@ -41,7 +40,6 @@ def get_steam_game_info(game_input):
         
         try: 
             raw_date = game_data['release_date']['date']
-            # 날짜 파싱 안정성 강화
             clean_date = re.sub(r'[^\d\s-]', '', raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", ""))
             release_date = datetime.strptime(clean_date.strip(), "%Y-%m-%d")
         except: 
@@ -75,7 +73,7 @@ def fetch_latest_news(app_id):
 
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
-    if days_since < 3: return None, "전체 누적 동향", "초기 데이터 기반 분석"
+    if days_since < 3: return None, "전체 주요 동향", "초기 데이터 기반 분석"
     elif days_since < 7: return 3, "최근 3일 동향", "출시 초기 집중 분석"
     elif days_since < 30: return 7, "최근 7일 동향", "신작 초기 안정화 분석"
     return 30, "최근 30일 동향", "장기 운영 안정성 분석"
@@ -107,18 +105,20 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
 
 def fetch_steam_reviews(app_id, recent_days_val):
     total_lang_counts = {}
-    all_time_total_reviews = 0
     
+    # 1. 전체 언어별 리뷰 수 파악 (테이블 작성용)
     for lang in LANG_MAP.keys():
         try:
             res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
             count = res.json().get('query_summary', {}).get('total_reviews', 0)
             if count > 0:
                 total_lang_counts[lang] = count
-                all_time_total_reviews += count
         except: pass
             
-    summary_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all")).json().get('query_summary', {})
+    # 2. 전체 누적 평점 요약 가져오기 (💡 통합 수치로 버그 수정)
+    summary_all_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all")).json()
+    summary_all = summary_all_res.get('query_summary', {})
+    all_time_total_reviews = summary_all.get('total_reviews', 0)
     
     recent_custom_desc = "평가 없음"
     recent_total = 0
@@ -132,7 +132,7 @@ def fetch_steam_reviews(app_id, recent_days_val):
                 recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
         except: pass
     else:
-        recent_total = summary_all.get('total_reviews', 0)
+        recent_total = all_time_total_reviews
         recent_pos = summary_all.get('total_positive', 0)
         if recent_total > 0:
             recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
@@ -143,7 +143,7 @@ def fetch_steam_reviews(app_id, recent_days_val):
         
     store_stats = {
         "all_desc": SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음"),
-        "all_total": all_time_total_reviews,
+        "all_total": all_time_total_reviews, # 수정 완료
         "recent_desc": recent_custom_desc,
         "recent_total": recent_total, 
         "total_lang_counts": total_lang_counts 
