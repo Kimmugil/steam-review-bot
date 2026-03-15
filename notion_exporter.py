@@ -79,7 +79,6 @@ def get_category_summary_block(ai_data):
 def get_language_ratio_block(store_stats):
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 누적 리뷰 작성 언어 비중"}}]}}, {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"총 누적 리뷰 수: {store_stats['all_total']:,}개"}, "annotations": {"bold": True, "color": "gray"}}]}}]
     
-    # 💡 [버그 픽스] 표 데이터 구조 정상화 완료!
     table_rows = [
         {"type": "table_row", "table_row": {"cells": [
             [{"text": {"content": "순위"}, "annotations": {"bold": True, "color": "gray"}}], 
@@ -118,8 +117,24 @@ def get_country_analysis_block(ai_data):
 
 def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smart_reason, news_data):
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Content-Type": "application/json", "Notion-Version": "2022-06-28"}
-    page_title = f"[{datetime.now().strftime('%Y-%m-%d')}] {game_name} 평가 요약"
-    create_data = {"parent": {"database_id": NOTION_DATABASE_ID}, "properties": {"이름": {"title": [{"text": {"content": page_title}}]}}}
+    
+    # 시간 및 버전 메타데이터 준비
+    now = datetime.now()
+    iso_timestamp = now.strftime('%Y-%m-%dT%H:%M:%S+09:00') # Notion Date 포맷 (GMT+9)
+    
+    # 💡 [수정] 제목에는 지저분한 정보 다 빼고 게임명만 남김
+    page_title = f"{game_name} 평가 요약"
+    
+    # [팩트] 노션 DB의 '추출 시점'과 '탈곡기 버전' 컬럼에 메타데이터를 정식으로 입력
+    create_data = {
+        "parent": {"database_id": NOTION_DATABASE_ID}, 
+        "properties": {
+            "이름": {"title": [{"text": {"content": page_title}}]},
+            "추출 시점": {"date": {"start": iso_timestamp}},
+            "탈곡기 버전": {"rich_text": [{"text": {"content": APP_VERSION}}]}
+        }
+    }
+    
     res = requests.post("https://api.notion.com/v1/pages", headers=headers, data=json.dumps(create_data))
     res.raise_for_status()
     page_id = res.json()['id']
@@ -139,7 +154,6 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
         
     append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
     for i in range(0, len(children_blocks), 100):
-        # 💡 [버그 픽스] 블록 추가 중 에러가 발생하면 무시하지 않고 바로 알려주도록 변경!
         patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": children_blocks[i:i+100]}))
         patch_res.raise_for_status() 
         time.sleep(0.5)

@@ -24,14 +24,37 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         
     prompt = build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text, review_text, user_feedback)
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
-    # 온도 원복 및 토큰 아끼지 않도록 원복 (temperature=0.3)
-    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.3}}
+    # 💡 URL 형식이 마크다운 형태로 꼬여있던 부분을 순수 URL로 픽스
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
+    
+    # 💡 [개선] temperature를 0.3에서 0.1로 낮춰서 환각(Hallucination) 억제 및 번역 정확도 향상
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}], 
+        "generationConfig": {
+            "responseMimeType": "application/json", 
+            "temperature": 0.1
+        }
+    }
     
     try:
         res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
         res.raise_for_status()
         raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
         
-        # 불필요한 마크다운 백틱 제거
-        if raw_text.startswith("
+        bt = "`" * 3
+        if raw_text.startswith(f"{bt}json"): raw_text = raw_text[7:]
+        if raw_text.startswith(bt): raw_text = raw_text[3:]
+        if raw_text.endswith(bt): raw_text = raw_text[:-3]
+        raw_text = raw_text.strip()
+        
+        return json.loads(raw_text), None
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 429: return None, "429 Client Error"
+        return None, f"API 에러 ({e.response.status_code})"
+    except json.JSONDecodeError as e:
+        return None, f"JSON_DECODE_ERROR: {str(e)}"
+    except Exception as e: 
+        error_msg = str(e)
+        if GEMINI_API_KEY and GEMINI_API_KEY in error_msg:
+            error_msg = error_msg.replace(GEMINI_API_KEY, "********")
+        return None, error_msg

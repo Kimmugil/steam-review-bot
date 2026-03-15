@@ -1,5 +1,6 @@
 import requests
 import urllib.parse
+import re
 from datetime import datetime
 from config import LANG_MAP, SCORE_MAP
 
@@ -16,32 +17,39 @@ def calculate_custom_score(pos_ratio, total):
     elif pos_ratio >= 0.01: return "매우 부정적"
     return "압도적으로 부정적"
 
+def sanitize_url(url):
+    return "".join(char for char in url if 32 <= ord(char) <= 126).strip()
+
 def get_steam_game_info(game_input):
     app_id = str(game_input).strip()
     if not app_id.isdigit(): return None, None, None
     
-    details_url = f"[https://store.steampowered.com/api/appdetails?appids=](https://store.steampowered.com/api/appdetails?appids=){app_id}&l=korean"
-    res = requests.get(details_url)
-    res.raise_for_status()
-    data = res.json()
+    details_url = sanitize_url(f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean")
     
-    if not data or app_id not in data or not data[app_id]['success']: 
+    try:
+        res = requests.get(details_url, timeout=10)
+        res.raise_for_status()
+        data = res.json()
+        
+        if not data or app_id not in data or not data[app_id]['success']: 
+            return None, None, None
+            
+        game_data = data[app_id]['data']
+        exact_name = game_data['name'].encode('utf-8', 'ignore').decode('utf-8')
+        
+        try: 
+            raw_date = game_data['release_date']['date']
+            clean_date = re.sub(r'[^\d\s-]', '', raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", ""))
+            release_date = datetime.strptime(clean_date.strip(), "%Y-%m-%d")
+        except: 
+            release_date = datetime(2020, 1, 1)
+            
+        return app_id, exact_name, release_date
+    except:
         return None, None, None
-        
-    game_data = data[app_id]['data']
-    exact_name = game_data['name'].encode('utf-8', 'ignore').decode('utf-8')
-    
-    try: 
-        raw_date = game_data['release_date']['date']
-        clean_date = raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", "")
-        release_date = datetime.strptime(clean_date, "%Y-%m-%d")
-    except: 
-        release_date = datetime(2020, 1, 1)
-        
-    return app_id, exact_name, release_date
 
 def fetch_latest_news(app_id):
-    url = f"[https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=](https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=){app_id}&count=5&maxlength=3000&format=json"
+    url = sanitize_url(f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json")
     try:
         res = requests.get(url, timeout=5)
         res.raise_for_status()
@@ -64,21 +72,24 @@ def fetch_latest_news(app_id):
 
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
-    if days_since < 3: return None, "전체 주요 동향", "초기 데이터 기반 분석"
-    elif days_since < 7: return 3, "최근 3일 동향", "출시 초기 집중 분석"
-    elif days_since < 30: return 7, "최근 7일 동향", "신작 초기 안정화 분석"
-    return 30, "최근 30일 동향", "장기 운영 안정성 분석"
+    if days_since < 3: 
+        return None, "전체 누적", "출시된 지 3일이 채 지나지 않은 극초기 신작이므로, 특정 기간을 나누지 않고 전체 누적 리뷰를 바탕으로 유저 반응을 종합 분석했습니다."
+    elif days_since < 7: 
+        return 3, "최근 3일", "출시 후 1주일이 지나지 않은 신작입니다. 발매 직후의 평가 변동성이 매우 큰 시기이므로, 최신 민심을 정확히 파악하기 위해 최근 3일간의 동향을 집중적으로 분석했습니다."
+    elif days_since < 30: 
+        return 7, "최근 7일", "출시 후 1달이 채 되지 않은 게임입니다. 초기 '오픈빨'이 빠지고 실제 게임성이 평가받는 시점이므로, 최근 7일간의 리뷰를 통해 안정화 단계의 민심을 확인했습니다."
+    return 30, "최근 30일", "출시 후 1달 이상 경과하여 서비스가 안정화된 게임입니다. 현재 시점의 실질적인 유저 여론과 최근 패치/업데이트에 대한 반응을 확인하기 위해 최근 30일간의 장기 동향을 분석했습니다."
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
-    """특정 언어의 리뷰만 집중적으로 긁어오는 함수"""
     reviews = []
-    base_url = f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&filter=all&language={lang}&num_per_page=100&purchase_type=all"
+    filter_type = "recent" if day_range else "all"
+    base_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter={filter_type}&language={lang}&num_per_page=100&purchase_type=all")
     if day_range: base_url += f"&day_range={day_range}"
         
     cursor = "*"
-    for _ in range(3): # 언어당 최대 300개까지만 탐색
+    for _ in range(3): 
         try:
-            res = requests.get(base_url + f"&cursor={urllib.parse.quote(cursor)}")
+            res = requests.get(base_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=10)
             res.raise_for_status()
             data = res.json()
             if not data.get('reviews'): break
@@ -97,64 +108,90 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
 
 def fetch_steam_reviews(app_id, recent_days_val):
     total_lang_counts = {}
-    all_time_total_reviews = 0
     
-    # 1. 전체 언어별 리뷰 수 파악
+    # 1. 전체 언어별 누적 리뷰 수 파악
     for lang in LANG_MAP.keys():
         try:
-            res = requests.get(f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all")
-            count = res.json().get('query_summary', {}).get('total_reviews', 0)
-            if count > 0:
-                total_lang_counts[lang] = count
-                all_time_total_reviews += count
+            res_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
+            all_data = res_all.json().get('query_summary', {})
+            total_lang_counts[lang] = all_data.get('total_reviews', 0)
         except: pass
             
-    # 2. 전체 누적 평점 요약 가져오기
-    summary_all = requests.get(f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&language=all&num_per_page=0&purchase_type=all").json().get('query_summary', {})
+    # 2. 전체 누적 평점 요약 (스팀 공식 글로벌 통합 수치 활용)
+    summary_all_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all")).json()
+    summary_all = summary_all_res.get('query_summary', {})
+    all_time_total_reviews = summary_all.get('total_reviews', 0)
     
-    # 3. 최근 동향 평점 요약 가져오기 (정확한 수치 계산용)
-    recent_custom_desc = "평가 없음"
+    # 3. 최근 동향 데이터 확정
     recent_total = 0
-    if recent_days_val:
-        try:
-            res_recent = requests.get(f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&language=all&day_range={recent_days_val}&num_per_page=1&purchase_type=all").json()
-            recent_summary = res_recent.get('query_summary', {})
-            recent_total = recent_summary.get('total_reviews', 0)
-            recent_pos = recent_summary.get('total_positive', 0)
-            if recent_total > 0:
-                recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
-        except: pass
-    else:
-        recent_total = summary_all.get('total_reviews', 0)
-        recent_pos = summary_all.get('total_positive', 0)
-        if recent_total > 0:
-            recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
+    recent_custom_desc = "평가 없음"
 
-    # 4. 분석할 TOP 3 언어 + 한국어 선정
+    if recent_days_val:
+        sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&day_range={recent_days_val}&num_per_page=100&purchase_type=all")
+        cursor = "*"
+        pos_count = 0
+        for _ in range(5):
+            try:
+                res = requests.get(sample_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=5)
+                data = res.json()
+                revs = data.get('reviews', [])
+                if not revs: break
+                for r in revs:
+                    if r.get('voted_up'): pos_count += 1
+                    recent_total += 1
+                cursor = data.get('cursor', '*')
+                if not cursor: break
+            except: break
+        
+        if recent_total > 0:
+            recent_custom_desc = calculate_custom_score(pos_count / recent_total, recent_total)
+    else:
+        recent_total = all_time_total_reviews
+        recent_custom_desc = SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음")
+
+    # 4. 분석 대상 언어 선정 (TOP 3 + 한국어)
     top_langs_keys = [l[0] for l in sorted(total_lang_counts.items(), key=lambda x: x[1], reverse=True)[:3]]
     if "koreana" not in top_langs_keys:
         top_langs_keys.append("koreana")
         
+    # 5. 실제 리뷰 텍스트 수집 및 플레이타임 데이터 추출
+    filtered_all = {lang: [] for lang in top_langs_keys}
+    filtered_recent = {lang: [] for lang in top_langs_keys}
+    all_playtimes = []
+    
+    for lang in top_langs_keys:
+        all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
+        
+        all_playtimes.extend([r['playtime'] for r in all_revs])
+        
+        # 💡 [버그 픽스] 마크다운 볼드체 기호(**) 원천 제거
+        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in all_revs][:20]
+        
+        if recent_days_val:
+            rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val)
+            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in rec_revs][:20]
+        else:
+            filtered_recent[lang] = filtered_all[lang]
+
+    # 뉴비 vs 코어 유저 평균 플레이타임 산출 (중간값 분할 기준)
+    newbie_avg = 0
+    core_avg = 0
+    if all_playtimes:
+        all_playtimes.sort()
+        mid = len(all_playtimes) // 2
+        newbies = all_playtimes[:mid]
+        cores = all_playtimes[mid:]
+        newbie_avg = round(sum(newbies) / len(newbies), 1) if newbies else 0
+        core_avg = round(sum(cores) / len(cores), 1) if cores else 0
+
     store_stats = {
         "all_desc": SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음"),
         "all_total": all_time_total_reviews,
         "recent_desc": recent_custom_desc,
         "recent_total": recent_total, 
-        "total_lang_counts": total_lang_counts 
+        "total_lang_counts": total_lang_counts,
+        "newbie_avg": newbie_avg,
+        "core_avg": core_avg
     }
-    
-    # 5. 선정된 언어들에 대해서만 정확하게 리뷰 텍스트 수집 (원래대로 20개 유지)
-    filtered_all = {lang: [] for lang in top_langs_keys}
-    filtered_recent = {lang: [] for lang in top_langs_keys}
-    
-    for lang in top_langs_keys:
-        all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
-        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: **{r['steam_id']}] {r['review']}" for r in all_revs][:20]
-        
-        if recent_days_val:
-            rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val)
-            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: **{r['steam_id']}] {r['review']}" for r in rec_revs][:20]
-        else:
-            filtered_recent[lang] = filtered_all[lang]
 
     return filtered_all, filtered_recent, store_stats
