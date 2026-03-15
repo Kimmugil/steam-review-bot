@@ -18,14 +18,14 @@ def calculate_custom_score(pos_ratio, total):
     return "압도적으로 부정적"
 
 def sanitize_url(url):
-    # 💡 [에러 픽스] URL 문자열 내 보이지 않는 제어 문자 및 유니코드 공백 제거
-    return "".join(char for char in url if ord(char) > 31 and ord(char) < 127).strip()
+    # 💡 [에러 픽스] URL 내 보이지 않는 제어 문자 및 유니코드 공백 원천 차단
+    # ASCII 영역의 출력 가능한 문자만 남기고 모두 제거
+    return "".join(char for char in url if 32 <= ord(char) <= 126).strip()
 
 def get_steam_game_info(game_input):
     app_id = str(game_input).strip()
     if not app_id.isdigit(): return None, None, None
     
-    # URL 세정 강화
     details_url = sanitize_url(f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean")
     
     try:
@@ -41,8 +41,9 @@ def get_steam_game_info(game_input):
         
         try: 
             raw_date = game_data['release_date']['date']
-            clean_date = raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", "")
-            release_date = datetime.strptime(clean_date, "%Y-%m-%d")
+            # 날짜 파싱 안정성 강화
+            clean_date = re.sub(r'[^\d\s-]', '', raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", ""))
+            release_date = datetime.strptime(clean_date.strip(), "%Y-%m-%d")
         except: 
             release_date = datetime(2020, 1, 1)
             
@@ -74,7 +75,7 @@ def fetch_latest_news(app_id):
 
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
-    if days_since < 3: return None, "전체 주요 동향", "초기 데이터 기반 분석"
+    if days_since < 3: return None, "전체 누적 동향", "초기 데이터 기반 분석"
     elif days_since < 7: return 3, "최근 3일 동향", "출시 초기 집중 분석"
     elif days_since < 30: return 7, "최근 7일 동향", "신작 초기 안정화 분석"
     return 30, "최근 30일 동향", "장기 운영 안정성 분석"
