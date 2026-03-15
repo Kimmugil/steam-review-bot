@@ -20,20 +20,24 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
     else:
         news_title, news_contents, news_url, news_date = None, None, None, None
 
-    news_text = f"\n[최신 게임 업데이트/공지]\n- 업로드 날짜: {news_date}\n- 제목: {news_title}\n- 내용: {news_contents[:1500]}" if news_title else "제공된 최신 뉴스가 없습니다."
+    news_text = f"\n[최신 게임 업데이트/공지]\n- 날짜: {news_date}\n- 제목: {news_title}\n- 내용: {news_contents[:1500]}" if news_title else "최신 뉴스가 존재하지 않습니다."
         
     prompt = build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text, review_text, user_feedback)
     
-    # 💡 [버그 픽스] URL 문자열에 섞인 마크다운 문법 제거 및 공백 제거
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
-    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.3}}
+    # 💡 URL 문자열 정제 강화
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
+    
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}], 
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.3}
+    }
     
     try:
-        res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'), timeout=60)
+        res = requests.post(api_url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'), timeout=60)
         res.raise_for_status()
         raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
         
-        # 백틱 기호 우회 파싱
+        # 백틱 기호 우회 파싱 로직
         bt = "`" * 3
         if raw_text.startswith(f"{bt}json"): raw_text = raw_text[7:]
         elif raw_text.startswith(bt): raw_text = raw_text[3:]
@@ -44,7 +48,7 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         return json.loads(raw_text), None
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 429: return None, "429 Client Error"
-        return None, f"API 에러 ({e.response.status_code})"
+        return None, f"API 요청 실패: {e.response.status_code}"
     except json.JSONDecodeError as e:
         return None, f"JSON_DECODE_ERROR: {str(e)}"
     except Exception as e: 
