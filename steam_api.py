@@ -105,50 +105,52 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
 
 def fetch_steam_reviews(app_id, recent_days_val):
     total_lang_counts = {}
+    recent_total_sum = 0
+    recent_pos_sum = 0
     
-    # 1. 전체 언어별 리뷰 수 파악 (테이블 작성용)
+    # 💡 [개선] 12개 주요 언어별로 전체/최근 수치를 각각 긁어와서 정확도 확보
     for lang in LANG_MAP.keys():
         try:
-            res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
-            count = res.json().get('query_summary', {}).get('total_reviews', 0)
-            if count > 0:
-                total_lang_counts[lang] = count
+            # 해당 언어의 전체 수치
+            res_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
+            all_data = res_all.json().get('query_summary', {})
+            total_lang_counts[lang] = all_data.get('total_reviews', 0)
+            
+            # 해당 언어의 최근 수치 합산 (API 버그 우회)
+            if recent_days_val:
+                res_rec = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&day_range={recent_days_val}&num_per_page=0&purchase_type=all"), timeout=5)
+                rec_data = res_rec.json().get('query_summary', {})
+                recent_total_sum += rec_data.get('total_reviews', 0)
+                recent_pos_sum += rec_data.get('total_positive', 0)
         except: pass
             
-    # 2. 전체 누적 평점 요약 가져오기 (💡 통합 수치로 버그 수정)
+    # 1. 전체 누적 평점 요약 (글로벌 통합 수치용)
     summary_all_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all")).json()
     summary_all = summary_all_res.get('query_summary', {})
     all_time_total_reviews = summary_all.get('total_reviews', 0)
     
-    recent_custom_desc = "평가 없음"
-    recent_total = 0
+    # 2. 최근 동향 데이터 확정
     if recent_days_val:
-        try:
-            res_recent = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&day_range={recent_days_val}&num_per_page=1&purchase_type=all")).json()
-            recent_summary = res_recent.get('query_summary', {})
-            recent_total = recent_summary.get('total_reviews', 0)
-            recent_pos = recent_summary.get('total_positive', 0)
-            if recent_total > 0:
-                recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
-        except: pass
+        recent_total = recent_total_sum
+        recent_custom_desc = calculate_custom_score(recent_pos_sum / recent_total if recent_total > 0 else 0, recent_total)
     else:
         recent_total = all_time_total_reviews
-        recent_pos = summary_all.get('total_positive', 0)
-        if recent_total > 0:
-            recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
+        recent_custom_desc = SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음")
 
+    # 3. 분석 대상 언어 선정 (TOP 3 + 한국어)
     top_langs_keys = [l[0] for l in sorted(total_lang_counts.items(), key=lambda x: x[1], reverse=True)[:3]]
     if "koreana" not in top_langs_keys:
         top_langs_keys.append("koreana")
         
     store_stats = {
         "all_desc": SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음"),
-        "all_total": all_time_total_reviews, # 수정 완료
+        "all_total": all_time_total_reviews,
         "recent_desc": recent_custom_desc,
         "recent_total": recent_total, 
         "total_lang_counts": total_lang_counts 
     }
     
+    # 4. 실제 리뷰 텍스트 수집
     filtered_all = {lang: [] for lang in top_langs_keys}
     filtered_recent = {lang: [] for lang in top_langs_keys}
     
