@@ -96,7 +96,7 @@ def main():
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
         st.title("🚜 스팀 사용자 평가 탈곡기")
-        st.markdown("스팀 상점 주소나 App ID를 통해 글로벌 리뷰 동향을 분석합니다.")
+        st.markdown("스팀 상점 주소나 App ID를 입력하여 글로벌 여론을 탈탈 털어보세요.")
     with col_h2:
         st.write("")
         st.link_button("👉 통합 리포트 열람", NOTION_PUBLISH_URL, use_container_width=True)
