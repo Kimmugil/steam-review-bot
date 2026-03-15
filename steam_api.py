@@ -1,5 +1,6 @@
 import requests
 import urllib.parse
+import re
 from datetime import datetime
 from config import LANG_MAP, SCORE_MAP
 
@@ -16,13 +17,16 @@ def calculate_custom_score(pos_ratio, total):
     elif pos_ratio >= 0.01: return "매우 부정적"
     return "압도적으로 부정적"
 
+def sanitize_url(url):
+    # 💡 [에러 픽스] URL 문자열 내 보이지 않는 제어 문자 및 유니코드 공백 제거
+    return "".join(char for char in url if ord(char) > 31 and ord(char) < 127).strip()
+
 def get_steam_game_info(game_input):
-    # 앞뒤 공백 및 보이지 않는 문자 제거
     app_id = str(game_input).strip()
     if not app_id.isdigit(): return None, None, None
     
-    # 💡 [버그 픽스] URL 생성 시 한 번 더 검증하여 Connection Adapter 에러 방지
-    details_url = f"[https://store.steampowered.com/api/appdetails?appids=](https://store.steampowered.com/api/appdetails?appids=){app_id}&l=korean".strip()
+    # URL 세정 강화
+    details_url = sanitize_url(f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean")
     
     try:
         res = requests.get(details_url, timeout=10)
@@ -43,13 +47,11 @@ def get_steam_game_info(game_input):
             release_date = datetime(2020, 1, 1)
             
         return app_id, exact_name, release_date
-    except Exception as e:
-        # 에러 발생 시 로그 확인을 위해 에러 출력
-        print(f"Error fetching game info: {e}")
+    except:
         return None, None, None
 
 def fetch_latest_news(app_id):
-    url = f"[https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=](https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=){app_id}&count=5&maxlength=3000&format=json".strip()
+    url = sanitize_url(f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json")
     try:
         res = requests.get(url, timeout=5)
         res.raise_for_status()
@@ -79,7 +81,7 @@ def get_smart_period(release_date):
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     reviews = []
-    base_url = f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&filter=all&language={lang}&num_per_page=100&purchase_type=all".strip()
+    base_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=all&language={lang}&num_per_page=100&purchase_type=all")
     if day_range: base_url += f"&day_range={day_range}"
         
     cursor = "*"
@@ -108,20 +110,20 @@ def fetch_steam_reviews(app_id, recent_days_val):
     
     for lang in LANG_MAP.keys():
         try:
-            res = requests.get(f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all".strip(), timeout=5)
+            res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
             count = res.json().get('query_summary', {}).get('total_reviews', 0)
             if count > 0:
                 total_lang_counts[lang] = count
                 all_time_total_reviews += count
         except: pass
             
-    summary_all = requests.get(f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&language=all&num_per_page=0&purchase_type=all".strip()).json().get('query_summary', {})
+    summary_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all")).json().get('query_summary', {})
     
     recent_custom_desc = "평가 없음"
     recent_total = 0
     if recent_days_val:
         try:
-            res_recent = requests.get(f"[https://store.steampowered.com/appreviews/](https://store.steampowered.com/appreviews/){app_id}?json=1&language=all&day_range={recent_days_val}&num_per_page=1&purchase_type=all".strip()).json()
+            res_recent = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&day_range={recent_days_val}&num_per_page=1&purchase_type=all")).json()
             recent_summary = res_recent.get('query_summary', {})
             recent_total = recent_summary.get('total_reviews', 0)
             recent_pos = recent_summary.get('total_positive', 0)
