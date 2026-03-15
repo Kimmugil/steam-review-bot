@@ -2,7 +2,6 @@
 def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text, review_text, user_feedback=""):
     feedback_instruction = f"\n\n[사용자 추가 피드백!! 반드시 최우선으로 반영할 것!]:\n{user_feedback}\n" if user_feedback else ""
     
-    # f-string 안에서 JSON 구조를 위한 중괄호는 {{ }} 로 두 번 써야 에러가 안 나!
     return f"""
     넌 글로벌 게임 사업 PM이야. '{game_name}'의 스팀 유저 평가 데이터야.{feedback_instruction}
     
