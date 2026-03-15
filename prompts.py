@@ -19,7 +19,8 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
     7. final_summary_all, final_summary_recent의 각 항목 맨 앞에 반드시 '[긍정]' 또는 '[부정]' 머리말을 붙일 것. 긍정 항목을 배열 앞쪽에 먼저 나열할 것.
     8. ai_issue_pick 작성 시 단순 현상 나열이 아니라 그로 인한 인사이트(시사점)를 반드시 포함할 것.
     9. news_summary는 공지/업데이트의 핵심을 3~4개의 배열 형태로 요약할 것.
-    10. playtime_analysis: 뉴비와 코어 유저의 여론을 분리하고, 두 그룹 간의 공통/상반된 평가를 comparison_insights에 교차 비교할 것.
+    10. playtime_analysis: 뉴비와 코어 유저의 여론을 분리하고, 두 그룹 간의 공통/상반된 평가를 comparison_insights에 교차 비교할 것. newbie_title과 core_title에는 반드시 통계 데이터에 제공된 그룹별 평균 플레이타임을 명시할 것 (예: "🌱 뉴비 여론 (평균 12.5시간)").
+    11. [⚠️중요] 숫자 및 시간 단위(week, month, year, anniversary 등) 번역 시 절대 넘겨짚지 말고 원문 그대로 직역할 것. '1 week'를 '1주년'으로 번역하는 식의 찐빠는 절대 금지다.
     
     [출력 JSON 형식]:
     {{
@@ -31,8 +32,8 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
       "news_summary": ["공지 요약1"],
       "playtime_analysis": {{
         "comparison_insights": ["교차 인사이트1"],
-        "newbie_title": "🌱 뉴비 여론", "newbie_summary": ["요약1"],
-        "core_title": "💀 코어 여론", "core_summary": ["요약1"]
+        "newbie_title": "🌱 뉴비 여론 (평균 O시간)", "newbie_summary": ["요약1"],
+        "core_title": "💀 코어 여론 (평균 O시간)", "core_summary": ["요약1"]
       }},
       "global_category_summary": [{{ "category": "[긍정평가]...", "summary": ["요약"] }}],
       "country_analysis": [
@@ -51,6 +52,8 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
     - 전체 누적 평가: {store_stats['all_desc']}
     - {recent_label} 민심: {store_stats['recent_desc']}
     - 누적 리뷰 언어 비중: {top_langs_str}
+    - 📊 표본 기준 뉴비 평균 플레이타임: {store_stats.get('newbie_avg', 0)}시간
+    - 💀 표본 기준 코어 평균 플레이타임: {store_stats.get('core_avg', 0)}시간
     {news_text}
     
     [리뷰 데이터]
