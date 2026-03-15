@@ -1,7 +1,11 @@
 import streamlit as st
 
-APP_VERSION = "v2.1.5"
+APP_VERSION = "v2.1.6"
 UPDATE_HISTORY = """
+**[v2.1.6] - 2026.03.13**
+- 🔗 **URL 로직 개선:** 노션 공개 주소를 Secrets에서 직접 설정 가능하도록 변경 (링크 깨짐 방지)
+- 🛠️ **안정성 강화:** 하드코딩된 노션 도메인을 제거하고 유연한 URL 생성 로직 적용
+
 **[v2.1.5] - 2026.03.13**
 - 🔗 **URL 파싱:** 스팀 상점 전체 주소를 붙여넣어도 App ID를 자동 추출하도록 개선
 - 👁️ **웹 프리뷰 도입:** 노션 업로드 전 AI 분석 결과를 웹에서 먼저 확인하고 승인하는 프로세스 구축
@@ -12,7 +16,9 @@ UPDATE_HISTORY = """
 # 💡 Secrets에서 안전하게 값을 가져오는 함수
 def get_secret(key, default=None):
     try:
-        return st.secrets[key]
+        # 공백이나 줄바꿈으로 인한 에러 방지를 위해 .strip() 추가
+        val = st.secrets[key]
+        return val.strip() if isinstance(val, str) else val
     except (KeyError, FileNotFoundError):
         return default
 
@@ -20,10 +26,15 @@ def get_secret(key, default=None):
 GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
 NOTION_TOKEN = get_secret("NOTION_TOKEN")
 NOTION_DATABASE_ID = get_secret("NOTION_DATABASE_ID")
+NOTION_PUBLIC_URL = get_secret("NOTION_PUBLIC_URL") # 💡 노션 '웹에 게시'용 전체 URL
 
-# 🔗 노션 발행 주소 (ID가 없을 경우를 대비해 안전하게 처리)
-if NOTION_DATABASE_ID:
-    NOTION_PUBLISH_URL = f"https://childlike-binder-ad2.notion.site/{NOTION_DATABASE_ID}"
+# 🔗 노션 발행 주소 설정 로직
+if NOTION_PUBLIC_URL:
+    # 1순위: 사용자가 직접 입력한 전체 공개 URL 사용
+    NOTION_PUBLISH_URL = NOTION_PUBLIC_URL
+elif NOTION_DATABASE_ID:
+    # 2순위: ID만 있을 경우 기본 노션 도메인으로 연결 (노션이 알아서 리다이렉트해줌)
+    NOTION_PUBLISH_URL = f"https://www.notion.so/{NOTION_DATABASE_ID}"
 else:
     NOTION_PUBLISH_URL = "https://www.notion.so"
 
