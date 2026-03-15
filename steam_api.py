@@ -72,7 +72,6 @@ def fetch_latest_news(app_id):
 
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
-    # 💡 [버그 수정] UI에서 '동향 동향'으로 중복 출력되던 문제 해결
     if days_since < 3: return None, "전체 누적", "초기 데이터 기반 분석"
     elif days_since < 7: return 3, "최근 3일", "출시 초기 집중 분석"
     elif days_since < 30: return 7, "최근 7일", "신작 초기 안정화 분석"
@@ -80,8 +79,6 @@ def get_smart_period(release_date):
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     reviews = []
-    # 💡 [버그 수정] 스팀 API는 filter=all 일 때 day_range 파라미터를 씹어버림
-    # 그래서 기간이 지정된 최근 데이터는 filter=recent 옵션을 강제해야 AI 분석이 다르게 나옴
     filter_type = "recent" if day_range else "all"
     base_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter={filter_type}&language={lang}&num_per_page=100&purchase_type=all")
     if day_range: base_url += f"&day_range={day_range}"
@@ -127,7 +124,6 @@ def fetch_steam_reviews(app_id, recent_days_val):
     recent_custom_desc = "평가 없음"
 
     if recent_days_val:
-        # 💡 [롤백 완료] 네 요청대로 최근 동향은 최대 500개 샘플을 직접 긁어와서 그걸로 평균을 냄
         sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&day_range={recent_days_val}&num_per_page=100&purchase_type=all")
         cursor = "*"
         pos_count = 0
@@ -155,20 +151,17 @@ def fetch_steam_reviews(app_id, recent_days_val):
     if "koreana" not in top_langs_keys:
         top_langs_keys.append("koreana")
         
-    store_stats = {
-        "all_desc": SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음"),
-        "all_total": all_time_total_reviews,
-        "recent_desc": recent_custom_desc,
-        "recent_total": recent_total, 
-        "total_lang_counts": total_lang_counts 
-    }
-    
-    # 5. 실제 리뷰 텍스트 수집 (최종 분석용)
+    # 5. 실제 리뷰 텍스트 수집 및 플레이타임 데이터 추출
     filtered_all = {lang: [] for lang in top_langs_keys}
     filtered_recent = {lang: [] for lang in top_langs_keys}
+    all_playtimes = []
     
     for lang in top_langs_keys:
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
+        
+        # 💡 전체 리뷰에서 플레이타임 데이터 수집
+        all_playtimes.extend([r['playtime'] for r in all_revs])
+        
         filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: **{r['steam_id']}] {r['review']}" for r in all_revs][:20]
         
         if recent_days_val:
@@ -176,5 +169,26 @@ def fetch_steam_reviews(app_id, recent_days_val):
             filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: **{r['steam_id']}] {r['review']}" for r in rec_revs][:20]
         else:
             filtered_recent[lang] = filtered_all[lang]
+
+    # 💡 뉴비 vs 코어 유저 평균 플레이타임 산출 (중간값 분할 기준)
+    newbie_avg = 0
+    core_avg = 0
+    if all_playtimes:
+        all_playtimes.sort()
+        mid = len(all_playtimes) // 2
+        newbies = all_playtimes[:mid]
+        cores = all_playtimes[mid:]
+        newbie_avg = round(sum(newbies) / len(newbies), 1) if newbies else 0
+        core_avg = round(sum(cores) / len(cores), 1) if cores else 0
+
+    store_stats = {
+        "all_desc": SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음"),
+        "all_total": all_time_total_reviews,
+        "recent_desc": recent_custom_desc,
+        "recent_total": recent_total, 
+        "total_lang_counts": total_lang_counts,
+        "newbie_avg": newbie_avg,
+        "core_avg": core_avg
+    }
 
     return filtered_all, filtered_recent, store_stats
