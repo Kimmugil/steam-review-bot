@@ -2,7 +2,7 @@
 import requests
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from config import NOTION_TOKEN, NOTION_DATABASE_ID, APP_VERSION, NOTION_SECTION_ORDER
 from steam_api import get_lang_name
 
@@ -118,9 +118,10 @@ def get_country_analysis_block(ai_data):
 def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smart_reason, news_data):
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Content-Type": "application/json", "Notion-Version": "2022-06-28"}
     
-    # 시간 및 버전 메타데이터 준비
-    now = datetime.now()
-    iso_timestamp = now.strftime('%Y-%m-%dT%H:%M:%S+09:00') # Notion Date 포맷 (GMT+9)
+    # 시간 및 버전 메타데이터 준비 (스트림릿 클라우드의 UTC 서버 시간에 9시간을 더해 KST로 명시적 변환)
+    kst = timezone(timedelta(hours=9))
+    now_kst = datetime.now(kst)
+    iso_timestamp = now_kst.strftime('%Y-%m-%dT%H:%M:%S+09:00')
     
     # 💡 [수정] 제목에는 지저분한 정보 다 빼고 게임명만 남김
     page_title = f"{game_name} 평가 요약"
@@ -135,8 +136,12 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
         }
     }
     
-    res = requests.post("https://api.notion.com/v1/pages", headers=headers, data=json.dumps(create_data))
-    res.raise_for_status()
+    try:
+        res = requests.post("https://api.notion.com/v1/pages", headers=headers, data=json.dumps(create_data))
+        res.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        raise Exception(f"노션 DB 연동 실패 (컬럼명/타입 불일치 의심): {e.response.text}")
+        
     page_id = res.json()['id']
     
     children_blocks = []
@@ -154,8 +159,11 @@ def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smar
         
     append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
     for i in range(0, len(children_blocks), 100):
-        patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": children_blocks[i:i+100]}))
-        patch_res.raise_for_status() 
+        try:
+            patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": children_blocks[i:i+100]}))
+            patch_res.raise_for_status() 
+        except requests.exceptions.HTTPError as e:
+            raise Exception(f"노션 블록 추가 실패: {e.response.text}")
         time.sleep(0.5)
         
     return page_id
