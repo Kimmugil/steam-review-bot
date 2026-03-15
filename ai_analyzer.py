@@ -24,15 +24,16 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         
     prompt = build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text, review_text, user_feedback)
     
-    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=){GEMINI_API_KEY}"
+    # 💡 [버그 픽스] URL 문자열에 섞인 마크다운 문법 제거 및 공백 제거
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
     payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.3}}
     
     try:
-        res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+        res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'), timeout=60)
         res.raise_for_status()
         raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
         
-        # 💡 [보안] 백틱 기호를 직접 사용하지 않고 문자열 연산으로 우회하여 파싱 오류 차단
+        # 백틱 기호 우회 파싱
         bt = "`" * 3
         if raw_text.startswith(f"{bt}json"): raw_text = raw_text[7:]
         elif raw_text.startswith(bt): raw_text = raw_text[3:]
