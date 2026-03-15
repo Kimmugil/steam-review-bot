@@ -72,10 +72,13 @@ def fetch_latest_news(app_id):
 
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
-    if days_since < 3: return None, "전체 누적", "초기 데이터 기반 분석"
-    elif days_since < 7: return 3, "최근 3일", "출시 초기 집중 분석"
-    elif days_since < 30: return 7, "최근 7일", "신작 초기 안정화 분석"
-    return 30, "최근 30일", "장기 운영 안정성 분석"
+    if days_since < 3: 
+        return None, "전체 누적", "출시된 지 3일이 채 지나지 않은 극초기 신작이므로, 특정 기간을 나누지 않고 전체 누적 리뷰를 바탕으로 유저 반응을 종합 분석했습니다."
+    elif days_since < 7: 
+        return 3, "최근 3일", "출시 후 1주일이 지나지 않은 신작입니다. 발매 직후의 평가 변동성이 매우 큰 시기이므로, 최신 민심을 정확히 파악하기 위해 최근 3일간의 동향을 집중적으로 분석했습니다."
+    elif days_since < 30: 
+        return 7, "최근 7일", "출시 후 1달이 채 되지 않은 게임입니다. 초기 '오픈빨'이 빠지고 실제 게임성이 평가받는 시점이므로, 최근 7일간의 리뷰를 통해 안정화 단계의 민심을 확인했습니다."
+    return 30, "최근 30일", "출시 후 1달 이상 경과하여 서비스가 안정화된 게임입니다. 현재 시점의 실질적인 유저 여론과 최근 패치/업데이트에 대한 반응을 확인하기 위해 최근 30일간의 장기 동향을 분석했습니다."
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     reviews = []
@@ -159,18 +162,18 @@ def fetch_steam_reviews(app_id, recent_days_val):
     for lang in top_langs_keys:
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
         
-        # 💡 전체 리뷰에서 플레이타임 데이터 수집
         all_playtimes.extend([r['playtime'] for r in all_revs])
         
-        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: **{r['steam_id']}] {r['review']}" for r in all_revs][:20]
+        # 💡 [버그 픽스] 마크다운 볼드체 기호(**) 원천 제거
+        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in all_revs][:20]
         
         if recent_days_val:
             rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val)
-            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: **{r['steam_id']}] {r['review']}" for r in rec_revs][:20]
+            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in rec_revs][:20]
         else:
             filtered_recent[lang] = filtered_all[lang]
 
-    # 💡 뉴비 vs 코어 유저 평균 플레이타임 산출 (중간값 분할 기준)
+    # 뉴비 vs 코어 유저 평균 플레이타임 산출 (중간값 분할 기준)
     newbie_avg = 0
     core_avg = 0
     if all_playtimes:
