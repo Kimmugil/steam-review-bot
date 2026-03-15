@@ -118,11 +118,22 @@ def get_country_analysis_block(ai_data):
 def upload_to_notion(app_id, game_name, store_stats, ai_data, recent_label, smart_reason, news_data):
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Content-Type": "application/json", "Notion-Version": "2022-06-28"}
     
-    # 💡 [개선] 노션 제목에 버전 정보와 초 단위 추출 시각을 포함하여 중복 방지 및 히스토리 관리 강화
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    page_title = f"[{timestamp}][{APP_VERSION}] {game_name} 평가 요약"
+    # [개선] 노션 제목 및 메타데이터 필드 구성
+    now = datetime.now()
+    timestamp_str = now.strftime('%Y-%m-%d %H:%M:%S')
+    iso_timestamp = now.strftime('%Y-%m-%dT%H:%M:%S+09:00') # Notion Date 포맷 (GMT+9)
+    page_title = f"[{timestamp_str}][{APP_VERSION}] {game_name} 평가 요약"
     
-    create_data = {"parent": {"database_id": NOTION_DATABASE_ID}, "properties": {"이름": {"title": [{"text": {"content": page_title}}]}}}
+    # 💡 [팩트] 노션 DB에 '추출 시점'(Date), '탈곡기 버전'(Text) 컬럼이 있어야 정상 동작함
+    create_data = {
+        "parent": {"database_id": NOTION_DATABASE_ID}, 
+        "properties": {
+            "이름": {"title": [{"text": {"content": page_title}}]},
+            "추출 시점": {"date": {"start": iso_timestamp}},
+            "탈곡기 버전": {"rich_text": [{"text": {"content": APP_VERSION}}]}
+        }
+    }
+    
     res = requests.post("https://api.notion.com/v1/pages", headers=headers, data=json.dumps(create_data))
     res.raise_for_status()
     page_id = res.json()['id']
