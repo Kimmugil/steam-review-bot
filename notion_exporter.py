@@ -22,9 +22,8 @@ def format_sentiment_line(line):
 def get_bot_info_block(game_name, app_id, release_date):
     return [
         {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 봇 안내 및 리뷰 추출 기준 (클릭해서 펼치기)"}, "annotations": {"color": "gray", "bold": True}}], "children": [
-            {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🤖"}, "color": "blue_background", "rich_text": [{"text": {"content": f"[{APP_VERSION}] 스팀 사용자 리뷰 분석기\n", "link": None}, "annotations": {"bold": True, "color": "blue"}}, {"text": {"content": f"📅 스팀 출시일: {release_date}\n", "link": None}, "annotations": {"bold": True, "color": "default"}}, {"text": {"content": "해당 봇은 글로벌 유저 민심을 객관적으로 분석합니다.\n"}}, {"text": {"content": f"👉 {game_name} 스팀 상점 바로가기", "link": {"url": f"https://store.steampowered.com/app/{app_id}/"}}, "annotations": {"bold": True, "color": "blue", "underline": True}}]}},
-            # 💡 [개선] 3분할 평점에 맞춰 안내문구(Callout) 업데이트
-            {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚠️"}, "color": "yellow_background", "rich_text": [{"text": {"content": "평점 지표 3분할 안내\n", "link": None}, "annotations": {"bold": True}}, {"text": {"content": "리포트 내 평점은 3가지로 나뉘어 제공됩니다. 스팀 공식 평점은 '스팀 상점을 통해 직접 라이선스를 획득한 유저'의 평가만 점수에 반영합니다. 하지만 전체 누적 평점 및 최근 동향은 외부 키 등록 및 무료 플레이어 등 "}}, {"text": {"content": "모든 유저(purchase_type=all)", "link": None}, "annotations": {"bold": True, "color": "red"}}, {"text": {"content": "의 리뷰를 100% 수집하므로, 탈곡기 데이터가 전체 유저의 더 포괄적인 민심을 반영합니다."}}]}}
+            {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🤖"}, "color": "blue_background", "rich_text": [{"text": {"content": f"[{APP_VERSION}] 스팀 사용자 리뷰 분석기\\n", "link": None}, "annotations": {"bold": True, "color": "blue"}}, {"text": {"content": f"📅 스팀 출시일: {release_date}\\n", "link": None}, "annotations": {"bold": True, "color": "default"}}, {"text": {"content": "해당 봇은 글로벌 유저 민심을 객관적으로 분석합니다.\\n"}}, {"text": {"content": f"👉 {game_name} 스팀 상점 바로가기", "link": {"url": f"https://store.steampowered.com/app/{app_id}/"}}, "annotations": {"bold": True, "color": "blue", "underline": True}}]}},
+            {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚠️"}, "color": "yellow_background", "rich_text": [{"text": {"content": "평점 지표 3분할 안내\\n", "link": None}, "annotations": {"bold": True}}, {"text": {"content": "리포트 내 평점은 3가지로 나뉘어 제공됩니다. 스팀 공식 평점은 '스팀 상점을 통해 직접 라이선스를 획득한 유저'의 평가만 점수에 반영합니다. 하지만 전체 누적 평점 및 최근 동향은 외부 키 등록 및 무료 플레이어 등 "}}, {"text": {"content": "모든 유저(purchase_type=all)", "link": None}, "annotations": {"bold": True, "color": "red"}}, {"text": {"content": "의 리뷰를 100% 수집하므로, 탈곡기 데이터가 전체 유저의 더 포괄적인 민심을 반영합니다."}}]}}
         ]}}, 
         {"object": "block", "type": "divider", "divider": {}}
     ]
@@ -33,11 +32,11 @@ def get_ai_one_liner_block(ai_data):
     return [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🤖 AI의 한줄평"}}]}}, {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"❝ {ai_data.get('critic_one_liner', '')} ❞"}, "annotations": {"color": "blue"}}]}}, {"object": "block", "type": "divider", "divider": {}}]
 
 def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
-    # 💡 [개선] 노션 리포트에도 공식 / 누적 / 최근 평점 3가지로 나열
+    # 💡 [수정] 노션 리포트에서도 스팀 공식 평점 리뷰 수 표시 제거
     return [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "📊 스팀 민심 온도계"}}]}}, 
             {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
-                {"text": {"content": f"🛑 스팀 공식 평점: {store_stats.get('official_desc', '평가 없음')} (총 {store_stats.get('official_total', 0):,}개)\n"}},
-                {"text": {"content": f"📈 전체 누적 평가: {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)\n"}},
+                {"text": {"content": f"🛑 스팀 공식 평점: {store_stats.get('official_desc', '평가 없음')}\\n"}},
+                {"text": {"content": f"📈 전체 누적 평가: {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)\\n"}},
                 {"text": {"content": f"🔥 {recent_label}: {store_stats['recent_desc']} (분석 표본 {store_stats['recent_total']:,}개)"}, "annotations": {"bold": True, "color": "red"}}
             ]}}, 
             {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": f"💡 왜 '{recent_label}' 기준으로 분석했나요?"}, "annotations": {"color": "gray"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": smart_reason}}]}}]}}, 
