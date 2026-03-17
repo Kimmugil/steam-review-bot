@@ -152,6 +152,18 @@ def get_language_ratio_block(store_stats):
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 국가 여론 지표"}}]}}]
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🗺️ 주요 권역별 누적 리뷰 비중"}}]}})
+    blocks.append({
+        "object": "block", "type": "toggle", "toggle": {
+            "rich_text": [{"text": {"content": "ℹ️ 각 권역별 포함 국가(언어) 안내"}, "annotations": {"color": "gray"}}],
+            "children": [
+                {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "🌏 아시아: 한국어, 중국어(간/번체), 일본어, 태국어, 베트남어, 인도네시아어"}}]}},
+                {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "🌍 영미/유럽권: 영어, 프랑스어, 독일어, 스페인어, 이탈리아어 등 유럽 주요 언어"}}]}},
+                {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "🧊 CIS (러시아 등): 러시아어, 우크라이나어"}}]}},
+                {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "💃 중남미: 스페인어(중남미), 포르투갈어(브라질)"}}]}},
+                {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "🕌 중동/기타: 튀르키예어, 아랍어 등"}}]}}
+            ]
+        }
+    })
     blocks.append(_create_notion_table(store_stats['table_data_region'], is_region=True))
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🥇 언어별 누적 리뷰 비중 TOP 10"}}]}})
