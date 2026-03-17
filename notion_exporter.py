@@ -57,9 +57,10 @@ def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
     return blocks
 
 def get_global_summary_block(ai_data, recent_label):
-    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🎯 전 국가 망라 최종 요약"}}]}}, {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "📈 [전체 누적 평가 주요 여론]"}, "annotations": {"color": "blue", "bold": True}}]}}]
+    # 💡 [요청 2번] 파란색, 빨간색 옵션 제거하고 기본색(검은색) 적용
+    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🎯 전 국가 망라 최종 요약"}}]}}, {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "📈 [전체 누적 평가 주요 여론]"}, "annotations": {"bold": True}}]}}]
     for line in ai_data.get('final_summary_all', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"🔥 [{recent_label} 주요 여론]"}, "annotations": {"color": "red", "bold": True}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"🔥 [{recent_label} 주요 여론]"}, "annotations": {"bold": True}}]}})
     for line in ai_data.get('final_summary_recent', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
@@ -69,7 +70,8 @@ def get_playtime_analysis_block(ai_data, stats):
     if not playtime_data: return []
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "⏱️ 플레이타임별 주요 민심 교차 분석"}}]}}]
     
-    blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 플레이타임별 표본 수집 및 분석 방식 안내"}, "annotations": {"color": "gray"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "수집된 전체 리뷰 표본을 플레이타임 순으로 정렬한 뒤, 정확히 절반(50:50)으로 분할하여 분석합니다. 하위 50%는 '뉴비 여론', 상위 50%는 '코어 여론'으로 분류되어 두 그룹 간의 시각차를 도출합니다."}}]}}]}})
+    # 💡 [요청 4번] 하위 25%, 상위 25% 양극화 기준 안내 문구로 토글 내용 업데이트
+    blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 플레이타임별 표본 수집 및 분석 방식 안내"}, "annotations": {"color": "gray"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "수집된 전체 리뷰 표본을 플레이타임 순으로 정렬한 뒤, 중간값의 노이즈를 배제하기 위해 하위 25%를 '뉴비 여론', 상위 25%를 '코어 여론'으로 명확히 분리하여 두 그룹 간의 시각차를 도출합니다."}}]}}]}})
 
     comparison_insights = playtime_data.get('comparison_insights', [])
     if comparison_insights:
@@ -78,12 +80,10 @@ def get_playtime_analysis_block(ai_data, stats):
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('newbie_title', '🌱 뉴비 여론')}, "annotations": {"color": "green", "bold": True}}]}})
     blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"ℹ️ 표본: {stats.get('newbie_total', 0)}개 | 평균 여론: {stats.get('newbie_desc', '평가 없음')}"}, "annotations": {"color": "gray"}}]}})
-    # 💡 [픽스 6번] format_sentiment_line 적용! 이제 [긍정], [부정] 텍스트가 파란색, 빨간색으로 예쁘게 칠해짐
     for line in playtime_data.get('newbie_summary', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('core_title', '💀 코어 여론')}, "annotations": {"color": "purple", "bold": True}}]}})
     blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"ℹ️ 표본: {stats.get('core_total', 0)}개 | 평균 여론: {stats.get('core_desc', '평가 없음')}"}, "annotations": {"color": "gray"}}]}})
-    # 💡 [픽스 6번] format_sentiment_line 적용
     for line in playtime_data.get('core_summary', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "divider", "divider": {}})
@@ -114,11 +114,12 @@ def get_category_summary_block(ai_data):
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
-def _create_notion_table(table_data_list, limit=None):
+# 💡 [요청 3번] 권역 테이블도 지원하도록 is_region 플래그 추가
+def _create_notion_table(table_data_list, limit=None, is_region=False):
     rows = [
         {"type": "table_row", "table_row": {"cells": [
             [{"text": {"content": "순위"}, "annotations": {"bold": True, "color": "gray"}}], 
-            [{"text": {"content": "언어"}, "annotations": {"bold": True, "color": "gray"}}], 
+            [{"text": {"content": "권역" if is_region else "언어"}, "annotations": {"bold": True, "color": "gray"}}], 
             [{"text": {"content": "리뷰 수"}, "annotations": {"bold": True, "color": "gray"}}], 
             [{"text": {"content": "비중"}, "annotations": {"bold": True, "color": "gray"}}],
             [{"text": {"content": "👍 긍정 비율"}, "annotations": {"bold": True, "color": "blue"}}],
@@ -132,9 +133,12 @@ def _create_notion_table(table_data_list, limit=None):
         eval_val = str(r['eval'])
         eval_color = "blue" if "긍정적" in eval_val else ("red" if "부정적" in eval_val else "gray")
         
+        # 💡 [요청 1번, 3번] 권역인 경우 권역명, 언어인 경우 국기 이모지가 들어간 이름 사용
+        name_val = str(r['region']) if is_region else str(r['lang_with_flag'])
+        
         rows.append({"type": "table_row", "table_row": {"cells": [
             [{"text": {"content": str(r['rank'])}}], 
-            [{"text": {"content": str(r['lang'])}}], 
+            [{"text": {"content": name_val}}], 
             [{"text": {"content": f"{r['count']:,}개"}}], 
             [{"text": {"content": str(r['ratio'])}}],
             [{"text": {"content": str(r['pos_ratio'])}, "annotations": {"color": "blue"}}],
@@ -145,9 +149,12 @@ def _create_notion_table(table_data_list, limit=None):
     return {"object": "block", "type": "table", "table": {"table_width": 7, "has_column_header": True, "children": rows}}
 
 def get_language_ratio_block(store_stats):
-    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 언어별 누적 리뷰 비중"}}]}}]
+    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 국가 여론 지표"}}]}}]
     
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🥇 누적 리뷰 비중 TOP 10"}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🗺️ 주요 권역별 누적 리뷰 비중"}}]}})
+    blocks.append(_create_notion_table(store_stats['table_data_region'], is_region=True))
+    
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🥇 언어별 누적 리뷰 비중 TOP 10"}}]}})
     blocks.append(_create_notion_table(store_stats['table_data_all'], limit=10))
     
     blocks.append({"object": "block", "type": "toggle", "toggle": {
