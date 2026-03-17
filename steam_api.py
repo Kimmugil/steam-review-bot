@@ -22,8 +22,9 @@ def sanitize_url(url):
 
 def fetch_store_official_rating(app_id):
     """
-    💡 [추가] 스팀 상점 페이지 HTML을 직접 크롤링하여 공식 평점 텍스트와 리뷰 수를 추출합니다.
+    💡 [추가] 스팀 상점 페이지 HTML을 직접 크롤링하여 공식 평점 텍스트를 추출합니다.
     API 지연(Caching) 문제를 우회하기 위해 가장 최신 정보를 담고 있는 웹 페이지를 직접 읽습니다.
+    (리뷰 숫자는 무의미하므로 0으로 반환하여 UI에서 숨깁니다)
     """
     url = f"https://store.steampowered.com/app/{app_id}/?l=korean"
     headers = {
@@ -38,21 +39,10 @@ def fetch_store_official_rating(app_id):
         html = res.text
         
         # 1. 공식 평점 텍스트 추출 (예: "복합적", "대체로 긍정적")
-        # <span class="game_review_summary positive">...</span> 형태 탐색
         rating_match = re.search(r'<span class="game_review_summary[^>]*>([^<]+)</span>', html)
         rating_text = rating_match.group(1).strip() if rating_match else "평가 없음"
         
-        # 2. 공식 리뷰 수 추출 (예: "2,466")
-        # (2,466개 리뷰) 형태의 텍스트 탐색
-        count_match = re.search(r'\((\d{1,3}(?:,\d{3})*)개 리뷰\)', html)
-        if not count_match:
-            # 영어 환경 등 다른 텍스트 패턴 대비 (예: 2,466 reviews)
-            count_match = re.search(r'\((\d{1,3}(?:,\d{3})*)\)', html)
-            
-        review_count_str = count_match.group(1).replace(",", "") if count_match else "0"
-        review_count = int(review_count_str)
-        
-        return rating_text, review_count
+        return rating_text, 0 # 리뷰 숫자는 제거 요청에 따라 0 반환
     except Exception:
         return None, None
 
@@ -144,8 +134,9 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
 
 def fetch_steam_reviews(app_id, recent_days_val):
     total_lang_counts = {}
+    sum_total, sum_pos = 0, 0
     
-    # 1. 언어별 데이터 수집
+    # 1. 언어별 데이터 수집 (직접 합산을 위해 데이터 정밀 수집)
     for lang in LANG_MAP.keys():
         try:
             res_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
@@ -155,42 +146,29 @@ def fetch_steam_reviews(app_id, recent_days_val):
             n_revs = all_data.get('total_negative', 0)
             if t_revs > 0:
                 total_lang_counts[lang] = {"total": t_revs, "positive": p_revs, "negative": n_revs}
+                sum_total += t_revs
+                sum_pos += p_revs
         except: pass
 
-    # 2. 스팀 공식 평점 (💡 API 대신 상점 페이지 스크래핑 우선 적용)
-    official_desc, official_total_reviews = fetch_store_official_rating(app_id)
-    
-    # 만약 스크래핑에 실패하면 기존 API 로직으로 폴백
+    # 2. 스팀 공식 평점 (상점 페이지 스크래핑 우선 적용)
+    official_desc, _ = fetch_store_official_rating(app_id)
     if not official_desc or official_desc == "평가 없음":
         try:
-            summary_official_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json()
-            summary_official = summary_official_res.get('query_summary', {})
-            official_total_reviews = summary_official.get('total_reviews', 0)
-            official_score_code = summary_official.get('review_score', 0)
-            
-            if official_score_code == 0 and official_total_reviews > 0:
-                pos = summary_official.get('total_positive', 0)
-                official_desc = calculate_custom_score(pos / official_total_reviews, official_total_reviews)
+            res_steam = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json()
+            summ = res_steam.get('query_summary', {})
+            score_code = summ.get('review_score', 0)
+            # API가 0을 줄 때 예외 처리
+            if score_code == 0 and summ.get('total_reviews', 0) > 0:
+                official_desc = calculate_custom_score(summ.get('total_positive', 0) / summ.get('total_reviews', 0), summ.get('total_reviews', 0))
             else:
-                official_desc = SCORE_MAP.get(official_score_code, "평가 없음")
-        except:
-            official_total_reviews = 0
-            official_desc = "평가 없음"
-            
-    # 3. 전체 누적 평점 (외부 키 포함)
-    try:
-        summary_all_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all"), timeout=5).json()
-        summary_all = summary_all_res.get('query_summary', {})
-        all_time_total_reviews = summary_all.get('total_reviews', 0)
-        all_score_code = summary_all.get('review_score', 0)
-        
-        if all_score_code == 0 and all_time_total_reviews > 0:
-            pos = summary_all.get('total_positive', 0)
-            all_desc = calculate_custom_score(pos / all_time_total_reviews, all_time_total_reviews)
-        else:
-            all_desc = SCORE_MAP.get(all_score_code, "평가 없음")
-    except:
-        all_time_total_reviews = 0
+                official_desc = SCORE_MAP.get(score_code, "평가 없음")
+        except: official_desc = "평가 없음"
+
+    # 3. 전체 누적 평점 (💡 API 요약 데이터 0 버그 대응 - 직접 합산한 데이터로 계산)
+    all_time_total_reviews = sum_total
+    if sum_total > 0:
+        all_desc = calculate_custom_score(sum_pos / sum_total, sum_total)
+    else:
         all_desc = "평가 없음"
     
     # 4. 최근 동향 분석 데이터
@@ -220,6 +198,7 @@ def fetch_steam_reviews(app_id, recent_days_val):
         recent_total = all_time_total_reviews
         recent_custom_desc = all_desc
 
+    # TOP 3 언어 설정
     top_langs_keys = [l[0] for l in sorted(total_lang_counts.items(), key=lambda x: x[1]['total'], reverse=True)[:3]]
     if "koreana" not in top_langs_keys:
         top_langs_keys.append("koreana")
@@ -249,7 +228,6 @@ def fetch_steam_reviews(app_id, recent_days_val):
 
     store_stats = {
         "official_desc": official_desc,
-        "official_total": official_total_reviews,
         "all_desc": all_desc,
         "all_total": all_time_total_reviews,
         "recent_desc": recent_custom_desc,
