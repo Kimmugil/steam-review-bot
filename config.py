@@ -1,10 +1,10 @@
 import streamlit as st
 
-# 앱 버전 및 틱 간격 설정
+# 앱 버전 및 환경 설정
 APP_VERSION = "v2.2.1"
 TICKER_INTERVAL = 2.5
 
-# 💡 기본값 설정 (Secrets에 없으면 자동으로 LIVE 모드로 동작)
+# 💡 기본값 설정 (Secrets에 ENV_NAME이 있으면 그걸 우선함)
 ENV_NAME = "LIVE"
 NOTION_PUBLIC_URL = "https://www.notion.so/" 
 
@@ -13,12 +13,14 @@ try:
     NOTION_TOKEN = st.secrets["NOTION_TOKEN"]
     NOTION_DATABASE_ID = st.secrets["NOTION_DATABASE_ID"]
     
-    # 💡 [핵심] Secrets에 ENV_NAME이 적혀있으면 그 값을 최우선으로 가져옴
     if "ENV_NAME" in st.secrets:
         ENV_NAME = st.secrets["ENV_NAME"]
         
+    # 💡 변수명을 PUBLIC_URL로 확실히 매핑
     if "NOTION_PUBLIC_URL" in st.secrets:
         NOTION_PUBLIC_URL = st.secrets["NOTION_PUBLIC_URL"]
+    elif "NOTION_PUBLISH_URL" in st.secrets:
+        NOTION_PUBLIC_URL = st.secrets["NOTION_PUBLISH_URL"]
         
 except Exception:
     GEMINI_API_KEY = None
