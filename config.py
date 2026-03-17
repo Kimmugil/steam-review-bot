@@ -5,7 +5,7 @@ APP_VERSION = "v2.2.0"
 ENV_NAME = "LIVE" 
 TICKER_INTERVAL = 2.5
 
-# 노션 배포 URL (기본값 설정, secrets에 있으면 덮어씌움)
+# 💡 노션 배포 URL (PUBLISH -> PUBLIC 으로 통일)
 NOTION_PUBLIC_URL = "https://www.notion.so/" 
 
 try:
@@ -13,6 +13,7 @@ try:
     NOTION_TOKEN = st.secrets["NOTION_TOKEN"]
     NOTION_DATABASE_ID = st.secrets["NOTION_DATABASE_ID"]
     
+    # Secrets에서도 PUBLIC_URL을 찾도록 세팅
     if "NOTION_PUBLIC_URL" in st.secrets:
         NOTION_PUBLIC_URL = st.secrets["NOTION_PUBLIC_URL"]
         
