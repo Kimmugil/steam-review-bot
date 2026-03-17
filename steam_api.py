@@ -126,7 +126,8 @@ def _build_lang_table_data(lang_data_dict, total_all_reviews):
         eval_desc = calculate_custom_score(pos / count if count > 0 else 0, count)
         
         raw_lang = get_lang_name(lang_code)
-        clean_lang = raw_lang.split(" ", 1)[-1] if " " in raw_lang else raw_lang
+        # 💡 [픽스 4번] OS가 이모지를 문자로 렌더링해도 무시하고, 띄어쓰기 뒷부분만 완벽하게 가져옴
+        clean_lang = raw_lang.split(" ", 1)[-1].strip() if " " in raw_lang else raw_lang
         
         table_data.append({
             "rank": f"{idx+1}위", "lang": clean_lang, "count": count, 
