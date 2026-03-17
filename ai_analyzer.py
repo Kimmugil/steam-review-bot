@@ -5,7 +5,7 @@ from steam_api import get_lang_name
 from prompts import build_prompt
 
 def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_stats, recent_label, news_data, user_feedback=""):
-    # 💡 [딕셔너리 구조 반영] total_lang_counts 정렬 및 추출
+    # 💡 [핵심 픽스] x[1]['total']로 접근해야 타입 에러가 안 나고 정상 정렬됨!
     top_langs_str = ", ".join([f"{get_lang_name(k)}: {v['total']:,}개" for k, v in sorted(store_stats['total_lang_counts'].items(), key=lambda x: x[1]['total'], reverse=True)[:7]])
     
     review_text = "==== [전체 누적 평가 주요 리뷰] ====\n"
@@ -25,10 +25,8 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         
     prompt = build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text, review_text, user_feedback)
     
-    # 💡 URL 형식이 마크다운 형태로 꼬여있던 부분을 순수 URL로 픽스
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
     
-    # 💡 [개선] temperature를 0.3에서 0.1로 낮춰서 환각(Hallucination) 억제 및 번역 정확도 향상
     payload = {
         "contents": [{"parts": [{"text": prompt}]}], 
         "generationConfig": {

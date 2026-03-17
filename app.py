@@ -37,6 +37,7 @@ st.markdown("""
         }
         .stats-card {
             background-color: #1e2129;
+            color: #ffffff;
             padding: 20px;
             border-radius: 12px;
             border-left: 5px solid #ff4b4b;
@@ -133,7 +134,8 @@ def main():
                         info_txt.write("📥 2/5 & 3/5: 최신 소식 및 리뷰 데이터 수집 중...")
                         rday, rlabel, rreason = get_smart_period(rdate)
                         news = fetch_latest_news(rid)
-                        all_r, rec_r, stats = fetch_steam_reviews(rid, rday)
+                        
+                        all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate)
                         
                         if stats['all_total'] == 0: 
                             status.update(label="데이터 없음", state="error")
@@ -170,7 +172,6 @@ def main():
 
     elif st.session_state.step == 1:
         st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
-        st.write(f"📅 **스팀 출시일:** {st.session_state.rel_date_str}")
         
         st.warning("⚠️ **평점 지표 안내:** **'스팀 공식 평점'**은 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수이며, **'전체 누적 평점'**은 외부 키(Key) 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
         
@@ -179,13 +180,12 @@ def main():
         
         tab1, tab2, tab3 = st.tabs(["📊 주요 요약", "⏱️ 플레이타임 분석", "🌐 상세 분석"])
         with tab1:
-            st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}<br><br><span style="color:#888888; font-size:0.9em;">{st.session_state.rel_date_str} 스팀에 출시된 [{st.session_state.game_name}]에 대한 AI의 한줄평 입니다.</span></div>', unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
-            # 💡 [수정] 스팀 공식 평점에서 리뷰 수 표시 완벽 제거
-            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'))
-            with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
-            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
+            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'), help="스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수입니다.")
+            with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개", help="외부 키(Key) 등록 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
+            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개", help="최신 민심을 정확히 파악하기 위해 특정 기간 동안 수집된 리뷰 표본 결과입니다.")
             
             st.info(f"💡 **분석 요약:** {ins.get('sentiment_analysis', '')}")
             st.markdown("---")
@@ -198,7 +198,7 @@ def main():
                 for line in ins.get('final_summary_recent', []): st.write(render_colored_text(line))
 
         with tab2:
-            st.markdown("### ⏱️ 플레이타임별 민심 교차 분석")
+            st.markdown("### ⏱️ 플레이타임별 민심 교차 분석", help="전체 리뷰 표본을 플레이타임 순으로 정렬한 뒤, 중간값의 노이즈를 배제하기 위해 하위 25%를 '뉴비 여론', 상위 25%를 '코어 여론'으로 양극화하여 분석합니다.")
             pt = ins.get('playtime_analysis', {})
             if pt:
                 if pt.get('comparison_insights'):
@@ -206,9 +206,11 @@ def main():
                 p1, p2 = st.columns(2)
                 with p1:
                     st.markdown(f"**{pt.get('newbie_title', '🌱 신규 유저')}**")
+                    st.caption(f"ℹ️ 표본: {stats.get('newbie_total', 0)}개 | 평균 여론: {stats.get('newbie_desc', '평가 없음')}")
                     for l in pt.get('newbie_summary', []): st.write(f"- {render_colored_text(l)}")
                 with p2:
                     st.markdown(f"**{pt.get('core_title', '💀 숙련 유저')}**")
+                    st.caption(f"ℹ️ 표본: {stats.get('core_total', 0)}개 | 평균 여론: {stats.get('core_desc', '평가 없음')}")
                     for l in pt.get('core_summary', []): st.write(f"- {render_colored_text(l)}")
 
         with tab3:
@@ -230,11 +232,64 @@ def main():
                     for line in cat.get('summary', []): st.write(f"- {render_colored_text(line)}")
             
             st.divider()
-            st.markdown("### 🌍 언어별 상세 리뷰")
+            st.markdown("### 🌍 리뷰 작성 언어별 세부 평가 분석")
             for country in ins.get('country_analysis', []):
                 st.markdown(f"**[{country.get('language')}]**")
                 for c_cat in country.get('categories', []):
                     st.write(f"  - {render_colored_text(c_cat.get('name'))}: {', '.join([render_colored_text(x) for x in c_cat.get('summary', [])])}")
+            
+            st.divider()
+            st.markdown("### 🌐 전 세계 국가 여론 지표")
+            
+            def apply_eval_color(val):
+                val_str = str(val)
+                if "긍정적" in val_str: return "color: #5c93fa"
+                elif "부정적" in val_str: return "color: #ff4b4b"
+                return "color: #888888"
+                
+            # 💡 [요청 1번] 권역 툴팁 도움말 추가
+            region_help = (
+                "각 권역별 포함 국가(언어) 안내\n"
+                "- 아시아: 한국어, 중국어, 일본어, 태국어, 베트남어, 인도네시아어\n"
+                "- 영미/유럽권: 영어, 프랑스어, 독일어, 스페인어, 폴란드어 등 유럽 주요 언어\n"
+                "- CIS: 러시아어, 우크라이나어\n"
+                "- 중남미: 스페인어(중남미), 포르투갈어(브라질)\n"
+                "- 중동/기타: 튀르키예어, 아랍어 등"
+            )
+            st.markdown("##### 🗺️ 주요 권역별 누적 리뷰 비중", help=region_help)
+            df_cols_region = ["순위", "권역", "리뷰 수", "비중", "👍 긍정 비율", "👎 부정 비율", "📊 평가 결과"]
+            df_region = pd.DataFrame([[r['rank'], r['region'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_region']], columns=df_cols_region)
+            try: styled_region = df_region.style.map(apply_eval_color, subset=["📊 평가 결과"])
+            except AttributeError: styled_region = df_region.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+            st.dataframe(styled_region, hide_index=True, use_container_width=True)
+
+            st.markdown("##### 🥇 언어별 누적 리뷰 비중 TOP 10")
+            df_cols = ["순위", "언어", "리뷰 수", "비중", "👍 긍정 비율", "👎 부정 비율", "📊 평가 결과"]
+            df_all = pd.DataFrame([[r['rank'], r['lang'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_all']], columns=df_cols)
+            df_30 = pd.DataFrame([[r['rank'], r['lang'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_30']], columns=df_cols)
+
+            df_all_top10 = df_all.head(10)
+            df_30_top10 = df_30.head(10)
+
+            try:
+                styled_all_top10 = df_all_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
+                styled_all_full = df_all.style.map(apply_eval_color, subset=["📊 평가 결과"])
+                styled_30_top10 = df_30_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
+            except AttributeError:
+                styled_all_top10 = df_all_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+                styled_all_full = df_all.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+                styled_30_top10 = df_30_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+
+            st.dataframe(styled_all_top10, hide_index=True, use_container_width=True)
+            
+            with st.expander("👀 전 세계 누적 리뷰 비중 (전체 보기)"):
+                st.dataframe(styled_all_full, hide_index=True, use_container_width=True)
+                
+            st.markdown("##### 🔥 최근 30일 누적 리뷰 비중 TOP 10")
+            if stats['days_since_release'] < 30:
+                st.info("ℹ️ 출시일로부터 30일 이후부터 지원하는 표입니다. (현재 데이터 부족)")
+            else:
+                st.dataframe(styled_30_top10, hide_index=True, use_container_width=True)
 
         st.divider()
         with st.container(border=True):
