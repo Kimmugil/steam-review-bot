@@ -32,11 +32,13 @@ def get_ai_one_liner_block(ai_data):
     return [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🤖 AI의 한줄평"}}]}}, {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"❝ {ai_data.get('critic_one_liner', '')} ❞"}, "annotations": {"color": "blue"}}]}}, {"object": "block", "type": "divider", "divider": {}}]
 
 def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
-    # 💡 [수정] 스팀 공식 평점 리뷰 수 표시 완벽 제거
+    # 💡 [해결] \n 기호를 사용하지 않고, 리치 텍스트 배열을 분리하여 자연스러운 줄바꿈 유도
     return [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "📊 스팀 민심 온도계"}}]}}, 
             {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
-                {"text": {"content": f"🛑 스팀 공식 평점: {store_stats.get('official_desc', '평가 없음')}\\n"}},
-                {"text": {"content": f"📈 전체 누적 평가: {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)\\n"}},
+                {"text": {"content": f"🛑 스팀 공식 평점: {store_stats.get('official_desc', '평가 없음')}"}},
+                {"text": {"content": "\n"}}, # 💡 명시적 줄바꿈
+                {"text": {"content": f"📈 전체 누적 평가: {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)"}},
+                {"text": {"content": "\n"}}, # 💡 명시적 줄바꿈
                 {"text": {"content": f"🔥 {recent_label}: {store_stats['recent_desc']} (분석 표본 {store_stats['recent_total']:,}개)"}, "annotations": {"bold": True, "color": "red"}}
             ]}}, 
             {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": f"💡 왜 '{recent_label}' 기준으로 분석했나요?"}, "annotations": {"color": "gray"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": smart_reason}}]}}]}}, 
