@@ -1,7 +1,7 @@
 import requests
 import urllib.parse
 import re
-import concurrent.futures # 💡 비동기 병렬 처리를 위한 모듈 추가
+import concurrent.futures
 from datetime import datetime
 from config import LANG_MAP, SCORE_MAP
 
@@ -103,32 +103,57 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
     return reviews
 
 def _fetch_single_lang_stats(app_id, lang):
-    """💡 [추가] 단일 언어의 통계 데이터를 가져오는 헬퍼 함수 (스레딩용)"""
+    """전체 및 최근 30일 데이터를 동시에 수집 (스레딩용)"""
     try:
-        url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all")
-        res = requests.get(url, timeout=5)
-        data = res.json().get('query_summary', {})
-        return lang, data.get('total_reviews', 0), data.get('total_positive', 0), data.get('total_negative', 0)
+        url_all = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all")
+        res_all = requests.get(url_all, timeout=5).json().get('query_summary', {})
+        
+        url_30 = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&day_range=30&num_per_page=0&purchase_type=all&filter=recent")
+        res_30 = requests.get(url_30, timeout=5).json().get('query_summary', {})
+        
+        return lang, res_all, res_30
     except:
-        return lang, 0, 0, 0
+        return lang, {}, {}
 
-def fetch_steam_reviews(app_id, recent_days_val):
-    total_lang_counts = {}
+def _build_lang_table_data(lang_data_dict, total_all_reviews):
+    """딕셔너리 데이터를 UI 및 노션에서 쓰기 편하게 리스트 형태로 정렬/가공"""
+    sorted_langs = sorted(lang_data_dict.items(), key=lambda x: x[1]['total'], reverse=True)
+    table_data = []
+    for idx, (lang_code, stats) in enumerate(sorted_langs):
+        count, pos = stats['total'], stats['positive']
+        neg = stats['total'] - stats['positive']
+        ratio = (count / total_all_reviews) * 100 if total_all_reviews > 0 else 0
+        pos_ratio = (pos / count) * 100 if count > 0 else 0
+        neg_ratio = (neg / count) * 100 if count > 0 else 0
+        eval_desc = calculate_custom_score(pos / count if count > 0 else 0, count)
+        
+        table_data.append({
+            "rank": f"{idx+1}위", "lang": get_lang_name(lang_code), "count": count, 
+            "ratio": f"{ratio:.1f}%", "pos_ratio": f"{pos_ratio:.1f}%", "neg_ratio": f"{neg_ratio:.1f}%", "eval": eval_desc
+        })
+    return table_data
+
+def fetch_steam_reviews(app_id, recent_days_val, release_date):
+    lang_stats_all_dict, lang_stats_30_dict = {}, {}
     sum_total, sum_pos = 0, 0
     
-    # 💡 1. 30개국 언어별 데이터 정밀 수집 -> 비동기 병렬 처리(Thread)로 속도 10배 폭발!
-    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
-        # 모든 언어에 대해 동시에 API 요청을 던짐
+    # 1. 30개국 데이터 비동기 수집 (All 및 30 Days)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         futures = [executor.submit(_fetch_single_lang_stats, app_id, lang) for lang in LANG_MAP.keys()]
-        
         for future in concurrent.futures.as_completed(futures):
-            lang, t_revs, p_revs, n_revs = future.result()
-            if t_revs > 0:
-                total_lang_counts[lang] = {"total": t_revs, "positive": p_revs, "negative": n_revs}
-                sum_total += t_revs
-                sum_pos += p_revs
+            lang, summ_all, summ_30 = future.result()
+            
+            t_all, p_all = summ_all.get('total_reviews', 0), summ_all.get('total_positive', 0)
+            if t_all > 0:
+                lang_stats_all_dict[lang] = {"total": t_all, "positive": p_all}
+                sum_total += t_all
+                sum_pos += p_all
+                
+            t_30, p_30 = summ_30.get('total_reviews', 0), summ_30.get('total_positive', 0)
+            if t_30 > 0:
+                lang_stats_30_dict[lang] = {"total": t_30, "positive": p_30}
 
-    # 2. 스팀 공식 평점 (상점 페이지 스크래핑)
+    # 2. 스팀 공식 평점 및 전체 평점 산출
     official_desc, _ = fetch_store_official_rating(app_id)
     if not official_desc or official_desc == "평가 없음":
         try:
@@ -140,14 +165,10 @@ def fetch_steam_reviews(app_id, recent_days_val):
             else: official_desc = SCORE_MAP.get(score_code, "평가 없음")
         except: official_desc = "평가 없음"
 
-    # 3. 전체 누적 평점 (직접 합산 데이터 사용)
     all_time_total_reviews = sum_total
-    if sum_total > 0:
-        all_desc = calculate_custom_score(sum_pos / sum_total, sum_total)
-    else:
-        all_desc = "평가 없음"
+    all_desc = calculate_custom_score(sum_pos / sum_total, sum_total) if sum_total > 0 else "평가 없음"
     
-    # 4. 최근 동향 분석 데이터
+    # 3. 최근 동향 평점 산출
     recent_total, recent_custom_desc = 0, "평가 없음"
     if recent_days_val:
         sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&day_range={recent_days_val}&num_per_page=100&purchase_type=all")
@@ -155,56 +176,58 @@ def fetch_steam_reviews(app_id, recent_days_val):
         for _ in range(5):
             try:
                 res = requests.get(sample_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=5)
-                data = res.json()
-                revs = data.get('reviews', [])
+                revs = res.json().get('reviews', [])
                 if not revs: break
                 for r in revs:
                     if r.get('voted_up'): pos_count += 1
                     recent_total += 1
-                cursor = data.get('cursor', '*')
+                cursor = res.json().get('cursor', '*')
                 if not cursor: break
             except: break
         if recent_total > 0: recent_custom_desc = calculate_custom_score(pos_count / recent_total, recent_total)
     else:
         recent_total, recent_custom_desc = all_time_total_reviews, all_desc
 
-    # TOP 3 언어 설정
-    top_langs_keys = [l[0] for l in sorted(total_lang_counts.items(), key=lambda x: x[1]['total'], reverse=True)[:3]]
-    if "koreana" not in top_langs_keys:
-        top_langs_keys.append("koreana")
-        
-    filtered_all = {lang: [] for lang in top_langs_keys}
-    filtered_recent = {lang: [] for lang in top_langs_keys}
-    all_playtimes = []
+    # 4. 언어별 데이터 포맷팅 (UI/노션 출력용)
+    table_data_all = _build_lang_table_data(lang_stats_all_dict, sum_total)
+    table_data_30 = _build_lang_table_data(lang_stats_30_dict, sum([v['total'] for v in lang_stats_30_dict.values()]))
+    days_since_release = (datetime.now() - release_date).days
+
+    # 5. 리뷰 및 플레이타임 정밀 분석
+    top_langs_keys = [l[0] for l in sorted(lang_stats_all_dict.items(), key=lambda x: x[1]['total'], reverse=True)[:3]]
+    if "koreana" not in top_langs_keys: top_langs_keys.append("koreana")
     
+    filtered_all, filtered_recent, all_reviews_for_pt = {l: [] for l in top_langs_keys}, {l: [] for l in top_langs_keys}, []
     for lang in top_langs_keys:
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
-        all_playtimes.extend([r['playtime'] for r in all_revs])
+        all_reviews_for_pt.extend([{'pt': r['playtime'], 'pos': r['is_positive']} for r in all_revs])
         filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in all_revs][:20]
-        
         if recent_days_val:
             rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val)
             filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in rec_revs][:20]
-        else:
-            filtered_recent[lang] = filtered_all[lang]
+        else: filtered_recent[lang] = filtered_all[lang]
 
-    newbie_avg, core_avg = 0, 0
-    if all_playtimes:
-        all_playtimes.sort()
-        mid = len(all_playtimes) // 2
-        newbies, cores = all_playtimes[:mid], all_playtimes[mid:]
-        newbie_avg = round(sum(newbies) / len(newbies), 1) if newbies else 0
-        core_avg = round(sum(cores) / len(cores), 1) if cores else 0
+    # 플레이타임 그룹별 수치(평균, 표본수, 평가) 계산
+    all_reviews_for_pt.sort(key=lambda x: x['pt'])
+    mid = len(all_reviews_for_pt) // 2
+    newbies, cores = all_reviews_for_pt[:mid], all_reviews_for_pt[mid:]
+    
+    def calc_pt_stats(group):
+        if not group: return 0, 0, "평가 없음"
+        avg = round(sum(x['pt'] for x in group) / len(group), 1)
+        pos = sum(1 for x in group if x['pos'])
+        desc = calculate_custom_score(pos / len(group), len(group))
+        return avg, len(group), desc
+
+    n_avg, n_tot, n_desc = calc_pt_stats(newbies)
+    c_avg, c_tot, c_desc = calc_pt_stats(cores)
 
     store_stats = {
-        "official_desc": official_desc,
-        "all_desc": all_desc,
-        "all_total": all_time_total_reviews,
-        "recent_desc": recent_custom_desc,
-        "recent_total": recent_total, 
-        "total_lang_counts": total_lang_counts,
-        "newbie_avg": newbie_avg,
-        "core_avg": core_avg
+        "official_desc": official_desc, "all_desc": all_desc, "all_total": all_time_total_reviews,
+        "recent_desc": recent_custom_desc, "recent_total": recent_total, 
+        "total_lang_counts": lang_stats_all_dict, # AI Prompt용 하위호환
+        "table_data_all": table_data_all, "table_data_30": table_data_30, "days_since_release": days_since_release,
+        "newbie_avg": n_avg, "newbie_total": n_tot, "newbie_desc": n_desc,
+        "core_avg": c_avg, "core_total": c_tot, "core_desc": c_desc
     }
-
     return filtered_all, filtered_recent, store_stats
