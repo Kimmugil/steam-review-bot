@@ -173,7 +173,7 @@ def main():
     elif st.session_state.step == 1:
         st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
         
-        st.warning("⚠️ **평점 지표 안내:** **'스팀 공식 평점'**은 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수이며, **'전체 누적 평점'**은 외부 키(Key) 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
+        st.warning("⚠️ **평점 지표 안내:** '스팀 공식 평점'은 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수이며, '전체 누적 평점'은 외부 키(Key) 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
         
         ins = st.session_state.insights
         stats = st.session_state.stats
