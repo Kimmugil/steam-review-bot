@@ -4,7 +4,6 @@ import time
 import threading
 import re
 import pandas as pd
-# 💡 IMPORT 변수명 PUBLIC_URL 로 수정
 from config import APP_VERSION, NOTION_PUBLIC_URL, GEMINI_API_KEY, NOTION_TOKEN, TICKER_INTERVAL, ENV_NAME
 from updates import UPDATE_HISTORY
 from messages import WAITING_MESSAGES
@@ -14,13 +13,11 @@ from notion_exporter import upload_to_notion
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="wide")
 
-# 💡 긍정/부정 색상 렌더링 헬퍼 함수 추가
 def render_colored_text(text):
     if "[긍정]" in text: return f":blue[{text}]"
     elif "[부정]" in text: return f":red[{text}]"
     return text
 
-# CSS 주입: UI 개선 및 상단 배너 고정
 st.markdown("""
     <style>
         .fixed-banner {
@@ -106,7 +103,6 @@ def main():
         st.markdown("스팀 상점 주소나 App ID를 입력하여 글로벌 여론을 탈탈 털어보세요.")
     with col_h2:
         st.write("")
-        # 💡 링크 버튼에 PUBLIC_URL 적용
         st.link_button("👉 통합 리포트 열람", NOTION_PUBLIC_URL, use_container_width=True)
     
     st.write("")
@@ -158,7 +154,6 @@ def main():
                             time.sleep(TICKER_INTERVAL)
                         
                         if res_box[1]: raise Exception(res_box[1])
-                        # 💡 세션 스테이트에 출시일 텍스트 추가 저장
                         st.session_state.update({
                             "app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), 
                             "insights": res_box[0], "stats": stats, "recent_label": rlabel, 
@@ -175,10 +170,10 @@ def main():
 
     elif st.session_state.step == 1:
         st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
+        st.write(f"📅 **스팀 출시일:** {st.session_state.rel_date_str}")
         
-        # 💡 출시일 표시 및 스팀 상점 평점 차이점 경고문 추가
-        st.markdown(f"📅 **스팀 출시일:** {st.session_state.rel_date_str}")
-        st.warning("⚠️ **스팀 상점 평점과의 차이점 안내:** 스팀 공식 상점은 '스팀 내 직접 결제 유저'의 평가만 점수에 반영합니다. 하지만 탈곡기는 외부 키(Key) 등록 및 무료 플레이어 등 **모든 유저(purchase_type=all)**의 리뷰를 100% 수집하므로 평점 지표가 상점과 다를 수 있으며, 전체 유저의 포괄적인 민심을 반영합니다.")
+        # 💡 [개선] 평점 지표 3분할에 맞춘 경고문 업데이트
+        st.warning("⚠️ **평점 지표 안내:** **'스팀 공식 평점'**은 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수이며, **'전체 누적 평점'**은 외부 키(Key) 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
         
         ins = st.session_state.insights
         stats = st.session_state.stats
@@ -186,14 +181,16 @@ def main():
         tab1, tab2, tab3 = st.tabs(["📊 주요 요약", "⏱️ 플레이타임 분석", "🌐 상세 분석"])
         with tab1:
             st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}</div>', unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            with col1: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
-            with col2: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
+            
+            # 💡 [개선] 컬럼을 3개로 늘려서 각각 공식 / 누적 / 최근 평점 표기
+            col1, col2, col3 = st.columns(3)
+            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'), f"{stats.get('official_total', 0):,}개")
+            with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
+            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
             
             st.info(f"💡 **분석 요약:** {ins.get('sentiment_analysis', '')}")
             st.markdown("---")
             c1, c2 = st.columns(2)
-            # 💡 긍정/부정 색상 적용
             with c1:
                 st.markdown("##### 📈 누적 여론 동향")
                 for line in ins.get('final_summary_all', []): st.write(render_colored_text(line))
@@ -208,7 +205,6 @@ def main():
                 if pt.get('comparison_insights'):
                     st.warning(f"**⚖️ 핵심 인사이트**\n\n" + "\n".join([f"- {i}" for i in pt.get('comparison_insights', [])]))
                 p1, p2 = st.columns(2)
-                # 💡 긍정/부정 색상 적용
                 with p1:
                     st.markdown(f"**{pt.get('newbie_title', '🌱 신규 유저')}**")
                     for l in pt.get('newbie_summary', []): st.write(f"- {render_colored_text(l)}")
@@ -230,14 +226,12 @@ def main():
             
             st.divider()
             st.markdown("### 📁 세부 카테고리 평가")
-            # 💡 긍정/부정 색상 적용
             for cat in ins.get('global_category_summary', []):
                 with st.expander(f"📌 {cat.get('category')}"):
                     for line in cat.get('summary', []): st.write(f"- {render_colored_text(line)}")
             
             st.divider()
             st.markdown("### 🌍 언어별 상세 리뷰")
-            # 💡 긍정/부정 색상 적용
             for country in ins.get('country_analysis', []):
                 st.markdown(f"**[{country.get('language')}]**")
                 for c_cat in country.get('categories', []):
@@ -257,7 +251,6 @@ def main():
             with col2:
                 if st.button("📤 노션 리포트 최종 발행", type="primary", use_container_width=True):
                     with st.status("노션 페이지 생성 중..."):
-                        # 💡 release_date_str 추가 파라미터 전달
                         pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, st.session_state.stats, ins, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data)
                         st.session_state.page_id = pid; st.session_state.step = 2; st.rerun()
 
