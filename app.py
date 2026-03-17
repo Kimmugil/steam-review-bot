@@ -37,6 +37,7 @@ st.markdown("""
         }
         .stats-card {
             background-color: #1e2129;
+            color: #ffffff;
             padding: 20px;
             border-radius: 12px;
             border-left: 5px solid #ff4b4b;
