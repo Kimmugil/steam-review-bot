@@ -32,7 +32,7 @@ def get_ai_one_liner_block(ai_data):
     return [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🤖 AI의 한줄평"}}]}}, {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"❝ {ai_data.get('critic_one_liner', '')} ❞"}, "annotations": {"color": "blue"}}]}}, {"object": "block", "type": "divider", "divider": {}}]
 
 def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
-    # 💡 [수정] 노션 리포트에서도 스팀 공식 평점 리뷰 수 표시 제거
+    # 💡 [수정] 스팀 공식 평점 리뷰 수 표시 완벽 제거
     return [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "📊 스팀 민심 온도계"}}]}}, 
             {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
                 {"text": {"content": f"🛑 스팀 공식 평점: {store_stats.get('official_desc', '평가 없음')}\\n"}},
