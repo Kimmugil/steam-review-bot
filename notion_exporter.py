@@ -18,19 +18,22 @@ def format_sentiment_line(line):
         return [{"text": {"content": "[부정] "}, "annotations": {"color": "red", "bold": True}}, {"text": {"content": line[4:].strip()}}]
     return [{"text": {"content": line}}]
 
-def get_bot_info_block(game_name, app_id, release_date):
-    # 💡 [요청 5] 출시일 정보를 토글 블록 외부 하단으로 이동
+def get_bot_info_block(game_name, app_id):
     return [
         {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 봇 안내 및 리뷰 추출 기준 (클릭해서 펼치기)"}, "annotations": {"color": "gray", "bold": True}}], "children": [
             {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🤖"}, "color": "blue_background", "rich_text": [{"text": {"content": f"[{APP_VERSION}] 스팀 사용자 리뷰 분석기\n", "link": None}, "annotations": {"bold": True, "color": "blue"}}, {"text": {"content": "해당 봇은 글로벌 유저 민심을 객관적으로 분석합니다.\n"}}, {"text": {"content": f"👉 {game_name} 스팀 상점 바로가기", "link": {"url": f"https://store.steampowered.com/app/{app_id}/"}}, "annotations": {"bold": True, "color": "blue", "underline": True}}]}},
             {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚠️"}, "color": "yellow_background", "rich_text": [{"text": {"content": "평점 지표 3분할 안내\n", "link": None}, "annotations": {"bold": True}}, {"text": {"content": "리포트 내 평점은 3가지로 나뉘어 제공됩니다. 스팀 공식 평점은 '스팀 상점을 통해 직접 라이선스를 획득한 유저'의 평가만 점수에 반영합니다. 하지만 전체 누적 평점 및 최근 동향은 외부 키 등록 및 무료 플레이어 등 "}}, {"text": {"content": "모든 유저(purchase_type=all)", "link": None}, "annotations": {"bold": True, "color": "red"}}, {"text": {"content": "의 리뷰를 100% 수집하므로, 탈곡기 데이터가 전체 유저의 더 포괄적인 민심을 반영합니다."}}]}}
         ]}}, 
-        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"📅 스팀 출시일: {release_date}"}, "annotations": {"bold": True, "color": "gray"}}]}},
         {"object": "block", "type": "divider", "divider": {}}
     ]
 
-def get_ai_one_liner_block(ai_data):
-    return [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🤖 AI의 한줄평"}}]}}, {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"❝ {ai_data.get('critic_one_liner', '')} ❞"}, "annotations": {"color": "blue"}}]}}, {"object": "block", "type": "divider", "divider": {}}]
+def get_ai_one_liner_block(ai_data, game_name, release_date):
+    return [
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🤖 AI의 한줄평"}}]}}, 
+        {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"❝ {ai_data.get('critic_one_liner', '')} ❞"}, "annotations": {"color": "blue"}}]}}, 
+        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"{release_date} 스팀에 출시된 [{game_name}]에 대한 AI의 한줄평 입니다."}, "annotations": {"color": "gray"}}]}},
+        {"object": "block", "type": "divider", "divider": {}}
+    ]
 
 def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
     blocks = [
@@ -43,7 +46,6 @@ def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
             {"text": {"content": f"🔥 {recent_label}: {store_stats['recent_desc']} (분석 표본 {store_stats['recent_total']:,}개)"}, "annotations": {"bold": True, "color": "red"}}
         ]}}, 
         {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": f"💡 왜 '{recent_label}' 기준으로 분석했나요?"}, "annotations": {"color": "gray"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": smart_reason}}]}}]}}, 
-        # 💡 [요청 7] 마우스오버를 대체하는 지표 상세 설명 토글 추가
         {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 각 평점 지표별 산출 기준 안내"}, "annotations": {"color": "gray"}}], "children": [
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "스팀 공식 평점: 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수입니다."}}]}},
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "전체 누적 평점: 외부 키(Key) 등록 및 무료 플레이어 등 모든 유저를 100% 포함한 포괄적 민심입니다."}}]}},
@@ -66,22 +68,21 @@ def get_playtime_analysis_block(ai_data, stats):
     playtime_data = ai_data.get('playtime_analysis', {})
     if not playtime_data: return []
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "⏱️ 플레이타임별 주요 민심 교차 분석"}}]}}]
+    
+    blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 플레이타임별 표본 수집 및 분석 방식 안내"}, "annotations": {"color": "gray"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "수집된 전체 리뷰 표본을 플레이타임 순으로 정렬한 뒤, 정확히 절반(50:50)으로 분할하여 분석합니다. 하위 50%는 '뉴비 여론', 상위 50%는 '코어 여론'으로 분류되어 두 그룹 간의 시각차를 도출합니다."}}]}}]}})
+
     comparison_insights = playtime_data.get('comparison_insights', [])
     if comparison_insights:
         list_items = [{"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}} for line in comparison_insights if isinstance(line, str) and line.strip()]
         blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚖️"}, "color": "gray_background", "rich_text": [{"text": {"content": "📊 핵심 교차 체크포인트"}, "annotations": {"bold": True, "color": "gray"}}], "children": list_items}})
     
-    # 뉴비 파트
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('newbie_title', '🌱 뉴비 여론')}, "annotations": {"color": "green", "bold": True}}]}})
-    # 💡 [요청 4] 정보성 안내 문구 삽입
     blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"ℹ️ 표본: {stats.get('newbie_total', 0)}개 | 평균 여론: {stats.get('newbie_desc', '평가 없음')}"}, "annotations": {"color": "gray"}}]}})
-    for line in playtime_data.get('newbie_summary', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
+    for line in playtime_data.get('newbie_summary', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
-    # 코어 파트
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('core_title', '💀 코어 여론')}, "annotations": {"color": "purple", "bold": True}}]}})
-    # 💡 [요청 4] 정보성 안내 문구 삽입
     blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"ℹ️ 표본: {stats.get('core_total', 0)}개 | 평균 여론: {stats.get('core_desc', '평가 없음')}"}, "annotations": {"color": "gray"}}]}})
-    for line in playtime_data.get('core_summary', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
+    for line in playtime_data.get('core_summary', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
@@ -111,7 +112,6 @@ def get_category_summary_block(ai_data):
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
-# 💡 테이블 생성 헬퍼 함수
 def _create_notion_table(table_data_list, limit=None):
     rows = [
         {"type": "table_row", "table_row": {"cells": [
@@ -127,14 +127,17 @@ def _create_notion_table(table_data_list, limit=None):
     
     target_list = table_data_list[:limit] if limit else table_data_list
     for r in target_list:
+        eval_val = str(r['eval'])
+        eval_color = "blue" if "긍정적" in eval_val else ("red" if "부정적" in eval_val else "gray")
+        
         rows.append({"type": "table_row", "table_row": {"cells": [
-            [{"text": {"content": r['rank']}}], 
-            [{"text": {"content": r['lang']}}], 
+            [{"text": {"content": str(r['rank'])}}], 
+            [{"text": {"content": str(r['lang'])}}], 
             [{"text": {"content": f"{r['count']:,}개"}}], 
-            [{"text": {"content": r['ratio']}}],
-            [{"text": {"content": r['pos_ratio']}, "annotations": {"color": "blue"}}],
-            [{"text": {"content": r['neg_ratio']}, "annotations": {"color": "red"}}],
-            [{"text": {"content": r['eval']}}]
+            [{"text": {"content": str(r['ratio'])}}],
+            [{"text": {"content": str(r['pos_ratio'])}, "annotations": {"color": "blue"}}],
+            [{"text": {"content": str(r['neg_ratio'])}, "annotations": {"color": "red"}}],
+            [{"text": {"content": eval_val}, "annotations": {"color": eval_color, "bold": True}}]
         ]}})
         
     return {"object": "block", "type": "table", "table": {"table_width": 7, "has_column_header": True, "children": rows}}
@@ -142,11 +145,9 @@ def _create_notion_table(table_data_list, limit=None):
 def get_language_ratio_block(store_stats):
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 언어별 누적 리뷰 비중"}}]}}]
     
-    # 💡 [요청 2, 3] 3개의 테이블로 쪼개기
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🥇 누적 리뷰 비중 TOP 10"}}]}})
     blocks.append(_create_notion_table(store_stats['table_data_all'], limit=10))
     
-    # 토글: 전체 보기
     blocks.append({"object": "block", "type": "toggle", "toggle": {
         "rich_text": [{"text": {"content": "👀 전 세계 누적 리뷰 비중 (전체 보기)"}}],
         "children": [_create_notion_table(store_stats['table_data_all'])]
@@ -196,11 +197,11 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
     page_id = res.json()['id']
     children_blocks = []
     for section in NOTION_SECTION_ORDER:
-        if section == "bot_info": children_blocks.extend(get_bot_info_block(game_name, app_id, release_date))
-        elif section == "ai_one_liner": children_blocks.extend(get_ai_one_liner_block(ai_data))
+        if section == "bot_info": children_blocks.extend(get_bot_info_block(game_name, app_id))
+        elif section == "ai_one_liner": children_blocks.extend(get_ai_one_liner_block(ai_data, game_name, release_date))
         elif section == "steam_sentiment": children_blocks.extend(get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data))
         elif section == "global_summary": children_blocks.extend(get_global_summary_block(ai_data, recent_label))
-        elif section == "playtime_analysis": children_blocks.extend(get_playtime_analysis_block(ai_data, store_stats)) # 💡 stats 파라미터 전달 추가
+        elif section == "playtime_analysis": children_blocks.extend(get_playtime_analysis_block(ai_data, store_stats))
         elif section == "ai_issue_pick": children_blocks.extend(get_ai_issue_pick_block(ai_data))
         elif section == "news_summary": children_blocks.extend(get_news_summary_block(news_data, ai_data))
         elif section == "category_summary": children_blocks.extend(get_category_summary_block(ai_data))
