@@ -171,8 +171,8 @@ def main():
 
     elif st.session_state.step == 1:
         st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
-        st.write(f"📅 **스팀 출시일:** {st.session_state.rel_date_str}")
         
+        # 💡 [픽스 7번] 여기서 st.write(출시일) 표시하던 부분을 완벽하게 삭제했어! (하단 AI 한줄평 아래로 이동)
         st.warning("⚠️ **평점 지표 안내:** **'스팀 공식 평점'**은 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수이며, **'전체 누적 평점'**은 외부 키(Key) 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
         
         ins = st.session_state.insights
@@ -180,7 +180,8 @@ def main():
         
         tab1, tab2, tab3 = st.tabs(["📊 주요 요약", "⏱️ 플레이타임 분석", "🌐 상세 분석"])
         with tab1:
-            st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}</div>', unsafe_allow_html=True)
+            # 💡 [픽스 7번] AI 한줄평 아래에 회색 메모 형식으로 출시일 자연스럽게 삽입
+            st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}<br><br><span style="color:#888888; font-size:0.9em;">{st.session_state.rel_date_str} 스팀에 출시된 [{st.session_state.game_name}]에 대한 AI의 한줄평 입니다.</span></div>', unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
             with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'), help="스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수입니다.")
@@ -246,16 +247,23 @@ def main():
             df_30 = pd.DataFrame([[r['rank'], r['lang'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_30']], columns=df_cols)
 
             def apply_eval_color(val):
-                if "긍정적" in str(val): return "color: #5c93fa"
-                elif "부정적" in str(val): return "color: #ff4b4b"
+                val_str = str(val)
+                if "긍정적" in val_str: return "color: #5c93fa"
+                elif "부정적" in val_str: return "color: #ff4b4b"
                 return "color: #888888"
 
             df_all_top10 = df_all.head(10)
             df_30_top10 = df_30.head(10)
 
-            styled_all_top10 = df_all_top10.style.map(apply_eval_color, subset=["📊 평가 결과"]) if hasattr(df_all_top10.style, "map") else df_all_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
-            styled_all_full = df_all.style.map(apply_eval_color, subset=["📊 평가 결과"]) if hasattr(df_all.style, "map") else df_all.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
-            styled_30_top10 = df_30_top10.style.map(apply_eval_color, subset=["📊 평가 결과"]) if hasattr(df_30_top10.style, "map") else df_30_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+            # 💡 [픽스 5번] Pandas 구버전과 신버전(map vs applymap) 둘 다 호환되도록 try-except로 완벽 방어!
+            try:
+                styled_all_top10 = df_all_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
+                styled_all_full = df_all.style.map(apply_eval_color, subset=["📊 평가 결과"])
+                styled_30_top10 = df_30_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
+            except AttributeError:
+                styled_all_top10 = df_all_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+                styled_all_full = df_all.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+                styled_30_top10 = df_30_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
 
             st.markdown("##### 🥇 누적 리뷰 비중 TOP 10")
             st.dataframe(styled_all_top10, hide_index=True, use_container_width=True)
