@@ -197,7 +197,6 @@ def main():
                 for line in ins.get('final_summary_recent', []): st.write(render_colored_text(line))
 
         with tab2:
-            # 💡 [요청 4번] 25% 양극화 기준 툴팁 안내 업데이트
             st.markdown("### ⏱️ 플레이타임별 민심 교차 분석", help="전체 리뷰 표본을 플레이타임 순으로 정렬한 뒤, 중간값의 노이즈를 배제하기 위해 하위 25%를 '뉴비 여론', 상위 25%를 '코어 여론'으로 양극화하여 분석합니다.")
             pt = ins.get('playtime_analysis', {})
             if pt:
@@ -247,15 +246,22 @@ def main():
                 elif "부정적" in val_str: return "color: #ff4b4b"
                 return "color: #888888"
                 
-            # 💡 [요청 3번] 권역별 렌더링 추가
-            st.markdown("##### 🗺️ 주요 권역별 누적 리뷰 비중")
+            # 💡 [요청 1번] 권역 툴팁 도움말 추가
+            region_help = (
+                "각 권역별 포함 국가(언어) 안내\n"
+                "- 아시아: 한국어, 중국어, 일본어, 태국어, 베트남어, 인도네시아어\n"
+                "- 영미/유럽권: 영어, 프랑스어, 독일어, 스페인어, 폴란드어 등 유럽 주요 언어\n"
+                "- CIS: 러시아어, 우크라이나어\n"
+                "- 중남미: 스페인어(중남미), 포르투갈어(브라질)\n"
+                "- 중동/기타: 튀르키예어, 아랍어 등"
+            )
+            st.markdown("##### 🗺️ 주요 권역별 누적 리뷰 비중", help=region_help)
             df_cols_region = ["순위", "권역", "리뷰 수", "비중", "👍 긍정 비율", "👎 부정 비율", "📊 평가 결과"]
             df_region = pd.DataFrame([[r['rank'], r['region'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_region']], columns=df_cols_region)
             try: styled_region = df_region.style.map(apply_eval_color, subset=["📊 평가 결과"])
             except AttributeError: styled_region = df_region.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
             st.dataframe(styled_region, hide_index=True, use_container_width=True)
 
-            # 언어 표
             st.markdown("##### 🥇 언어별 누적 리뷰 비중 TOP 10")
             df_cols = ["순위", "언어", "리뷰 수", "비중", "👍 긍정 비율", "👎 부정 비율", "📊 평가 결과"]
             df_all = pd.DataFrame([[r['rank'], r['lang'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_all']], columns=df_cols)
