@@ -1,7 +1,7 @@
 import streamlit as st
 
 # 앱 버전 및 틱 간격 설정
-APP_VERSION = "v2.2.0"
+APP_VERSION = "v2.2.1"
 TICKER_INTERVAL = 2.5
 
 # 💡 기본값 설정 (Secrets에 없으면 자동으로 LIVE 모드로 동작)
