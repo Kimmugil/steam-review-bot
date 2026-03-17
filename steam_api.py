@@ -73,7 +73,8 @@ def fetch_latest_news(app_id):
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
     if days_since < 3: 
-        return None, "전체 누적", "출시된 지 3일이 채 지나지 않은 극초기 신작이므로, 특정 기간을 나누지 않고 전체 누적 리뷰를 바탕으로 유저 반응을 종합 분석했습니다."
+        # 💡 [수정] 신작일 때 None을 주지 않고 3일을 강제 할당하여 '실시간 점수 계산' 로직을 태움
+        return 3, "출시 초기", "출시된 지 3일이 채 지나지 않은 극초기 신작입니다. 스팀 상점의 누적 평점 갱신이 지연될 수 있으므로, 발매 직후 실시간 유저 리뷰 표본을 직접 수집하여 정확한 초기 민심을 분석했습니다."
     elif days_since < 7: 
         return 3, "최근 3일", "출시 후 1주일이 지나지 않은 신작입니다. 발매 직후의 평가 변동성이 매우 큰 시기이므로, 최신 민심을 정확히 파악하기 위해 최근 3일간의 동향을 집중적으로 분석했습니다."
     elif days_since < 30: 
@@ -109,7 +110,6 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
 def fetch_steam_reviews(app_id, recent_days_val):
     total_lang_counts = {}
     
-    # 💡 [개선] 각 언어별 전체/긍정/부정 리뷰 수를 모두 딕셔너리로 저장
     for lang in LANG_MAP.keys():
         try:
             res_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
@@ -151,7 +151,6 @@ def fetch_steam_reviews(app_id, recent_days_val):
         recent_total = all_time_total_reviews
         recent_custom_desc = SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음")
 
-    # 💡 [수정] 딕셔너리 구조 변경에 따른 정렬 기준 업데이트
     top_langs_keys = [l[0] for l in sorted(total_lang_counts.items(), key=lambda x: x[1]['total'], reverse=True)[:3]]
     if "koreana" not in top_langs_keys:
         top_langs_keys.append("koreana")
