@@ -2,6 +2,7 @@
 def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text, review_text, user_feedback=""):
     feedback_instruction = f"\n\n[사용자 추가 피드백!! 반드시 최우선으로 반영할 것!]:\n{user_feedback}\n" if user_feedback else ""
     
+    # 💡 [개선] AI가 3가지 평점 지표를 모두 인지하고 차이점을 파악하도록 통계 데이터 섹션 업데이트
     return f"""
     넌 글로벌 게임 사업 PM이야. '{game_name}'의 스팀 유저 평가 데이터야.{feedback_instruction}
     
@@ -26,7 +27,7 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
     [출력 JSON 형식]:
     {{
       "critic_one_liner": "한줄평",
-      "sentiment_analysis": "민심 코멘트",
+      "sentiment_analysis": "민심 코멘트 (공식 평점과 전체 평점 간의 차이가 있다면 이에 대한 분석 포함)",
       "final_summary_all": ["[긍정] 코멘트1", "[부정] 코멘트2"],
       "final_summary_recent": ["[긍정] 코멘트1", "[부정] 코멘트2"],
       "ai_issue_pick": ["이슈 현상 및 인사이트 1"],
@@ -50,8 +51,9 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
     }}
     
     [통계 데이터]
-    - 전체 누적 평가: {store_stats['all_desc']}
-    - {recent_label} 민심: {store_stats['recent_desc']}
+    - 🛑 스팀 공식 평가 (직접 결제 유저만): {store_stats.get('official_desc', '평가 없음')} (총 {store_stats.get('official_total', 0):,}개)
+    - 📈 전체 누적 평가 (무료/외부키 포함): {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)
+    - 🔥 {recent_label} 민심 (최근 분석 표본): {store_stats['recent_desc']} (분석 표본 {store_stats['recent_total']:,}개)
     - 누적 리뷰 언어 비중: {top_langs_str}
     - 📊 표본 기준 뉴비 평균 플레이타임: {store_stats.get('newbie_avg', 0)}시간
     - 💀 표본 기준 코어 평균 플레이타임: {store_stats.get('core_avg', 0)}시간
