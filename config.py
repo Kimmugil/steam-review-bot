@@ -1,11 +1,11 @@
 import streamlit as st
 
 # 앱 버전 및 환경 설정
-APP_VERSION = "v2.2.1"
+APP_VERSION = "v2.2.2" # 버전 살짝 올림!
 TICKER_INTERVAL = 2.5
 
-# 💡 기본값 설정 (Secrets에 ENV_NAME이 있으면 그걸 우선함)
-ENV_NAME = st.secrets["ENV_NAME"]
+# 기본값 설정 (Secrets에 ENV_NAME이 있으면 그걸 우선함)
+ENV_NAME = "LIVE"
 NOTION_PUBLIC_URL = "https://www.notion.so/" 
 
 try:
@@ -16,7 +16,6 @@ try:
     if "ENV_NAME" in st.secrets:
         ENV_NAME = st.secrets["ENV_NAME"]
         
-    # 💡 변수명을 PUBLIC_URL로 확실히 매핑
     if "NOTION_PUBLIC_URL" in st.secrets:
         NOTION_PUBLIC_URL = st.secrets["NOTION_PUBLIC_URL"]
     elif "NOTION_PUBLISH_URL" in st.secrets:
@@ -27,12 +26,18 @@ except Exception:
     NOTION_TOKEN = None
     NOTION_DATABASE_ID = None
 
-# 언어 매핑 데이터
+# 💡 [확장] 스팀이 지원하는 전 세계 주요 30개 언어 100% 탑재!
 LANG_MAP = {
     "english": "🇺🇸 영어", "koreana": "🇰🇷 한국어", "schinese": "🇨🇳 중국어(간체)",
     "tchinese": "🇹🇼 중국어(번체)", "japanese": "🇯🇵 일본어", "french": "🇫🇷 프랑스어",
-    "german": "🇩🇪 독일어", "spanish": "🇪🇸 스페인어", "russian": "🇷🇺 러시아어",
-    "brazilian": "🇧🇷 포르투갈어(브라질)", "polish": "🇵🇱 폴란드어", "turkish": "🇹🇷 튀르키예어"
+    "german": "🇩🇪 독일어", "spanish": "🇪🇸 스페인어", "latam": "🌎 스페인어(중남미)",
+    "russian": "🇷🇺 러시아어", "brazilian": "🇧🇷 포르투갈어(브라질)", "portuguese": "🇵🇹 포르투갈어",
+    "italian": "🇮🇹 이탈리아어", "polish": "🇵🇱 폴란드어", "turkish": "🇹🇷 튀르키예어",
+    "thai": "🇹🇭 태국어", "vietnamese": "🇻🇳 베트남어", "indonesian": "🇮🇩 인도네시아어",
+    "ukrainian": "🇺🇦 우크라이나어", "czech": "🇨🇿 체코어", "hungarian": "🇭🇺 헝가리어",
+    "arabic": "🇸🇦 아랍어", "romanian": "🇷🇴 루마니아어", "dutch": "🇳🇱 네덜란드어",
+    "swedish": "🇸🇪 스웨덴어", "danish": "🇩🇰 덴마크어", "norwegian": "🇳🇴 노르웨이어",
+    "finnish": "🇫🇮 핀란드어", "bulgarian": "🇧🇬 불가리아어", "greek": "🇬🇷 그리스어"
 }
 
 # 점수 매핑 데이터
