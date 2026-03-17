@@ -5,7 +5,7 @@ APP_VERSION = "v2.2.1"
 TICKER_INTERVAL = 2.5
 
 # 💡 기본값 설정 (Secrets에 ENV_NAME이 있으면 그걸 우선함)
-ENV_NAME = "LIVE"
+ENV_NAME = st.secrets["ENV_NAME"]
 NOTION_PUBLIC_URL = "https://www.notion.so/" 
 
 try:
