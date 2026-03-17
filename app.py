@@ -133,7 +133,9 @@ def main():
                         info_txt.write("📥 2/5 & 3/5: 최신 소식 및 리뷰 데이터 수집 중...")
                         rday, rlabel, rreason = get_smart_period(rdate)
                         news = fetch_latest_news(rid)
-                        all_r, rec_r, stats = fetch_steam_reviews(rid, rday)
+                        
+                        # 💡 함수에 release_date 전달 추가
+                        all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate)
                         
                         if stats['all_total'] == 0: 
                             status.update(label="데이터 없음", state="error")
@@ -182,10 +184,10 @@ def main():
             st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}</div>', unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
-            # 💡 [수정] 스팀 공식 평점에서 리뷰 수 표시 완벽 제거
-            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'))
-            with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
-            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
+            # 💡 [요청 6] 툴팁 추가 (help 파라미터)
+            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'), help="스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수입니다.")
+            with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개", help="외부 키(Key) 등록 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
+            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개", help="최신 민심을 정확히 파악하기 위해 특정 기간 동안 수집된 리뷰 표본 결과입니다.")
             
             st.info(f"💡 **분석 요약:** {ins.get('sentiment_analysis', '')}")
             st.markdown("---")
@@ -204,11 +206,14 @@ def main():
                 if pt.get('comparison_insights'):
                     st.warning(f"**⚖️ 핵심 인사이트**\n\n" + "\n".join([f"- {i}" for i in pt.get('comparison_insights', [])]))
                 p1, p2 = st.columns(2)
+                # 💡 [요청 4] 표본 수 및 평균 평가 캡션 텍스트 추가
                 with p1:
                     st.markdown(f"**{pt.get('newbie_title', '🌱 신규 유저')}**")
+                    st.caption(f"ℹ️ 표본: {stats.get('newbie_total', 0)}개 | 평균 여론: {stats.get('newbie_desc', '평가 없음')}")
                     for l in pt.get('newbie_summary', []): st.write(f"- {render_colored_text(l)}")
                 with p2:
                     st.markdown(f"**{pt.get('core_title', '💀 숙련 유저')}**")
+                    st.caption(f"ℹ️ 표본: {stats.get('core_total', 0)}개 | 평균 여론: {stats.get('core_desc', '평가 없음')}")
                     for l in pt.get('core_summary', []): st.write(f"- {render_colored_text(l)}")
 
         with tab3:
@@ -230,11 +235,31 @@ def main():
                     for line in cat.get('summary', []): st.write(f"- {render_colored_text(line)}")
             
             st.divider()
-            st.markdown("### 🌍 언어별 상세 리뷰")
+            st.markdown("### 🌍 리뷰 작성 언어별 세부 평가 분석")
             for country in ins.get('country_analysis', []):
                 st.markdown(f"**[{country.get('language')}]**")
                 for c_cat in country.get('categories', []):
                     st.write(f"  - {render_colored_text(c_cat.get('name'))}: {', '.join([render_colored_text(x) for x in c_cat.get('summary', [])])}")
+            
+            # 💡 [요청 1, 2, 3] 3단 분리된 언어 비중 표를 스트림릿에도 렌더링
+            st.divider()
+            st.markdown("### 🌐 전 세계 언어별 누적 리뷰 비중")
+            
+            df_cols = ["순위", "언어", "리뷰 수", "비중", "👍 긍정 비율", "👎 부정 비율", "📊 평가 결과"]
+            df_all = pd.DataFrame([[r['rank'], r['lang'], r['count'], r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_all']], columns=df_cols)
+            df_30 = pd.DataFrame([[r['rank'], r['lang'], r['count'], r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_30']], columns=df_cols)
+
+            st.markdown("##### 🥇 누적 리뷰 비중 TOP 10")
+            st.dataframe(df_all.head(10), hide_index=True, use_container_width=True)
+            
+            with st.expander("👀 전 세계 누적 리뷰 비중 (전체 보기)"):
+                st.dataframe(df_all, hide_index=True, use_container_width=True)
+                
+            st.markdown("##### 🔥 최근 30일 누적 리뷰 비중 TOP 10")
+            if stats['days_since_release'] < 30:
+                st.info("ℹ️ 출시일로부터 30일 이후부터 지원하는 표입니다. (현재 데이터 부족)")
+            else:
+                st.dataframe(df_30.head(10), hide_index=True, use_container_width=True)
 
         st.divider()
         with st.container(border=True):
