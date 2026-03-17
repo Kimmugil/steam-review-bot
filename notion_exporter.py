@@ -78,10 +78,12 @@ def get_playtime_analysis_block(ai_data, stats):
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('newbie_title', '🌱 뉴비 여론')}, "annotations": {"color": "green", "bold": True}}]}})
     blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"ℹ️ 표본: {stats.get('newbie_total', 0)}개 | 평균 여론: {stats.get('newbie_desc', '평가 없음')}"}, "annotations": {"color": "gray"}}]}})
+    # 💡 [픽스 6번] format_sentiment_line 적용! 이제 [긍정], [부정] 텍스트가 파란색, 빨간색으로 예쁘게 칠해짐
     for line in playtime_data.get('newbie_summary', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('core_title', '💀 코어 여론')}, "annotations": {"color": "purple", "bold": True}}]}})
     blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"ℹ️ 표본: {stats.get('core_total', 0)}개 | 평균 여론: {stats.get('core_desc', '평가 없음')}"}, "annotations": {"color": "gray"}}]}})
+    # 💡 [픽스 6번] format_sentiment_line 적용
     for line in playtime_data.get('core_summary', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "divider", "divider": {}})
