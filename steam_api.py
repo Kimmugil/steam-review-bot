@@ -73,7 +73,7 @@ def fetch_latest_news(app_id):
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
     if days_since < 3: 
-        return 3, "출시 초기", "출시된 지 3일이 채 지나지 않은 극초기 신작입니다. 스팀 상점의 누적 평점 갱신이 지연될 수 있으므로, 발매 직후 실시간 유저 리뷰 표본을 직접 수집하여 정확한 초기 민심을 분석했습니다."
+        return 3, "출시 초기", "출시된 지 3일이 채 지나지 않은 극초기 신작입니다. 스팀 상점의 공식 평점 갱신이 지연될 수 있으므로, 실시간 유저 리뷰 표본을 직접 수집하여 정확한 초기 민심을 분석했습니다."
     elif days_since < 7: 
         return 3, "최근 3일", "출시 후 1주일이 지나지 않은 신작입니다. 발매 직후의 평가 변동성이 매우 큰 시기이므로, 최신 민심을 정확히 파악하기 위해 최근 3일간의 동향을 집중적으로 분석했습니다."
     elif days_since < 30: 
@@ -109,6 +109,7 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
 def fetch_steam_reviews(app_id, recent_days_val):
     total_lang_counts = {}
     
+    # 1. 언어별 데이터 수집
     for lang in LANG_MAP.keys():
         try:
             res_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
@@ -120,27 +121,41 @@ def fetch_steam_reviews(app_id, recent_days_val):
                 total_lang_counts[lang] = {"total": t_revs, "positive": p_revs, "negative": n_revs}
         except: pass
 
-    # 💡 1. 스팀 공식 평점 (purchase_type=steam: 상점에서 직접 결제한 유저만)
+    # 2. 스팀 공식 평점 (지연 대응 로직 추가)
     try:
         summary_official_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json()
         summary_official = summary_official_res.get('query_summary', {})
         official_total_reviews = summary_official.get('total_reviews', 0)
-        official_desc = SCORE_MAP.get(summary_official.get('review_score', 0), "평가 없음")
+        official_score_code = summary_official.get('review_score', 0)
+        
+        # 💡 [핵심 수정] 스팀 API가 0(평가 없음)을 뱉더라도, 실제 리뷰가 존재하면 우리가 직접 계산
+        if official_score_code == 0 and official_total_reviews > 0:
+            pos = summary_official.get('total_positive', 0)
+            official_desc = calculate_custom_score(pos / official_total_reviews, official_total_reviews)
+        else:
+            official_desc = SCORE_MAP.get(official_score_code, "평가 없음")
     except:
         official_total_reviews = 0
         official_desc = "평가 없음"
             
-    # 💡 2. 전체 누적 평점 (purchase_type=all: 외부 키 등록, 무료 유저 모두 포함)
+    # 3. 전체 누적 평점 (외부 키 포함)
     try:
         summary_all_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all"), timeout=5).json()
         summary_all = summary_all_res.get('query_summary', {})
         all_time_total_reviews = summary_all.get('total_reviews', 0)
-        all_desc = SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음")
+        all_score_code = summary_all.get('review_score', 0)
+        
+        # 💡 [핵심 수정] 전체 누적 평점도 지연 시 직접 계산
+        if all_score_code == 0 and all_time_total_reviews > 0:
+            pos = summary_all.get('total_positive', 0)
+            all_desc = calculate_custom_score(pos / all_time_total_reviews, all_time_total_reviews)
+        else:
+            all_desc = SCORE_MAP.get(all_score_code, "평가 없음")
     except:
         all_time_total_reviews = 0
         all_desc = "평가 없음"
     
-    # 💡 3. 최근 동향 분석 데이터
+    # 4. 최근 동향 분석 데이터
     recent_total = 0
     recent_custom_desc = "평가 없음"
 
@@ -194,7 +209,6 @@ def fetch_steam_reviews(app_id, recent_days_val):
         newbie_avg = round(sum(newbies) / len(newbies), 1) if newbies else 0
         core_avg = round(sum(cores) / len(cores), 1) if cores else 0
 
-    # 💡 3가지 평점 지표 모두 반환
     store_stats = {
         "official_desc": official_desc,
         "official_total": official_total_reviews,
