@@ -20,6 +20,42 @@ def calculate_custom_score(pos_ratio, total):
 def sanitize_url(url):
     return "".join(char for char in url if 32 <= ord(char) <= 126).strip()
 
+def fetch_store_official_rating(app_id):
+    """
+    💡 [추가] 스팀 상점 페이지 HTML을 직접 크롤링하여 공식 평점 텍스트와 리뷰 수를 추출합니다.
+    API 지연(Caching) 문제를 우회하기 위해 가장 최신 정보를 담고 있는 웹 페이지를 직접 읽습니다.
+    """
+    url = f"https://store.steampowered.com/app/{app_id}/?l=korean"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    # 성인 인증 및 언어 설정을 위한 쿠키 (birthtime=0으로 연령 제한 우회)
+    cookies = {"birthtime": "0", "lastagecheckage": "1-0-1900", "wants_mature_content": "1"}
+    
+    try:
+        res = requests.get(url, headers=headers, cookies=cookies, timeout=10)
+        res.raise_for_status()
+        html = res.text
+        
+        # 1. 공식 평점 텍스트 추출 (예: "복합적", "대체로 긍정적")
+        # <span class="game_review_summary positive">...</span> 형태 탐색
+        rating_match = re.search(r'<span class="game_review_summary[^>]*>([^<]+)</span>', html)
+        rating_text = rating_match.group(1).strip() if rating_match else "평가 없음"
+        
+        # 2. 공식 리뷰 수 추출 (예: "2,466")
+        # (2,466개 리뷰) 형태의 텍스트 탐색
+        count_match = re.search(r'\((\d{1,3}(?:,\d{3})*)개 리뷰\)', html)
+        if not count_match:
+            # 영어 환경 등 다른 텍스트 패턴 대비 (예: 2,466 reviews)
+            count_match = re.search(r'\((\d{1,3}(?:,\d{3})*)\)', html)
+            
+        review_count_str = count_match.group(1).replace(",", "") if count_match else "0"
+        review_count = int(review_count_str)
+        
+        return rating_text, review_count
+    except Exception:
+        return None, None
+
 def get_steam_game_info(game_input):
     app_id = str(game_input).strip()
     if not app_id.isdigit(): return None, None, None
@@ -82,7 +118,7 @@ def get_smart_period(release_date):
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     reviews = []
-    filter_type = "recent" if day_range else "all"
+    filter_type = "recent" if lang == "all" and day_range else "all"
     base_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter={filter_type}&language={lang}&num_per_page=100&purchase_type=all")
     if day_range: base_url += f"&day_range={day_range}"
         
@@ -121,22 +157,25 @@ def fetch_steam_reviews(app_id, recent_days_val):
                 total_lang_counts[lang] = {"total": t_revs, "positive": p_revs, "negative": n_revs}
         except: pass
 
-    # 2. 스팀 공식 평점 (지연 대응 로직 추가)
-    try:
-        summary_official_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json()
-        summary_official = summary_official_res.get('query_summary', {})
-        official_total_reviews = summary_official.get('total_reviews', 0)
-        official_score_code = summary_official.get('review_score', 0)
-        
-        # 💡 [핵심 수정] 스팀 API가 0(평가 없음)을 뱉더라도, 실제 리뷰가 존재하면 우리가 직접 계산
-        if official_score_code == 0 and official_total_reviews > 0:
-            pos = summary_official.get('total_positive', 0)
-            official_desc = calculate_custom_score(pos / official_total_reviews, official_total_reviews)
-        else:
-            official_desc = SCORE_MAP.get(official_score_code, "평가 없음")
-    except:
-        official_total_reviews = 0
-        official_desc = "평가 없음"
+    # 2. 스팀 공식 평점 (💡 API 대신 상점 페이지 스크래핑 우선 적용)
+    official_desc, official_total_reviews = fetch_store_official_rating(app_id)
+    
+    # 만약 스크래핑에 실패하면 기존 API 로직으로 폴백
+    if not official_desc or official_desc == "평가 없음":
+        try:
+            summary_official_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json()
+            summary_official = summary_official_res.get('query_summary', {})
+            official_total_reviews = summary_official.get('total_reviews', 0)
+            official_score_code = summary_official.get('review_score', 0)
+            
+            if official_score_code == 0 and official_total_reviews > 0:
+                pos = summary_official.get('total_positive', 0)
+                official_desc = calculate_custom_score(pos / official_total_reviews, official_total_reviews)
+            else:
+                official_desc = SCORE_MAP.get(official_score_code, "평가 없음")
+        except:
+            official_total_reviews = 0
+            official_desc = "평가 없음"
             
     # 3. 전체 누적 평점 (외부 키 포함)
     try:
@@ -145,7 +184,6 @@ def fetch_steam_reviews(app_id, recent_days_val):
         all_time_total_reviews = summary_all.get('total_reviews', 0)
         all_score_code = summary_all.get('review_score', 0)
         
-        # 💡 [핵심 수정] 전체 누적 평점도 지연 시 직접 계산
         if all_score_code == 0 and all_time_total_reviews > 0:
             pos = summary_all.get('total_positive', 0)
             all_desc = calculate_custom_score(pos / all_time_total_reviews, all_time_total_reviews)
