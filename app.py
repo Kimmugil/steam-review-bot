@@ -13,13 +13,11 @@ from notion_exporter import upload_to_notion
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="wide")
 
-# 💡 긍정/부정 색상 렌더링 헬퍼 함수
 def render_colored_text(text):
     if "[긍정]" in text: return f":blue[{text}]"
     elif "[부정]" in text: return f":red[{text}]"
     return text
 
-# CSS 주입: UI 개선 및 상단 배너 고정
 st.markdown("""
     <style>
         .fixed-banner {
@@ -184,7 +182,7 @@ def main():
             st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}</div>', unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
-            # 💡 [수정] 스팀 공식 평점에서 리뷰 수 표시 제거
+            # 💡 [수정] 스팀 공식 평점에서 리뷰 수 표시 완벽 제거
             with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'))
             with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
             with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
