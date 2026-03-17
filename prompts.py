@@ -1,4 +1,3 @@
-# prompts.py
 def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text, review_text, user_feedback=""):
     feedback_instruction = f"\n\n[사용자 추가 피드백!! 반드시 최우선으로 반영할 것!]:\n{user_feedback}\n" if user_feedback else ""
     official_rating_info = f"{store_stats.get('official_desc', '평가 없음')}" 
@@ -22,10 +21,10 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
     4. 리뷰 인용(quote) 시, 텍스트 내의 줄바꿈은 반드시 \\n 으로 처리하고, 쌍따옴표는 \\" 로 이스케이프 처리할 것.
     5. 한국어가 아닌 모든 외국어 리뷰 인용 시, [원문]을 그대로 적고, 그 아래에 [한국어 번역]을 100% 누락 없이 추가할 것. (한국어 리뷰면 이 줄 생략)
     6. global_category_summary 작성 시, [긍정평가] 항목을 모두 먼저 쓰고 그 뒤에 [부정평가] 항목 나열.
-    7. 💡 final_summary_all, final_summary_recent, country_analysis의 summary, 그리고 playtime_analysis의 newbie_summary와 core_summary 항목 맨 앞에 반드시 '[긍정]' 또는 '[부정]' 머리말을 붙일 것. 긍정 항목을 배열 앞쪽에 먼저 나열할 것.
+    7. final_summary_all, final_summary_recent, country_analysis의 summary, 그리고 playtime_analysis의 newbie_summary와 core_summary 항목 맨 앞에 반드시 '[긍정]' 또는 '[부정]' 머리말을 붙일 것. 긍정 항목을 배열 앞쪽에 먼저 나열할 것.
     8. ai_issue_pick 작성 시 단순 현상 나열이 아니라 그로 인한 인사이트(시사점)를 반드시 포함할 것.
     9. news_summary는 공지/업데이트의 핵심을 3~4개의 배열 형태로 요약할 것.
-    10. playtime_analysis: 뉴비와 코어 유저의 여론을 분리하고, 두 그룹 간의 공통/상반된 평가를 comparison_insights에 교차 비교할 것. newbie_title과 core_title에는 반드시 통계 데이터에 제공된 그룹별 평균 플레이타임을 명시할 것 (예: "🌱 뉴비 여론 (평균 12.5시간)").
+    10. 💡 playtime_analysis: 수집된 리뷰 표본을 플레이타임 기준 하위 25%(뉴비 여론)와 상위 25%(코어 여론)로 양극화하여 분석합니다. 두 그룹 간의 공통/상반된 평가를 comparison_insights에 교차 비교할 것. newbie_title과 core_title에는 반드시 통계 데이터에 제공된 그룹별 평균 플레이타임을 명시할 것.
     11. [⚠️중요] 숫자 및 시간 단위(week, month, year, anniversary 등) 번역 시 절대 넘겨짚지 말고 원문 그대로 직역할 것. '1 week'를 '1주년'으로 번역하는 식의 찐빠는 절대 금지다.
     12. 텍스트 데이터 내부에 마크다운 볼드체(**) 기호를 절대 포함하지 말 것. 노션 출력 시 문자 그대로 노출되는 오류가 있음.
     
@@ -60,8 +59,8 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
     - 📈 전체 누적 평가 (무료/외부키 포함): {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)
     - 🔥 {recent_label} 민심 (최근 분석 표본): {store_stats['recent_desc']} (분석 표본 {store_stats['recent_total']:,}개)
     - 누적 리뷰 언어 비중: {top_langs_str}
-    - 📊 표본 기준 뉴비 평균 플레이타임: {store_stats.get('newbie_avg', 0)}시간
-    - 💀 표본 기준 코어 평균 플레이타임: {store_stats.get('core_avg', 0)}시간
+    - 📊 표본 기준 하위 25% 뉴비 평균 플레이타임: {store_stats.get('newbie_avg', 0)}시간
+    - 💀 표본 기준 상위 25% 코어 평균 플레이타임: {store_stats.get('core_avg', 0)}시간
     {news_text}
     
     [리뷰 데이터]
