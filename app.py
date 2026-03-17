@@ -8,7 +8,6 @@ from notion_exporter import upload_to_notion
 from messages import WAITING_MESSAGES
 import random
 
-# 💡 스트림릿 내에서 긍/부정 텍스트를 파랑/빨강으로 렌더링하는 헬퍼 함수
 def render_colored_text(text):
     if "[긍정]" in text: return f":blue[{text}]"
     elif "[부정]" in text: return f":red[{text}]"
@@ -43,7 +42,6 @@ def main():
                     if app_id:
                         st.session_state.app_id = app_id
                         st.session_state.game_name = game_name
-                        # 💡 [개선] 출시일 텍스트 저장
                         st.session_state.rel_date_str = rel_date.strftime("%Y년 %m월 %d일")
                         
                         days_val, label, reason = get_smart_period(rel_date)
@@ -88,8 +86,10 @@ def main():
 
     elif st.session_state.step == 2:
         st.header(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
-        # 💡 [개선] 앱 상단에 게임 출시일 렌더링
         st.write(f"📅 **스팀 출시일:** {st.session_state.rel_date_str}")
+        
+        # 💡 [추가] 스팀 상점 평점과의 차이점 안내 경고문
+        st.warning("⚠️ **스팀 상점 평점과의 차이점 안내:** 스팀 공식 상점은 '스팀 내 직접 결제 유저'의 평가만 점수에 반영합니다. 하지만 탈곡기는 외부 키(Key) 등록 및 무료 플레이어 등 **모든 유저(purchase_type=all)**의 리뷰를 100% 수집하므로 평점 지표가 상점과 다를 수 있으며, 전체 유저의 포괄적인 민심을 반영합니다.")
         
         ai_data = st.session_state.ai_result
         tab1, tab2, tab3 = st.tabs(["📊 주요 요약", "⏱️ 플레이타임 분석", "🌐 상세 분석"])
@@ -127,7 +127,6 @@ def main():
             if st.button("✅ 최종 승인 및 노션 전송"):
                 with st.spinner("노션으로 리포트를 전송하고 있습니다..."):
                     try:
-                        # 💡 [개선] release_date_str 파라미터 추가 전송
                         pid = upload_to_notion(
                             st.session_state.app_id, 
                             st.session_state.game_name, 
