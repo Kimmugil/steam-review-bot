@@ -5,7 +5,8 @@ from steam_api import get_lang_name
 from prompts import build_prompt
 
 def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_stats, recent_label, news_data, user_feedback=""):
-    top_langs_str = ", ".join([f"{get_lang_name(k)}: {v:,}개" for k, v in sorted(store_stats['total_lang_counts'].items(), key=lambda x: x[1], reverse=True)[:7]])
+    # 💡 [딕셔너리 구조 반영] total_lang_counts 정렬 및 추출
+    top_langs_str = ", ".join([f"{get_lang_name(k)}: {v['total']:,}개" for k, v in sorted(store_stats['total_lang_counts'].items(), key=lambda x: x[1]['total'], reverse=True)[:7]])
     
     review_text = "==== [전체 누적 평가 주요 리뷰] ====\n"
     for lang, revs in review_data_all.items():

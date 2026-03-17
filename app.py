@@ -4,7 +4,7 @@ import time
 import threading
 import re
 import pandas as pd
-from config import APP_VERSION, NOTION_PUBLISH_URL, GEMINI_API_KEY, NOTION_TOKEN, TICKER_INTERVAL, ENV_NAME
+from config import APP_VERSION, NOTION_PUBLIC_URL, GEMINI_API_KEY, NOTION_TOKEN, TICKER_INTERVAL, ENV_NAME
 from updates import UPDATE_HISTORY
 from messages import WAITING_MESSAGES
 from steam_api import get_steam_game_info, fetch_latest_news, get_smart_period, fetch_steam_reviews, get_lang_name
@@ -13,7 +13,11 @@ from notion_exporter import upload_to_notion
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="wide")
 
-# CSS 주입: UI 개선 및 상단 배너 고정
+def render_colored_text(text):
+    if "[긍정]" in text: return f":blue[{text}]"
+    elif "[부정]" in text: return f":red[{text}]"
+    return text
+
 st.markdown("""
     <style>
         .fixed-banner {
@@ -99,7 +103,7 @@ def main():
         st.markdown("스팀 상점 주소나 App ID를 입력하여 글로벌 여론을 탈탈 털어보세요.")
     with col_h2:
         st.write("")
-        st.link_button("👉 통합 리포트 열람", NOTION_PUBLISH_URL, use_container_width=True)
+        st.link_button("👉 통합 리포트 열람", NOTION_PUBLIC_URL, use_container_width=True)
     
     st.write("")
     render_step_indicator(st.session_state.step)
@@ -150,7 +154,11 @@ def main():
                             time.sleep(TICKER_INTERVAL)
                         
                         if res_box[1]: raise Exception(res_box[1])
-                        st.session_state.update({"app_id": rid, "game_name": name, "insights": res_box[0], "stats": stats, "recent_label": rlabel, "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r})
+                        st.session_state.update({
+                            "app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), 
+                            "insights": res_box[0], "stats": stats, "recent_label": rlabel, 
+                            "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r
+                        })
                         if not any(h['id'] == rid for h in st.session_state.history):
                             st.session_state.history.append({"id": rid, "name": name})
 
@@ -162,25 +170,32 @@ def main():
 
     elif st.session_state.step == 1:
         st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
+        st.write(f"📅 **스팀 출시일:** {st.session_state.rel_date_str}")
+        
+        st.warning("⚠️ **평점 지표 안내:** **'스팀 공식 평점'**은 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수이며, **'전체 누적 평점'**은 외부 키(Key) 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
+        
         ins = st.session_state.insights
         stats = st.session_state.stats
         
         tab1, tab2, tab3 = st.tabs(["📊 주요 요약", "⏱️ 플레이타임 분석", "🌐 상세 분석"])
         with tab1:
             st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}</div>', unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            with col1: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
-            with col2: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
+            
+            col1, col2, col3 = st.columns(3)
+            # 💡 [수정] 스팀 공식 평점에서 리뷰 수 표시 완벽 제거
+            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'))
+            with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
+            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
             
             st.info(f"💡 **분석 요약:** {ins.get('sentiment_analysis', '')}")
             st.markdown("---")
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown("##### 📈 누적 여론 동향")
-                for line in ins.get('final_summary_all', []): st.write(line)
+                for line in ins.get('final_summary_all', []): st.write(render_colored_text(line))
             with c2:
                 st.markdown(f"##### 🔥 {st.session_state.recent_label} 동향")
-                for line in ins.get('final_summary_recent', []): st.write(line)
+                for line in ins.get('final_summary_recent', []): st.write(render_colored_text(line))
 
         with tab2:
             st.markdown("### ⏱️ 플레이타임별 민심 교차 분석")
@@ -191,10 +206,10 @@ def main():
                 p1, p2 = st.columns(2)
                 with p1:
                     st.markdown(f"**{pt.get('newbie_title', '🌱 신규 유저')}**")
-                    for l in pt.get('newbie_summary', []): st.write(f"- {l}")
+                    for l in pt.get('newbie_summary', []): st.write(f"- {render_colored_text(l)}")
                 with p2:
                     st.markdown(f"**{pt.get('core_title', '💀 숙련 유저')}**")
-                    for l in pt.get('core_summary', []): st.write(f"- {l}")
+                    for l in pt.get('core_summary', []): st.write(f"- {render_colored_text(l)}")
 
         with tab3:
             col1, col2 = st.columns(2)
@@ -212,14 +227,14 @@ def main():
             st.markdown("### 📁 세부 카테고리 평가")
             for cat in ins.get('global_category_summary', []):
                 with st.expander(f"📌 {cat.get('category')}"):
-                    for line in cat.get('summary', []): st.write(f"- {line}")
+                    for line in cat.get('summary', []): st.write(f"- {render_colored_text(line)}")
             
             st.divider()
             st.markdown("### 🌍 언어별 상세 리뷰")
             for country in ins.get('country_analysis', []):
                 st.markdown(f"**[{country.get('language')}]**")
                 for c_cat in country.get('categories', []):
-                    st.write(f"  - {c_cat.get('name')}: {', '.join(c_cat.get('summary', []))}")
+                    st.write(f"  - {render_colored_text(c_cat.get('name'))}: {', '.join([render_colored_text(x) for x in c_cat.get('summary', [])])}")
 
         st.divider()
         with st.container(border=True):
@@ -235,7 +250,7 @@ def main():
             with col2:
                 if st.button("📤 노션 리포트 최종 발행", type="primary", use_container_width=True):
                     with st.status("노션 페이지 생성 중..."):
-                        pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.stats, ins, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data)
+                        pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, st.session_state.stats, ins, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data)
                         st.session_state.page_id = pid; st.session_state.step = 2; st.rerun()
 
     elif st.session_state.step == 2:

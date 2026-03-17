@@ -2,8 +2,14 @@
 def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text, review_text, user_feedback=""):
     feedback_instruction = f"\n\n[사용자 추가 피드백!! 반드시 최우선으로 반영할 것!]:\n{user_feedback}\n" if user_feedback else ""
     
+    # 💡 [개선] AI가 3가지 평점 지표를 모두 인지하고 차이점을 파악하도록 통계 데이터 섹션 업데이트
     return f"""
     넌 글로벌 게임 사업 PM이야. '{game_name}'의 스팀 유저 평가 데이터야.{feedback_instruction}
+
+    🎯 [최우선 절대 강령 - 위반 시 해고]:
+    - 분석 요약이나 내용 어디에서도 '스팀 공식 평가'의 '리뷰 개수'나 '0개', '데이터 부족', '오류' 등의 단어를 절대 언급하지 마. 
+    - 공식 평가는 오직 '상태(예: 복합적, 긍정적 등)'만 참고해서 전체 민심과 비교하는 용도로만 써.
+    - 만약 '0개' 혹은 '데이터 수집 오류' 같은 말을 한 자라도 섞으면 분석 전체가 무효화됨을 명심해.
     
     🎯 [필수 선행 지시사항]: 
     분석을 시작하기 전, 반드시 해당 게임에 대한 배경지식을 인지하고, 이를 바탕으로 리뷰의 맥락을 깊게 해석해. 
@@ -22,11 +28,12 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
     10. playtime_analysis: 뉴비와 코어 유저의 여론을 분리하고, 두 그룹 간의 공통/상반된 평가를 comparison_insights에 교차 비교할 것. newbie_title과 core_title에는 반드시 통계 데이터에 제공된 그룹별 평균 플레이타임을 명시할 것 (예: "🌱 뉴비 여론 (평균 12.5시간)").
     11. [⚠️중요] 숫자 및 시간 단위(week, month, year, anniversary 등) 번역 시 절대 넘겨짚지 말고 원문 그대로 직역할 것. '1 week'를 '1주년'으로 번역하는 식의 찐빠는 절대 금지다.
     12. 텍스트 데이터 내부에 마크다운 볼드체(**) 기호를 절대 포함하지 말 것. 노션 출력 시 문자 그대로 노출되는 오류가 있음.
+
     
     [출력 JSON 형식]:
     {{
       "critic_one_liner": "한줄평",
-      "sentiment_analysis": "민심 코멘트",
+      "sentiment_analysis": "민심 코멘트 (공식 평점과 전체 평점 간의 차이가 있다면 이에 대한 분석 포함)",
       "final_summary_all": ["[긍정] 코멘트1", "[부정] 코멘트2"],
       "final_summary_recent": ["[긍정] 코멘트1", "[부정] 코멘트2"],
       "ai_issue_pick": ["이슈 현상 및 인사이트 1"],
@@ -50,8 +57,9 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
     }}
     
     [통계 데이터]
-    - 전체 누적 평가: {store_stats['all_desc']}
-    - {recent_label} 민심: {store_stats['recent_desc']}
+    - 🛑 스팀 공식 평가 (직접 결제 유저만): {store_stats.get('official_desc', '평가 없음')} (총 {store_stats.get('official_total', 0):,}개)
+    - 📈 전체 누적 평가 (무료/외부키 포함): {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)
+    - 🔥 {recent_label} 민심 (최근 분석 표본): {store_stats['recent_desc']} (분석 표본 {store_stats['recent_total']:,}개)
     - 누적 리뷰 언어 비중: {top_langs_str}
     - 📊 표본 기준 뉴비 평균 플레이타임: {store_stats.get('newbie_avg', 0)}시간
     - 💀 표본 기준 코어 평균 플레이타임: {store_stats.get('core_avg', 0)}시간

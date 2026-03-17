@@ -20,6 +20,32 @@ def calculate_custom_score(pos_ratio, total):
 def sanitize_url(url):
     return "".join(char for char in url if 32 <= ord(char) <= 126).strip()
 
+def fetch_store_official_rating(app_id):
+    """
+    💡 [추가] 스팀 상점 페이지 HTML을 직접 크롤링하여 공식 평점 텍스트를 추출합니다.
+    API 지연(Caching) 문제를 우회하기 위해 가장 최신 정보를 담고 있는 웹 페이지를 직접 읽습니다.
+    (리뷰 숫자는 무의미하므로 0으로 반환하여 UI에서 숨깁니다)
+    """
+    url = f"https://store.steampowered.com/app/{app_id}/?l=korean"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    # 성인 인증 및 언어 설정을 위한 쿠키 (birthtime=0으로 연령 제한 우회)
+    cookies = {"birthtime": "0", "lastagecheckage": "1-0-1900", "wants_mature_content": "1"}
+    
+    try:
+        res = requests.get(url, headers=headers, cookies=cookies, timeout=10)
+        res.raise_for_status()
+        html = res.text
+        
+        # 1. 공식 평점 텍스트 추출 (예: "복합적", "대체로 긍정적")
+        rating_match = re.search(r'<span class="game_review_summary[^>]*>([^<]+)</span>', html)
+        rating_text = rating_match.group(1).strip() if rating_match else "평가 없음"
+        
+        return rating_text, 0 # 리뷰 숫자는 제거 요청에 따라 0 반환
+    except Exception:
+        return None, None
+
 def get_steam_game_info(game_input):
     app_id = str(game_input).strip()
     if not app_id.isdigit(): return None, None, None
@@ -73,7 +99,7 @@ def fetch_latest_news(app_id):
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
     if days_since < 3: 
-        return None, "전체 누적", "출시된 지 3일이 채 지나지 않은 극초기 신작이므로, 특정 기간을 나누지 않고 전체 누적 리뷰를 바탕으로 유저 반응을 종합 분석했습니다."
+        return 3, "출시 초기", "출시된 지 3일이 채 지나지 않은 극초기 신작입니다. 스팀 상점의 공식 평점 갱신이 지연될 수 있으므로, 실시간 유저 리뷰 표본을 직접 수집하여 정확한 초기 민심을 분석했습니다."
     elif days_since < 7: 
         return 3, "최근 3일", "출시 후 1주일이 지나지 않은 신작입니다. 발매 직후의 평가 변동성이 매우 큰 시기이므로, 최신 민심을 정확히 파악하기 위해 최근 3일간의 동향을 집중적으로 분석했습니다."
     elif days_since < 30: 
@@ -82,7 +108,7 @@ def get_smart_period(release_date):
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     reviews = []
-    filter_type = "recent" if day_range else "all"
+    filter_type = "recent" if lang == "all" and day_range else "all"
     base_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter={filter_type}&language={lang}&num_per_page=100&purchase_type=all")
     if day_range: base_url += f"&day_range={day_range}"
         
@@ -108,21 +134,44 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
 
 def fetch_steam_reviews(app_id, recent_days_val):
     total_lang_counts = {}
+    sum_total, sum_pos = 0, 0
     
-    # 1. 전체 언어별 누적 리뷰 수 파악
+    # 1. 언어별 데이터 수집 (직접 합산을 위해 데이터 정밀 수집)
     for lang in LANG_MAP.keys():
         try:
             res_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5)
             all_data = res_all.json().get('query_summary', {})
-            total_lang_counts[lang] = all_data.get('total_reviews', 0)
+            t_revs = all_data.get('total_reviews', 0)
+            p_revs = all_data.get('total_positive', 0)
+            n_revs = all_data.get('total_negative', 0)
+            if t_revs > 0:
+                total_lang_counts[lang] = {"total": t_revs, "positive": p_revs, "negative": n_revs}
+                sum_total += t_revs
+                sum_pos += p_revs
         except: pass
-            
-    # 2. 전체 누적 평점 요약 (스팀 공식 글로벌 통합 수치 활용)
-    summary_all_res = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=all")).json()
-    summary_all = summary_all_res.get('query_summary', {})
-    all_time_total_reviews = summary_all.get('total_reviews', 0)
+
+    # 2. 스팀 공식 평점 (상점 페이지 스크래핑 우선 적용)
+    official_desc, _ = fetch_store_official_rating(app_id)
+    if not official_desc or official_desc == "평가 없음":
+        try:
+            res_steam = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json()
+            summ = res_steam.get('query_summary', {})
+            score_code = summ.get('review_score', 0)
+            # API가 0을 줄 때 예외 처리
+            if score_code == 0 and summ.get('total_reviews', 0) > 0:
+                official_desc = calculate_custom_score(summ.get('total_positive', 0) / summ.get('total_reviews', 0), summ.get('total_reviews', 0))
+            else:
+                official_desc = SCORE_MAP.get(score_code, "평가 없음")
+        except: official_desc = "평가 없음"
+
+    # 3. 전체 누적 평점 (💡 API 요약 데이터 0 버그 대응 - 직접 합산한 데이터로 계산)
+    all_time_total_reviews = sum_total
+    if sum_total > 0:
+        all_desc = calculate_custom_score(sum_pos / sum_total, sum_total)
+    else:
+        all_desc = "평가 없음"
     
-    # 3. 최근 동향 데이터 확정
+    # 4. 최근 동향 분석 데이터
     recent_total = 0
     recent_custom_desc = "평가 없음"
 
@@ -147,24 +196,20 @@ def fetch_steam_reviews(app_id, recent_days_val):
             recent_custom_desc = calculate_custom_score(pos_count / recent_total, recent_total)
     else:
         recent_total = all_time_total_reviews
-        recent_custom_desc = SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음")
+        recent_custom_desc = all_desc
 
-    # 4. 분석 대상 언어 선정 (TOP 3 + 한국어)
-    top_langs_keys = [l[0] for l in sorted(total_lang_counts.items(), key=lambda x: x[1], reverse=True)[:3]]
+    # TOP 3 언어 설정
+    top_langs_keys = [l[0] for l in sorted(total_lang_counts.items(), key=lambda x: x[1]['total'], reverse=True)[:3]]
     if "koreana" not in top_langs_keys:
         top_langs_keys.append("koreana")
         
-    # 5. 실제 리뷰 텍스트 수집 및 플레이타임 데이터 추출
     filtered_all = {lang: [] for lang in top_langs_keys}
     filtered_recent = {lang: [] for lang in top_langs_keys}
     all_playtimes = []
     
     for lang in top_langs_keys:
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
-        
         all_playtimes.extend([r['playtime'] for r in all_revs])
-        
-        # 💡 [버그 픽스] 마크다운 볼드체 기호(**) 원천 제거
         filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in all_revs][:20]
         
         if recent_days_val:
@@ -173,19 +218,17 @@ def fetch_steam_reviews(app_id, recent_days_val):
         else:
             filtered_recent[lang] = filtered_all[lang]
 
-    # 뉴비 vs 코어 유저 평균 플레이타임 산출 (중간값 분할 기준)
-    newbie_avg = 0
-    core_avg = 0
+    newbie_avg, core_avg = 0, 0
     if all_playtimes:
         all_playtimes.sort()
         mid = len(all_playtimes) // 2
-        newbies = all_playtimes[:mid]
-        cores = all_playtimes[mid:]
+        newbies, cores = all_playtimes[:mid], all_playtimes[mid:]
         newbie_avg = round(sum(newbies) / len(newbies), 1) if newbies else 0
         core_avg = round(sum(cores) / len(cores), 1) if cores else 0
 
     store_stats = {
-        "all_desc": SCORE_MAP.get(summary_all.get('review_score', 0), "평가 없음"),
+        "official_desc": official_desc,
+        "all_desc": all_desc,
         "all_total": all_time_total_reviews,
         "recent_desc": recent_custom_desc,
         "recent_total": recent_total, 
