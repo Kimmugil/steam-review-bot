@@ -13,11 +13,13 @@ from notion_exporter import upload_to_notion
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="wide")
 
+# 💡 긍정/부정 색상 렌더링 헬퍼 함수
 def render_colored_text(text):
     if "[긍정]" in text: return f":blue[{text}]"
     elif "[부정]" in text: return f":red[{text}]"
     return text
 
+# CSS 주입: UI 개선 및 상단 배너 고정
 st.markdown("""
     <style>
         .fixed-banner {
@@ -172,7 +174,6 @@ def main():
         st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
         st.write(f"📅 **스팀 출시일:** {st.session_state.rel_date_str}")
         
-        # 💡 [개선] 평점 지표 3분할에 맞춘 경고문 업데이트
         st.warning("⚠️ **평점 지표 안내:** **'스팀 공식 평점'**은 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수이며, **'전체 누적 평점'**은 외부 키(Key) 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
         
         ins = st.session_state.insights
@@ -182,9 +183,9 @@ def main():
         with tab1:
             st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}</div>', unsafe_allow_html=True)
             
-            # 💡 [개선] 컬럼을 3개로 늘려서 각각 공식 / 누적 / 최근 평점 표기
             col1, col2, col3 = st.columns(3)
-            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'), f"{stats.get('official_total', 0):,}개")
+            # 💡 [수정] 스팀 공식 평점에서 리뷰 수 표시 제거
+            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'))
             with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
             with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
             
