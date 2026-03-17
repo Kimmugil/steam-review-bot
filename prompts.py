@@ -23,6 +23,7 @@ def build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text,
     10. playtime_analysis: 뉴비와 코어 유저의 여론을 분리하고, 두 그룹 간의 공통/상반된 평가를 comparison_insights에 교차 비교할 것. newbie_title과 core_title에는 반드시 통계 데이터에 제공된 그룹별 평균 플레이타임을 명시할 것 (예: "🌱 뉴비 여론 (평균 12.5시간)").
     11. [⚠️중요] 숫자 및 시간 단위(week, month, year, anniversary 등) 번역 시 절대 넘겨짚지 말고 원문 그대로 직역할 것. '1 week'를 '1주년'으로 번역하는 식의 찐빠는 절대 금지다.
     12. 텍스트 데이터 내부에 마크다운 볼드체(**) 기호를 절대 포함하지 말 것. 노션 출력 시 문자 그대로 노출되는 오류가 있음.
+    13. 스팀 공식 평점은 텍스트를 불러오는 방식이기 때문에 표본은 언제나 1개이거나 매우 적으므로, 스팀 공식 평점에 대해 분석할 때에는 표본 수에 대해서는 고려하지 말 것.
     
     [출력 JSON 형식]:
     {{
