@@ -6,15 +6,15 @@ ENV_NAME = "LIVE"
 TICKER_INTERVAL = 2.5
 
 # 노션 배포 URL (기본값 설정, secrets에 있으면 덮어씌움)
-NOTION_PUBLISH_URL = "https://www.notion.so/" 
+NOTION_PUBLIC_URL = "https://www.notion.so/" 
 
 try:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     NOTION_TOKEN = st.secrets["NOTION_TOKEN"]
     NOTION_DATABASE_ID = st.secrets["NOTION_DATABASE_ID"]
     
-    if "NOTION_PUBLISH_URL" in st.secrets:
-        NOTION_PUBLISH_URL = st.secrets["NOTION_PUBLISH_URL"]
+    if "NOTION_PUBLIC_URL" in st.secrets:
+        NOTION_PUBLIC_URL = st.secrets["NOTION_PUBLIC_URL"]
         
 except Exception:
     GEMINI_API_KEY = None
