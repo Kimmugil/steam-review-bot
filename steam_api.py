@@ -3,7 +3,7 @@ import urllib.parse
 import re
 import concurrent.futures
 from datetime import datetime
-from config import LANG_MAP, SCORE_MAP
+from config import LANG_MAP, SCORE_MAP, REGION_MAP
 
 def get_lang_name(lang_code):
     return LANG_MAP.get(lang_code, f"🏳️ {lang_code}")
@@ -114,6 +114,33 @@ def _fetch_single_lang_stats(app_id, lang):
     except:
         return lang, {}, {}
 
+# 💡 [요청 3번] 전 세계 권역별 통계 데이터 생성 헬퍼 함수
+def _build_region_table_data(lang_data_dict, total_all_reviews):
+    region_stats = {}
+    for lang_code, stats in lang_data_dict.items():
+        region = REGION_MAP.get(lang_code, "🌐 기타")
+        if region not in region_stats:
+            region_stats[region] = {"total": 0, "positive": 0}
+        region_stats[region]["total"] += stats["total"]
+        region_stats[region]["positive"] += stats["positive"]
+    
+    sorted_regions = sorted(region_stats.items(), key=lambda x: x[1]['total'], reverse=True)
+    table_data = []
+    for idx, (region_name, stats) in enumerate(sorted_regions):
+        count = stats['total']
+        pos = stats['positive']
+        neg = count - pos
+        ratio = (count / total_all_reviews) * 100 if total_all_reviews > 0 else 0
+        pos_ratio = (pos / count) * 100 if count > 0 else 0
+        neg_ratio = (neg / count) * 100 if count > 0 else 0
+        eval_desc = calculate_custom_score(pos / count if count > 0 else 0, count)
+        
+        table_data.append({
+            "rank": f"{idx+1}위", "region": region_name, "count": count, 
+            "ratio": f"{ratio:.1f}%", "pos_ratio": f"{pos_ratio:.1f}%", "neg_ratio": f"{neg_ratio:.1f}%", "eval": eval_desc
+        })
+    return table_data
+
 def _build_lang_table_data(lang_data_dict, total_all_reviews):
     sorted_langs = sorted(lang_data_dict.items(), key=lambda x: x[1]['total'], reverse=True)
     table_data = []
@@ -126,11 +153,11 @@ def _build_lang_table_data(lang_data_dict, total_all_reviews):
         eval_desc = calculate_custom_score(pos / count if count > 0 else 0, count)
         
         raw_lang = get_lang_name(lang_code)
-        # 💡 [픽스 4번] OS가 이모지를 문자로 렌더링해도 무시하고, 띄어쓰기 뒷부분만 완벽하게 가져옴
+        # 💡 [요청 1번] 노션용 국기 포함 버전(lang_with_flag)과 스트림릿용 텍스트 버전(lang) 분리 제공
         clean_lang = raw_lang.split(" ", 1)[-1].strip() if " " in raw_lang else raw_lang
         
         table_data.append({
-            "rank": f"{idx+1}위", "lang": clean_lang, "count": count, 
+            "rank": f"{idx+1}위", "lang": clean_lang, "lang_with_flag": raw_lang, "count": count, 
             "ratio": f"{ratio:.1f}%", "pos_ratio": f"{pos_ratio:.1f}%", "neg_ratio": f"{neg_ratio:.1f}%", "eval": eval_desc
         })
     return table_data
@@ -187,8 +214,10 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
     else:
         recent_total, recent_custom_desc = all_time_total_reviews, all_desc
 
+    # 언어 통계 및 💡 권역 통계 동시 산출
     table_data_all = _build_lang_table_data(lang_stats_all_dict, sum_total)
     table_data_30 = _build_lang_table_data(lang_stats_30_dict, sum([v['total'] for v in lang_stats_30_dict.values()]))
+    table_data_region = _build_region_table_data(lang_stats_all_dict, sum_total)
     days_since_release = (datetime.now() - release_date).days
 
     top_langs_keys = [l[0] for l in sorted(lang_stats_all_dict.items(), key=lambda x: x[1]['total'], reverse=True)[:3]]
@@ -204,9 +233,18 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
             filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in rec_revs][:20]
         else: filtered_recent[lang] = filtered_all[lang]
 
+    # 💡 [요청 4번] 중간 노이즈 배제! 하위 25%(뉴비)와 상위 25%(코어) 분리 로직 적용
     all_reviews_for_pt.sort(key=lambda x: x['pt'])
-    mid = len(all_reviews_for_pt) // 2
-    newbies, cores = all_reviews_for_pt[:mid], all_reviews_for_pt[mid:]
+    n_len = len(all_reviews_for_pt)
+    if n_len >= 4:
+        q1 = n_len // 4
+        q3 = n_len * 3 // 4
+        newbies = all_reviews_for_pt[:q1]
+        cores = all_reviews_for_pt[q3:]
+    else:
+        mid = n_len // 2
+        newbies = all_reviews_for_pt[:mid]
+        cores = all_reviews_for_pt[mid:]
     
     def calc_pt_stats(group):
         if not group: return 0, 0, "평가 없음"
@@ -222,7 +260,8 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
         "official_desc": official_desc, "all_desc": all_desc, "all_total": all_time_total_reviews,
         "recent_desc": recent_custom_desc, "recent_total": recent_total, 
         "total_lang_counts": lang_stats_all_dict,
-        "table_data_all": table_data_all, "table_data_30": table_data_30, "days_since_release": days_since_release,
+        "table_data_all": table_data_all, "table_data_30": table_data_30, "table_data_region": table_data_region,
+        "days_since_release": days_since_release,
         "newbie_avg": n_avg, "newbie_total": n_tot, "newbie_desc": n_desc,
         "core_avg": c_avg, "core_total": c_tot, "core_desc": c_desc
     }
