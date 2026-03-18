@@ -173,7 +173,7 @@ def main():
     elif st.session_state.step == 1:
         st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
         
-        st.warning("⚠️ **평점 지표 안내:** '스팀 공식 평점'은 스팀 상점을 통해 직접 라이선스를 획득한 유저의 평가만 반영된 점수이며, '전체 누적 평점'은 외부 키(Key) 및 무료 플레이어 등 모든 유저의 평가를 100% 포함한 실제 점수입니다.")
+        st.warning("⚠️ **평점 지표 안내:** '스팀 공식 평점'은 스팀 상점을 통해 직접 라이선스를 획득한 유저의 평가만으로 계산된 결과이며, '전체 누적 평점'은 외부 키(Key) 및 무료 플레이어 등 모든 유저의 평가를 100% 포함하여 계산된 결과입니다.")
         
         ins = st.session_state.insights
         stats = st.session_state.stats
@@ -185,7 +185,10 @@ def main():
             col1, col2, col3 = st.columns(3)
             with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'), help="스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수입니다.")
             with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개", help="외부 키(Key) 등록 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
-            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개", help="최신 민심을 정확히 파악하기 위해 특정 기간 동안 수집된 리뷰 표본 결과입니다.")
+            
+            # 💡 [툴팁 추가] 최근 동향 지표에 타임스탬프 기반 정밀 추출 툴팁 반영
+            recent_help_text = f"{st.session_state.smart_reason}\n\n(※ 타임스탬프 컷오프를 적용하여, 해당 기간 내에 실제 작성된 리뷰 표본만을 정밀하게 추출해 집계합니다.)"
+            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개", help=recent_help_text)
             
             st.info(f"💡 **분석 요약:** {ins.get('sentiment_analysis', '')}")
             st.markdown("---")
@@ -239,7 +242,6 @@ def main():
                     st.write(f"  - {render_colored_text(c_cat.get('name'))}: {', '.join([render_colored_text(x) for x in c_cat.get('summary', [])])}")
             
             st.divider()
-            # 💡 [요청 1] 타이틀 문구 수정 완료
             st.markdown("### 🌐 전 세계 언어별 여론 지표")
             
             def apply_eval_color(val):
@@ -275,25 +277,24 @@ def main():
                 styled_all_top10 = df_all_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
                 styled_all_full = df_all.style.map(apply_eval_color, subset=["📊 평가 결과"])
                 styled_30_top10 = df_30_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
-                styled_30_full = df_30.style.map(apply_eval_color, subset=["📊 평가 결과"]) # 💡 [요청 3] 전체보기 스타일 적용
+                styled_30_full = df_30.style.map(apply_eval_color, subset=["📊 평가 결과"])
             except AttributeError:
                 styled_all_top10 = df_all_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
                 styled_all_full = df_all.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
                 styled_30_top10 = df_30_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
-                styled_30_full = df_30.style.applymap(apply_eval_color, subset=["📊 평가 결과"]) # 💡 [요청 3] 전체보기 스타일 적용
+                styled_30_full = df_30.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
 
             st.dataframe(styled_all_top10, hide_index=True, use_container_width=True)
             
             with st.expander("👀 전 세계 누적 리뷰 언어별 비중 (전체 보기)"):
                 st.dataframe(styled_all_full, hide_index=True, use_container_width=True)
                 
-            # 💡 [요청 2] 타이틀 문구 수정 완료
-            st.markdown("##### 🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10")
+            # 💡 [툴팁 추가] 최근 30일 언어별 비중 제목에 집계 기준 설명 툴팁 반영
+            st.markdown("##### 🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10", help="집계일 기준 최근 30일 이내에 실제 작성된 리뷰 표본만을 타임스탬프 컷오프로 정밀하게 추출하여 산출한 데이터입니다.")
             if stats['days_since_release'] < 30:
                 st.info("ℹ️ 출시일로부터 30일 이후부터 지원하는 표입니다. (현재 데이터 부족)")
             else:
                 st.dataframe(styled_30_top10, hide_index=True, use_container_width=True)
-                # 💡 [요청 3] 30일 데이터 전체보기 expander 추가
                 with st.expander("👀 최근 30일 누적 리뷰 언어별 비중 (전체보기)"):
                     st.dataframe(styled_30_full, hide_index=True, use_container_width=True)
 
