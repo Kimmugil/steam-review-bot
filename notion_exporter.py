@@ -49,7 +49,7 @@ def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
         {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 각 평점 지표별 산출 기준 안내"}, "annotations": {"color": "gray"}}], "children": [
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "스팀 공식 평점: 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수입니다."}}]}},
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "전체 누적 평점: 외부 키(Key) 등록 및 무료 플레이어 등 모든 유저를 100% 포함한 포괄적 민심입니다."}}]}},
-            {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "출시 초기 / 최근 동향: 최신 민심을 정확히 파악하기 위해 특정 기간 동안 수집된 리뷰 표본 결과입니다."}}]}}
+            {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": "출시 초기 / 최근 동향: 출시일에 따라 동적으로 설정된 기간 내에 실제 작성된 리뷰 표본을 타임스탬프 기준으로 정밀 필터링하여 집계합니다."}}]}}
         ]}},
         {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "💬"}, "color": "blue_background", "rich_text": [{"text": {"content": ai_data.get('sentiment_analysis', '')}}]}}, 
         {"object": "block", "type": "divider", "divider": {}}
@@ -173,6 +173,15 @@ def get_language_ratio_block(store_stats):
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10"}}]}})
     
+    blocks.append({
+        "object": "block", "type": "toggle", "toggle": {
+            "rich_text": [{"text": {"content": "ℹ️ 30일 데이터 집계 기준 안내"}, "annotations": {"color": "gray"}}],
+            "children": [
+                {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "집계일 기준 최근 30일 이내에 실제 작성된 리뷰 표본만을 타임스탬프 기준으로 정밀 추출하여 산출한 데이터입니다."}}]}}
+            ]
+        }
+    })
+    
     if store_stats['days_since_release'] < 30:
         blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "ℹ️"}, "color": "gray_background", "rich_text": [{"text": {"content": "출시일로부터 30일 이후부터 지원하는 표입니다. (현재 데이터 부족)"}}]}})
     else:
@@ -216,10 +225,10 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
         res.raise_for_status()
     except requests.exceptions.HTTPError as e:
         raise Exception(f"노션 DB 연동 실패 (컬럼명/타입 불일치 의심): {e.response.text}")
+    
     page_id = res.json()['id']
     children_blocks = []
     
-    # 💡 [버그 픽스] 
     for section in NOTION_SECTION_ORDER:
         if section == "bot_info": children_blocks.extend(get_bot_info_block(game_name, app_id))
         elif section == "ai_one_liner": children_blocks.extend(get_ai_one_liner_block(ai_data, game_name, release_date))
@@ -233,11 +242,45 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
         elif section == "country_analysis": children_blocks.extend(get_country_analysis_block(ai_data))
         
     append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
+    
+    # 💡 [핵심 픽스] 노션 API의 '3단계 깊이 중첩(Nesting) 제한' 우회 로직
+    # 토글(1) -> 표(2) -> 행(3) 은 한 번에 추가 불가. 표를 밖으로 빼서 토글 ID 발급 후 개별 주입!
     for i in range(0, len(children_blocks), 100):
+        chunk = children_blocks[i:i+100]
+        deferred_tables = []
+        
+        for idx, block in enumerate(chunk):
+            if block.get("type") == "toggle" and "children" in block["toggle"]:
+                clean_children = []
+                for child in block["toggle"]["children"]:
+                    # 표(Table) 발견 시 토글에서 분리하여 임시 보관
+                    if child.get("type") == "table":
+                        deferred_tables.append((idx, child))
+                    else:
+                        clean_children.append(child)
+                
+                if clean_children:
+                    block["toggle"]["children"] = clean_children
+                else:
+                    # 빈 토글 껍데기만 노션에 먼저 전송
+                    del block["toggle"]["children"]
+
         try:
-            patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": children_blocks[i:i+100]}))
+            # 1. 100개 블록(빈 토글 포함) 1차 배치 전송
+            patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": chunk}))
             patch_res.raise_for_status() 
+            created_blocks = patch_res.json().get('results', [])
+            
+            # 2. 미리 빼두었던 표(Table)를 생성된 토글의 ID를 찾아 2차로 밀어넣기
+            for idx, table_block in deferred_tables:
+                if idx < len(created_blocks):
+                    toggle_id = created_blocks[idx]['id']
+                    t_url = f"https://api.notion.com/v1/blocks/{toggle_id}/children"
+                    t_res = requests.patch(t_url, headers=headers, data=json.dumps({"children": [table_block]}))
+                    t_res.raise_for_status()
+                    
         except requests.exceptions.HTTPError as e:
             raise Exception(f"노션 블록 추가 실패: {e.response.text}")
         time.sleep(0.5)
+        
     return page_id

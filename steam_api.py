@@ -2,7 +2,7 @@ import requests
 import urllib.parse
 import re
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import LANG_MAP, SCORE_MAP, REGION_MAP
 
 def get_lang_name(lang_code):
@@ -71,12 +71,15 @@ def fetch_latest_news(app_id):
     except: pass
     return None, None, None, None
 
+# 💡 [핵심 픽스] 출시일 기준 절반 자르기 동적 계산 로직 반영
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
-    if days_since < 3: return 3, "출시 초기", "출시된 지 3일이 채 지나지 않은 극초기 신작입니다. 스팀 상점의 공식 평점 갱신이 지연될 수 있으므로, 실시간 유저 리뷰 표본을 직접 수집하여 정확한 초기 민심을 분석했습니다."
-    elif days_since < 7: return 3, "최근 3일", "출시 후 1주일이 지나지 않은 신작입니다. 발매 직후의 평가 변동성이 매우 큰 시기이므로, 최신 민심을 정확히 파악하기 위해 최근 3일간의 동향을 집중적으로 분석했습니다."
-    elif days_since < 30: return 7, "최근 7일", "출시 후 1달이 채 되지 않은 게임입니다. 초기 '오픈빨'이 빠지고 실제 게임성이 평가받는 시점이므로, 최근 7일간의 리뷰를 통해 안정화 단계의 민심을 확인했습니다."
-    return 30, "최근 30일", "출시 후 1달 이상 경과하여 서비스가 안정화된 게임입니다. 현재 시점의 실질적인 유저 여론과 최근 패치/업데이트에 대한 반응을 확인하기 위해 최근 30일간의 장기 동향을 분석했습니다."
+    if days_since < 6: 
+        return 3, "출시 초기", "출시된 지 며칠 지나지 않은 극초기 신작입니다. 발매 직후의 평가 변동성이 매우 큰 시기이므로, 최신 민심을 파악하기 위해 최소 기준인 최근 3일간의 동향을 분석했습니다."
+    elif days_since < 40: 
+        target_days = days_since // 2
+        return target_days, f"최근 {target_days}일", f"출시 후 40일이 경과하지 않은 신작입니다. 오픈 초기의 거품이나 기술적 이슈가 걷힌 후의 실제 민심을 확인하기 위해, 전체 서비스 기간의 절반인 최근 {target_days}일간의 동향을 집중적으로 분석했습니다."
+    return 30, "최근 30일", "출시 후 일정 기간 이상 경과하여 서비스가 안정화된 게임입니다. 현재 시점의 실질적인 유저 여론과 최근 패치/업데이트에 대한 반응을 확인하기 위해 최근 30일간의 장기 동향을 분석했습니다."
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     reviews = []
@@ -106,15 +109,10 @@ def _fetch_single_lang_stats(app_id, lang):
     try:
         url_all = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all")
         res_all = requests.get(url_all, timeout=5).json().get('query_summary', {})
-        
-        url_30 = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&day_range=30&num_per_page=0&purchase_type=all&filter=recent")
-        res_30 = requests.get(url_30, timeout=5).json().get('query_summary', {})
-        
-        return lang, res_all, res_30
+        return lang, res_all
     except:
-        return lang, {}, {}
+        return lang, {}
 
-# 💡 [요청 3번] 전 세계 권역별 통계 데이터 생성 헬퍼 함수
 def _build_region_table_data(lang_data_dict, total_all_reviews):
     region_stats = {}
     for lang_code, stats in lang_data_dict.items():
@@ -153,7 +151,6 @@ def _build_lang_table_data(lang_data_dict, total_all_reviews):
         eval_desc = calculate_custom_score(pos / count if count > 0 else 0, count)
         
         raw_lang = get_lang_name(lang_code)
-        # 💡 [요청 1번] 노션용 국기 포함 버전(lang_with_flag)과 스트림릿용 텍스트 버전(lang) 분리 제공
         clean_lang = raw_lang.split(" ", 1)[-1].strip() if " " in raw_lang else raw_lang
         
         table_data.append({
@@ -163,23 +160,18 @@ def _build_lang_table_data(lang_data_dict, total_all_reviews):
     return table_data
 
 def fetch_steam_reviews(app_id, recent_days_val, release_date):
-    lang_stats_all_dict, lang_stats_30_dict = {}, {}
+    lang_stats_all_dict = {}
     sum_total, sum_pos = 0, 0
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         futures = [executor.submit(_fetch_single_lang_stats, app_id, lang) for lang in LANG_MAP.keys()]
         for future in concurrent.futures.as_completed(futures):
-            lang, summ_all, summ_30 = future.result()
-            
+            lang, summ_all = future.result()
             t_all, p_all = summ_all.get('total_reviews', 0), summ_all.get('total_positive', 0)
             if t_all > 0:
                 lang_stats_all_dict[lang] = {"total": t_all, "positive": p_all}
                 sum_total += t_all
                 sum_pos += p_all
-                
-            t_30, p_30 = summ_30.get('total_reviews', 0), summ_30.get('total_positive', 0)
-            if t_30 > 0:
-                lang_stats_30_dict[lang] = {"total": t_30, "positive": p_30}
 
     official_desc, _ = fetch_store_official_rating(app_id)
     if not official_desc or official_desc == "평가 없음":
@@ -195,26 +187,52 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
     all_time_total_reviews = sum_total
     all_desc = calculate_custom_score(sum_pos / sum_total, sum_total) if sum_total > 0 else "평가 없음"
     
-    recent_total, recent_custom_desc = 0, "평가 없음"
+    lang_stats_30_dict = {lang: {'total': 0, 'positive': 0} for lang in LANG_MAP.keys()}
+    recent_total, recent_pos = 0, 0
+    recent_custom_desc = "평가 없음"
+
     if recent_days_val:
-        sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&day_range={recent_days_val}&num_per_page=100&purchase_type=all")
-        cursor, pos_count = "*", 0
-        for _ in range(5):
+        cutoff_date = datetime.now() - timedelta(days=recent_days_val)
+        cutoff_ts = int(cutoff_date.timestamp())
+        
+        sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&num_per_page=100&purchase_type=all")
+        cursor = "*"
+        
+        for _ in range(50):
             try:
                 res = requests.get(sample_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=5)
-                revs = res.json().get('reviews', [])
+                data = res.json()
+                revs = data.get('reviews', [])
                 if not revs: break
+                
+                stop_fetching = False
                 for r in revs:
-                    if r.get('voted_up'): pos_count += 1
+                    if r.get('timestamp_created', 0) < cutoff_ts:
+                        stop_fetching = True
+                        break 
+                        
                     recent_total += 1
-                cursor = res.json().get('cursor', '*')
+                    is_pos = r.get('voted_up', False)
+                    if is_pos: recent_pos += 1
+                    
+                    r_lang = r.get('language')
+                    if r_lang in lang_stats_30_dict:
+                        lang_stats_30_dict[r_lang]['total'] += 1
+                        if is_pos: lang_stats_30_dict[r_lang]['positive'] += 1
+                            
+                if stop_fetching: break
+                    
+                cursor = data.get('cursor', '*')
                 if not cursor: break
             except: break
-        if recent_total > 0: recent_custom_desc = calculate_custom_score(pos_count / recent_total, recent_total)
+            
+        if recent_total > 0: 
+            recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
+        
+        lang_stats_30_dict = {k: v for k, v in lang_stats_30_dict.items() if v['total'] > 0}
     else:
         recent_total, recent_custom_desc = all_time_total_reviews, all_desc
 
-    # 언어 통계 및 💡 권역 통계 동시 산출
     table_data_all = _build_lang_table_data(lang_stats_all_dict, sum_total)
     table_data_30 = _build_lang_table_data(lang_stats_30_dict, sum([v['total'] for v in lang_stats_30_dict.values()]))
     table_data_region = _build_region_table_data(lang_stats_all_dict, sum_total)
@@ -233,7 +251,6 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
             filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in rec_revs][:20]
         else: filtered_recent[lang] = filtered_all[lang]
 
-    # 💡 [요청 4번] 중간 노이즈 배제! 하위 25%(뉴비)와 상위 25%(코어) 분리 로직 적용
     all_reviews_for_pt.sort(key=lambda x: x['pt'])
     n_len = len(all_reviews_for_pt)
     if n_len >= 4:
