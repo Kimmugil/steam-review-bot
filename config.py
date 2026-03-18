@@ -1,6 +1,6 @@
 import streamlit as st
 
-APP_VERSION = "v2.2.2"
+APP_VERSION = "v2.2.3"
 TICKER_INTERVAL = 2.5
 
 ENV_NAME = "LIVE"
