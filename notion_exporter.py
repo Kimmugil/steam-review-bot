@@ -57,7 +57,6 @@ def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
     return blocks
 
 def get_global_summary_block(ai_data, recent_label):
-    # 💡 [요청 2번] 파란색, 빨간색 옵션 제거하고 기본색(검은색) 적용
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🎯 전 국가 망라 최종 요약"}}]}}, {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "📈 [전체 누적 평가 주요 여론]"}, "annotations": {"bold": True}}]}}]
     for line in ai_data.get('final_summary_all', []): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"🔥 [{recent_label} 주요 여론]"}, "annotations": {"bold": True}}]}})
@@ -70,7 +69,6 @@ def get_playtime_analysis_block(ai_data, stats):
     if not playtime_data: return []
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "⏱️ 플레이타임별 주요 민심 교차 분석"}}]}}]
     
-    # 💡 [요청 4번] 하위 25%, 상위 25% 양극화 기준 안내 문구로 토글 내용 업데이트
     blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 플레이타임별 표본 수집 및 분석 방식 안내"}, "annotations": {"color": "gray"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "수집된 전체 리뷰 표본을 플레이타임 순으로 정렬한 뒤, 중간값의 노이즈를 배제하기 위해 하위 25%를 '뉴비 여론', 상위 25%를 '코어 여론'으로 명확히 분리하여 두 그룹 간의 시각차를 도출합니다."}}]}}]}})
 
     comparison_insights = playtime_data.get('comparison_insights', [])
@@ -114,7 +112,6 @@ def get_category_summary_block(ai_data):
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
-# 💡 [요청 3번] 권역 테이블도 지원하도록 is_region 플래그 추가
 def _create_notion_table(table_data_list, limit=None, is_region=False):
     rows = [
         {"type": "table_row", "table_row": {"cells": [
@@ -132,8 +129,6 @@ def _create_notion_table(table_data_list, limit=None, is_region=False):
     for r in target_list:
         eval_val = str(r['eval'])
         eval_color = "blue" if "긍정적" in eval_val else ("red" if "부정적" in eval_val else "gray")
-        
-        # 💡 [요청 1번, 3번] 권역인 경우 권역명, 언어인 경우 국기 이모지가 들어간 이름 사용
         name_val = str(r['region']) if is_region else str(r['lang_with_flag'])
         
         rows.append({"type": "table_row", "table_row": {"cells": [
@@ -149,9 +144,10 @@ def _create_notion_table(table_data_list, limit=None, is_region=False):
     return {"object": "block", "type": "table", "table": {"table_width": 7, "has_column_header": True, "children": rows}}
 
 def get_language_ratio_block(store_stats):
-    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 국가 여론 지표"}}]}}]
+    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 언어별 여론 지표"}}]}}]
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🗺️ 주요 권역별 누적 리뷰 비중"}}]}})
+    
     blocks.append({
         "object": "block", "type": "toggle", "toggle": {
             "rich_text": [{"text": {"content": "ℹ️ 각 권역별 포함 국가(언어) 안내"}, "annotations": {"color": "gray"}}],
@@ -164,22 +160,27 @@ def get_language_ratio_block(store_stats):
             ]
         }
     })
+    
     blocks.append(_create_notion_table(store_stats['table_data_region'], is_region=True))
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🥇 언어별 누적 리뷰 비중 TOP 10"}}]}})
     blocks.append(_create_notion_table(store_stats['table_data_all'], limit=10))
     
     blocks.append({"object": "block", "type": "toggle", "toggle": {
-        "rich_text": [{"text": {"content": "👀 전 세계 누적 리뷰 비중 (전체 보기)"}}],
+        "rich_text": [{"text": {"content": "👀 전 세계 누적 리뷰 언어별 비중 (전체 보기)"}}],
         "children": [_create_notion_table(store_stats['table_data_all'])]
     }})
     
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🔥 최근 30일 누적 리뷰 비중 TOP 10"}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10"}}]}})
     
     if store_stats['days_since_release'] < 30:
         blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "ℹ️"}, "color": "gray_background", "rich_text": [{"text": {"content": "출시일로부터 30일 이후부터 지원하는 표입니다. (현재 데이터 부족)"}}]}})
     else:
         blocks.append(_create_notion_table(store_stats['table_data_30'], limit=10))
+        blocks.append({"object": "block", "type": "toggle", "toggle": {
+            "rich_text": [{"text": {"content": "👀 최근 30일 누적 리뷰 언어별 비중 (전체보기)"}}],
+            "children": [_create_notion_table(store_stats['table_data_30'])]
+        }})
         
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
@@ -217,6 +218,8 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
         raise Exception(f"노션 DB 연동 실패 (컬럼명/타입 불일치 의심): {e.response.text}")
     page_id = res.json()['id']
     children_blocks = []
+    
+    # 💡 [버그 픽스] 
     for section in NOTION_SECTION_ORDER:
         if section == "bot_info": children_blocks.extend(get_bot_info_block(game_name, app_id))
         elif section == "ai_one_liner": children_blocks.extend(get_ai_one_liner_block(ai_data, game_name, release_date))
@@ -228,6 +231,7 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
         elif section == "category_summary": children_blocks.extend(get_category_summary_block(ai_data))
         elif section == "language_ratio": children_blocks.extend(get_language_ratio_block(store_stats))
         elif section == "country_analysis": children_blocks.extend(get_country_analysis_block(ai_data))
+        
     append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
     for i in range(0, len(children_blocks), 100):
         try:
