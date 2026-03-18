@@ -42,7 +42,6 @@ st.markdown("""
             border-radius: 12px;
             border-left: 5px solid #ff4b4b;
             margin-bottom: 15px;
-        
         }
     </style>
 """, unsafe_allow_html=True)
@@ -174,7 +173,7 @@ def main():
     elif st.session_state.step == 1:
         st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
         
-        st.warning("⚠️ **평점 지표 안내:** '스팀 공식 평점'은 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수이며, '전체 누적 평점'은 외부 키(Key) 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
+        st.warning("⚠️ **평점 지표 안내:** **'스팀 공식 평점'**은 스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수이며, **'전체 누적 평점'**은 외부 키(Key) 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
         
         ins = st.session_state.insights
         stats = st.session_state.stats
@@ -240,7 +239,8 @@ def main():
                     st.write(f"  - {render_colored_text(c_cat.get('name'))}: {', '.join([render_colored_text(x) for x in c_cat.get('summary', [])])}")
             
             st.divider()
-            st.markdown("### 🌐 전 세계 국가 여론 지표")
+            # 💡 [요청 1] 타이틀 문구 수정 완료
+            st.markdown("### 🌐 전 세계 언어별 여론 지표")
             
             def apply_eval_color(val):
                 val_str = str(val)
@@ -248,7 +248,6 @@ def main():
                 elif "부정적" in val_str: return "color: #ff4b4b"
                 return "color: #888888"
                 
-            # 💡 [요청 1번] 권역 툴팁 도움말 추가
             region_help = (
                 "각 권역별 포함 국가(언어) 안내\n"
                 "- 아시아: 한국어, 중국어, 일본어, 태국어, 베트남어, 인도네시아어\n"
@@ -276,21 +275,27 @@ def main():
                 styled_all_top10 = df_all_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
                 styled_all_full = df_all.style.map(apply_eval_color, subset=["📊 평가 결과"])
                 styled_30_top10 = df_30_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
+                styled_30_full = df_30.style.map(apply_eval_color, subset=["📊 평가 결과"]) # 💡 [요청 3] 전체보기 스타일 적용
             except AttributeError:
                 styled_all_top10 = df_all_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
                 styled_all_full = df_all.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
                 styled_30_top10 = df_30_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+                styled_30_full = df_30.style.applymap(apply_eval_color, subset=["📊 평가 결과"]) # 💡 [요청 3] 전체보기 스타일 적용
 
             st.dataframe(styled_all_top10, hide_index=True, use_container_width=True)
             
-            with st.expander("👀 전 세계 누적 리뷰 비중 (전체 보기)"):
+            with st.expander("👀 전 세계 누적 리뷰 언어별 비중 (전체 보기)"):
                 st.dataframe(styled_all_full, hide_index=True, use_container_width=True)
                 
-            st.markdown("##### 🔥 최근 30일 누적 리뷰 비중 TOP 10")
+            # 💡 [요청 2] 타이틀 문구 수정 완료
+            st.markdown("##### 🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10")
             if stats['days_since_release'] < 30:
                 st.info("ℹ️ 출시일로부터 30일 이후부터 지원하는 표입니다. (현재 데이터 부족)")
             else:
                 st.dataframe(styled_30_top10, hide_index=True, use_container_width=True)
+                # 💡 [요청 3] 30일 데이터 전체보기 expander 추가
+                with st.expander("👀 최근 30일 누적 리뷰 언어별 비중 (전체보기)"):
+                    st.dataframe(styled_30_full, hide_index=True, use_container_width=True)
 
         st.divider()
         with st.container(border=True):
