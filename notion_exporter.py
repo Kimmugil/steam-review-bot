@@ -144,7 +144,6 @@ def _create_notion_table(table_data_list, limit=None, is_region=False):
     return {"object": "block", "type": "table", "table": {"table_width": 7, "has_column_header": True, "children": rows}}
 
 def get_language_ratio_block(store_stats):
-    # 💡 [요청 1] 타이틀 문구 수정 완료
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 전 세계 언어별 여론 지표"}}]}}]
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🗺️ 주요 권역별 누적 리뷰 비중"}}]}})
@@ -172,14 +171,12 @@ def get_language_ratio_block(store_stats):
         "children": [_create_notion_table(store_stats['table_data_all'])]
     }})
     
-    # 💡 [요청 2] 타이틀 문구 수정 완료
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10"}}]}})
     
     if store_stats['days_since_release'] < 30:
         blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "ℹ️"}, "color": "gray_background", "rich_text": [{"text": {"content": "출시일로부터 30일 이후부터 지원하는 표입니다. (현재 데이터 부족)"}}]}})
     else:
         blocks.append(_create_notion_table(store_stats['table_data_30'], limit=10))
-        # 💡 [요청 3] 30일 데이터 전체보기 토글 추가 완료
         blocks.append({"object": "block", "type": "toggle", "toggle": {
             "rich_text": [{"text": {"content": "👀 최근 30일 누적 리뷰 언어별 비중 (전체보기)"}}],
             "children": [_create_notion_table(store_stats['table_data_30'])]
@@ -221,8 +218,10 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
         raise Exception(f"노션 DB 연동 실패 (컬럼명/타입 불일치 의심): {e.response.text}")
     page_id = res.json()['id']
     children_blocks = []
+    
+    # 💡 [버그 픽스] 
     for section in NOTION_SECTION_ORDER:
-        if section == "bot_info": children_blocks.extend(get_bot_info_block(game_name, app_id, release_date))
+        if section == "bot_info": children_blocks.extend(get_bot_info_block(game_name, app_id))
         elif section == "ai_one_liner": children_blocks.extend(get_ai_one_liner_block(ai_data, game_name, release_date))
         elif section == "steam_sentiment": children_blocks.extend(get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data))
         elif section == "global_summary": children_blocks.extend(get_global_summary_block(ai_data, recent_label))
@@ -232,6 +231,7 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
         elif section == "category_summary": children_blocks.extend(get_category_summary_block(ai_data))
         elif section == "language_ratio": children_blocks.extend(get_language_ratio_block(store_stats))
         elif section == "country_analysis": children_blocks.extend(get_country_analysis_block(ai_data))
+        
     append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
     for i in range(0, len(children_blocks), 100):
         try:
