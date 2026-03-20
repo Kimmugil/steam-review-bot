@@ -8,7 +8,8 @@ from config import APP_VERSION, NOTION_PUBLIC_URL, GEMINI_API_KEY, NOTION_TOKEN,
 from updates import UPDATE_HISTORY
 from messages import WAITING_MESSAGES
 from steam_api import get_steam_game_info, fetch_latest_news, get_smart_period, fetch_steam_reviews, get_lang_name
-from ai_analyzer import analyze_with_gemini
+# 💡 [추가] ask_followup_question 임포트
+from ai_analyzer import analyze_with_gemini, ask_followup_question
 from notion_exporter import upload_to_notion
 
 st.set_page_config(page_title="스팀 사용자 평가 탈곡기", page_icon="🚜", layout="wide")
@@ -20,29 +21,9 @@ def render_colored_text(text):
 
 st.markdown("""
     <style>
-        .fixed-banner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            background-color: #ff4b4b;
-            color: white;
-            text-align: center;
-            padding: 8px;
-            font-weight: bold;
-            z-index: 9999;
-        }
-        .main .block-container {
-            padding-top: 50px; 
-        }
-        .stats-card {
-            background-color: #1e2129;
-            color: #ffffff;
-            padding: 20px;
-            border-radius: 12px;
-            border-left: 5px solid #ff4b4b;
-            margin-bottom: 15px;
-        }
+        .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #ff4b4b; color: white; text-align: center; padding: 8px; font-weight: bold; z-index: 9999; }
+        .main .block-container { padding-top: 50px; }
+        .stats-card { background-color: #1e2129; color: #ffffff; padding: 20px; border-radius: 12px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -73,27 +54,39 @@ def render_step_indicator(current_step):
 
 def handle_api_error(e):
     error_str = str(e)
-    if "429" in error_str:
-        st.error("🚨 **[사용량 한계]**\n현재 AI 서버 호출량이 많습니다. 1분 정도 후에 다시 시도해 주세요.")
-    elif "JSON_DECODE_ERROR" in error_str:
-        st.error("🚨 **[분석 결과 오류]**\nAI가 분석 결과를 구성하는 중 문제가 발생했습니다. 재시도를 권장합니다.")
-    else:
-        st.error(f"🚨 시스템 에러: {error_str.replace(GEMINI_API_KEY, '********') if GEMINI_API_KEY else error_str}")
+    if "429" in error_str: st.error("🚨 **[사용량 한계]**\n현재 AI 서버 호출량이 많습니다. 1분 정도 후에 다시 시도해 주세요.")
+    elif "JSON_DECODE_ERROR" in error_str: st.error("🚨 **[분석 결과 오류]**\nAI가 분석 결과를 구성하는 중 문제가 발생했습니다. 재시도를 권장합니다.")
+    else: st.error(f"🚨 시스템 에러: {error_str.replace(GEMINI_API_KEY, '********') if GEMINI_API_KEY else error_str}")
 
 def main():
     if "history" not in st.session_state: st.session_state.history = []
     if "step" not in st.session_state:
         st.session_state.step = 0
-        st.session_state.update({"app_id": None, "game_name": None, "insights": None})
+        st.session_state.update({"app_id": None, "game_name": None, "insights": None, "qa_history": []})
 
     with st.sidebar:
         st.markdown(f"### 📍 환경: `{ENV_NAME}`")
         st.divider()
         st.markdown("### 📚 최근 분석 기록")
-        if not st.session_state.history: st.caption("기록된 이력이 없습니다.")
+        
+        # 💡 [핵심] 텍스트 대신 클릭 가능한 버튼으로 히스토리 렌더링
+        if not st.session_state.history: 
+            st.caption("기록된 이력이 없습니다.")
         else:
-            for h in reversed(st.session_state.history[-5:]):
-                st.markdown(f"- **{h['name']}**")
+            st.caption("👇 게임명을 클릭하면 과거 분석을 다시 볼 수 있습니다.")
+            for idx, h in enumerate(reversed(st.session_state.history[-5:])):
+                if st.button(f"🎮 {h['game_name']}", key=f"hist_btn_{idx}_{h['app_id']}", use_container_width=True):
+                    # 클릭 시 해당 히스토리 데이터로 세션 복원 및 검수 화면(step=1)으로 이동
+                    st.session_state.update({
+                        "app_id": h['app_id'], "game_name": h['game_name'], "rel_date_str": h['rel_date_str'], 
+                        "insights": h['insights'], "stats": h['stats'], "recent_label": h['recent_label'], 
+                        "news_data": h['news_data'], "smart_reason": h['smart_reason'], 
+                        "reviews_all": h['reviews_all'], "reviews_recent": h['reviews_recent'],
+                        "qa_history": h.get('qa_history', [])
+                    })
+                    st.session_state.step = 1
+                    st.rerun()
+                    
         st.divider()
         st.caption(f"Version: {APP_VERSION}")
         with st.expander("🛠️ 업데이트 이력"): st.markdown(UPDATE_HISTORY)
@@ -114,9 +107,6 @@ def main():
             st.subheader("🎮 Step 1. 분석 대상 입력")
             raw_input = st.text_input("스팀 URL 또는 App ID 입력", placeholder="https://store.steampowered.com/app/2215430/...", label_visibility="collapsed")
             
-            with st.expander("❓ 스팀 App ID 확인 방법"):
-                st.markdown("1. 스팀 상점 페이지 주소창 URL을 확인합니다.\n2. `/app/` 뒤에 오는 **숫자**가 해당 게임의 고유 ID입니다.")
-
             if st.button("🚀 데이터 분석 시작", use_container_width=True, type="primary"):
                 app_id = extract_id(raw_input)
                 if not app_id: st.warning("유효한 App ID 또는 주소를 입력해 주세요."); return
@@ -156,13 +146,24 @@ def main():
                             time.sleep(TICKER_INTERVAL)
                         
                         if res_box[1]: raise Exception(res_box[1])
+                        
                         st.session_state.update({
                             "app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), 
                             "insights": res_box[0], "stats": stats, "recent_label": rlabel, 
-                            "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r
+                            "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r,
+                            "qa_history": [] # 새 분석이므로 Q&A 초기화
                         })
-                        if not any(h['id'] == rid for h in st.session_state.history):
-                            st.session_state.history.append({"id": rid, "name": name})
+                        
+                        # 💡 [핵심] 히스토리에 모든 상태값 통째로 저장 (클릭 시 복원용)
+                        history_item = {
+                            "app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), 
+                            "insights": res_box[0], "stats": stats, "recent_label": rlabel, 
+                            "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r,
+                            "qa_history": []
+                        }
+                        # 중복 방지를 위해 기존 이력 있으면 제거 후 맨 뒤에 추가
+                        st.session_state.history = [h for h in st.session_state.history if h['app_id'] != rid]
+                        st.session_state.history.append(history_item)
 
                         ticker.empty(); info_txt.write("✅ 5/5: 분석 완료!"); p_bar.progress(100)
                         st.session_state.step = 1; status.update(label="✅ 분석 완료", state="complete"); st.rerun()
@@ -173,22 +174,18 @@ def main():
     elif st.session_state.step == 1:
         st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
         
-        st.warning("⚠️ **평점 지표 안내:** '스팀 공식 평점'은 스팀 상점을 통해 직접 라이선스를 획득한 유저의 평가만으로 계산된 결과이며, '전체 누적 평점'은 외부 키(Key) 및 무료 플레이어 등 모든 유저의 평가를 100% 포함하여 계산된 결과입니다.")
-        
         ins = st.session_state.insights
         stats = st.session_state.stats
         
-        tab1, tab2, tab3 = st.tabs(["📊 주요 요약", "⏱️ 플레이타임 분석", "🌐 상세 분석"])
+        # 💡 [추가] Q&A 탭 (tab4) 신설
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 주요 요약", "⏱️ 플레이타임 분석", "🌐 상세 분석", "🙋‍♀️ 추가 질문"])
+        
         with tab1:
             st.markdown(f'<div class="stats-card"><b>💬 AI 평가 요약:</b><br>{ins.get("critic_one_liner", "")}<br><br><span style="color:#888888; font-size:0.9em;">{st.session_state.rel_date_str} 스팀에 출시된 [{st.session_state.game_name}]에 대한 AI의 한줄평 입니다.</span></div>', unsafe_allow_html=True)
-            
             col1, col2, col3 = st.columns(3)
-            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'), help="스팀 상점을 통해 직접 라이선스를 획득한 유저만 반영된 점수입니다.")
-            with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개", help="외부 키(Key) 등록 및 무료 플레이어 등 모든 유저를 100% 포함한 실제 포괄적 민심입니다.")
-            
-            # 💡 [툴팁 추가] 최근 동향 지표에 타임스탬프 기반 정밀 추출 툴팁 반영
-            recent_help_text = f"{st.session_state.smart_reason}\n\n(※ 타임스탬프 컷오프를 적용하여, 해당 기간 내에 실제 작성된 리뷰 표본만을 정밀하게 추출해 집계합니다.)"
-            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개", help=recent_help_text)
+            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'))
+            with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
+            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
             
             st.info(f"💡 **분석 요약:** {ins.get('sentiment_analysis', '')}")
             st.markdown("---")
@@ -201,7 +198,7 @@ def main():
                 for line in ins.get('final_summary_recent', []): st.write(render_colored_text(line))
 
         with tab2:
-            st.markdown("### ⏱️ 플레이타임별 민심 교차 분석", help="전체 리뷰 표본을 플레이타임 순으로 정렬한 뒤, 중간값의 노이즈를 배제하기 위해 하위 25%를 '뉴비 여론', 상위 25%를 '코어 여론'으로 양극화하여 분석합니다.")
+            st.markdown("### ⏱️ 플레이타임별 민심 교차 분석")
             pt = ins.get('playtime_analysis', {})
             if pt:
                 if pt.get('comparison_insights'):
@@ -243,77 +240,119 @@ def main():
             
             st.divider()
             st.markdown("### 🌐 전 세계 언어별 여론 지표")
-            
             def apply_eval_color(val):
                 val_str = str(val)
                 if "긍정적" in val_str: return "color: #5c93fa"
                 elif "부정적" in val_str: return "color: #ff4b4b"
                 return "color: #888888"
-                
-            region_help = (
-                "각 권역별 포함 국가(언어) 안내\n"
-                "- 아시아: 한국어, 중국어, 일본어, 태국어, 베트남어, 인도네시아어\n"
-                "- 영미/유럽권: 영어, 프랑스어, 독일어, 스페인어, 폴란드어 등 유럽 주요 언어\n"
-                "- CIS: 러시아어, 우크라이나어\n"
-                "- 중남미: 스페인어(중남미), 포르투갈어(브라질)\n"
-                "- 중동/기타: 튀르키예어, 아랍어 등"
-            )
-            st.markdown("##### 🗺️ 주요 권역별 누적 리뷰 비중", help=region_help)
+
             df_cols_region = ["순위", "권역", "리뷰 수", "비중", "👍 긍정 비율", "👎 부정 비율", "📊 평가 결과"]
             df_region = pd.DataFrame([[r['rank'], r['region'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_region']], columns=df_cols_region)
             try: styled_region = df_region.style.map(apply_eval_color, subset=["📊 평가 결과"])
             except AttributeError: styled_region = df_region.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+            
+            st.markdown("##### 🗺️ 주요 권역별 누적 리뷰 비중")
             st.dataframe(styled_region, hide_index=True, use_container_width=True)
 
-            st.markdown("##### 🥇 언어별 누적 리뷰 비중 TOP 10")
             df_cols = ["순위", "언어", "리뷰 수", "비중", "👍 긍정 비율", "👎 부정 비율", "📊 평가 결과"]
             df_all = pd.DataFrame([[r['rank'], r['lang'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_all']], columns=df_cols)
             df_30 = pd.DataFrame([[r['rank'], r['lang'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_30']], columns=df_cols)
 
-            df_all_top10 = df_all.head(10)
-            df_30_top10 = df_30.head(10)
-
             try:
-                styled_all_top10 = df_all_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
+                styled_all_top10 = df_all.head(10).style.map(apply_eval_color, subset=["📊 평가 결과"])
                 styled_all_full = df_all.style.map(apply_eval_color, subset=["📊 평가 결과"])
-                styled_30_top10 = df_30_top10.style.map(apply_eval_color, subset=["📊 평가 결과"])
+                styled_30_top10 = df_30.head(10).style.map(apply_eval_color, subset=["📊 평가 결과"])
                 styled_30_full = df_30.style.map(apply_eval_color, subset=["📊 평가 결과"])
             except AttributeError:
-                styled_all_top10 = df_all_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+                styled_all_top10 = df_all.head(10).style.applymap(apply_eval_color, subset=["📊 평가 결과"])
                 styled_all_full = df_all.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
-                styled_30_top10 = df_30_top10.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
+                styled_30_top10 = df_30.head(10).style.applymap(apply_eval_color, subset=["📊 평가 결과"])
                 styled_30_full = df_30.style.applymap(apply_eval_color, subset=["📊 평가 결과"])
 
+            st.markdown("##### 🥇 언어별 누적 리뷰 비중 TOP 10")
             st.dataframe(styled_all_top10, hide_index=True, use_container_width=True)
-            
             with st.expander("👀 전 세계 누적 리뷰 언어별 비중 (전체 보기)"):
                 st.dataframe(styled_all_full, hide_index=True, use_container_width=True)
                 
-            # 💡 [툴팁 추가] 최근 30일 언어별 비중 제목에 집계 기준 설명 툴팁 반영
-            st.markdown("##### 🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10", help="집계일 기준 최근 30일 이내에 실제 작성된 리뷰 표본만을 타임스탬프 컷오프로 정밀하게 추출하여 산출한 데이터입니다.")
+            st.markdown("##### 🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10")
             if stats['days_since_release'] < 30:
-                st.info("ℹ️ 출시일로부터 30일 이후부터 지원하는 표입니다. (현재 데이터 부족)")
+                st.info("ℹ️ 출시일로부터 30일 이후부터 지원하는 표입니다.")
             else:
                 st.dataframe(styled_30_top10, hide_index=True, use_container_width=True)
                 with st.expander("👀 최근 30일 누적 리뷰 언어별 비중 (전체보기)"):
                     st.dataframe(styled_30_full, hide_index=True, use_container_width=True)
 
+        # 💡 [핵심] Tab4: 추가 질문(Q&A) 영역 구현
+        with tab4:
+            st.markdown("### 🙋‍♀️ AI에게 추가 질문하기")
+            st.caption("현재 작성된 분석 리포트를 기반으로 궁금한 점을 물어보세요. 마음에 드는 답변은 리포트에 박제할 수 있습니다!")
+            
+            qa_list = st.session_state.get("qa_history", [])
+            
+            # 이미 리포트에 추가된(확정된) 질문들 표시
+            if qa_list:
+                for idx, qa in enumerate(qa_list):
+                    st.markdown(f"**Q. {qa['q']}**")
+                    st.info(f"**A.** {qa['a']}")
+                st.divider()
+
+            # 새로운 질문 입력 로직
+            if "current_q" not in st.session_state: st.session_state.current_q = ""
+            if "current_a" not in st.session_state: st.session_state.current_a = ""
+
+            q_input = st.text_input("질문을 입력하세요:", placeholder="예: 그래픽이나 최적화에 대한 부정적인 의견이 많아?")
+            
+            if st.button("💬 질문하기", type="primary"):
+                if q_input:
+                    with st.spinner("AI가 리포트 데이터를 기반으로 답변을 생성 중입니다..."):
+                        ans, err = ask_followup_question(st.session_state.game_name, st.session_state.stats, st.session_state.insights, q_input)
+                        if err: 
+                            st.error(f"오류 발생: {err}")
+                        else:
+                            st.session_state.current_q = q_input
+                            st.session_state.current_a = ans
+                            st.rerun()
+
+            # AI가 대답을 한 경우, '리포트 추가' 컨펌 버튼 노출
+            if st.session_state.current_a:
+                st.markdown("---")
+                st.markdown(f"**나의 질문:** {st.session_state.current_q}")
+                st.success(f"**🤖 AI 답변:**\n\n{st.session_state.current_a}")
+                
+                if st.button("✅ 이 답변을 리포트에 추가하기"):
+                    # 현재 Q&A 리스트에 추가
+                    new_qa = {"q": st.session_state.current_q, "a": st.session_state.current_a}
+                    st.session_state.qa_history.append(new_qa)
+                    
+                    # 히스토리 배열에 있는 원본 데이터에도 동기화 (나중에 복원할 때 불러오기 위함)
+                    for h in st.session_state.history:
+                        if h['app_id'] == st.session_state.app_id:
+                            h['qa_history'] = st.session_state.qa_history
+                            
+                    # 입력 폼 초기화
+                    st.session_state.current_q = ""
+                    st.session_state.current_a = ""
+                    st.rerun()
+
         st.divider()
         with st.container(border=True):
             st.markdown("### 📝 최종 검수 및 노션 전송")
-            feedback = st.text_area("수정 요청 사항 (선택)", placeholder="특정 지표 강조나 리포트 보완 사항이 있다면 입력해 주세요.", label_visibility="collapsed")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔄 피드백 반영 재분석", use_container_width=True):
-                    with st.status("분석 업데이트 중..."):
-                        res, err = analyze_with_gemini(st.session_state.game_name, st.session_state.reviews_all, st.session_state.reviews_recent, st.session_state.stats, st.session_state.recent_label, st.session_state.news_data, feedback)
-                        if err: handle_api_error(err); return
-                        st.session_state.insights = res; st.rerun()
+                st.caption("AI 분석 데이터를 바탕으로 노션(Notion)에 최종 리포트를 발행합니다.")
             with col2:
                 if st.button("📤 노션 리포트 최종 발행", type="primary", use_container_width=True):
                     with st.status("노션 페이지 생성 중..."):
-                        pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, st.session_state.stats, ins, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data)
-                        st.session_state.page_id = pid; st.session_state.step = 2; st.rerun()
+                        # 💡 노션 발행 시 qa_history 파라미터 추가 전달
+                        pid = upload_to_notion(
+                            st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, 
+                            st.session_state.stats, ins, st.session_state.recent_label, 
+                            st.session_state.smart_reason, st.session_state.news_data,
+                            st.session_state.get("qa_history", [])
+                        )
+                        st.session_state.page_id = pid
+                        st.session_state.step = 2
+                        st.rerun()
 
     elif st.session_state.step == 2:
         st.balloons()
