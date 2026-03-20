@@ -57,3 +57,36 @@ def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_st
         if GEMINI_API_KEY and GEMINI_API_KEY in error_msg:
             error_msg = error_msg.replace(GEMINI_API_KEY, "********")
         return None, error_msg
+
+def ask_followup_question(game_name, store_stats, insights, question):
+    from config import GEMINI_API_KEY
+    import json
+    import requests
+    
+    prompt = f"""
+    넌 글로벌 게임 사업 PM이야. '{game_name}'에 대해 이미 작성된 분석 리포트와 데이터를 바탕으로, 팀원의 추가 질문에 빠르고 객관적으로 답변해줘.
+    
+    [팀원 질문]: {question}
+    
+    [참고 데이터 - 초기 분석 결과]:
+    {json.dumps(insights, ensure_ascii=False)}
+    
+    답변 작성 규칙:
+    1. 팩트 기반으로 3~4문장 이내로 핵심만 대답할 것.
+    2. 제공된 데이터 내에서 유추할 수 없는 내용은 "제공된 데이터에서는 확인이 어렵습니다"라고 할 것.
+    3. 노션에 텍스트로 들어갈 예정이므로 마크다운 볼드체 등 특수기호는 가급적 사용하지 말 것.
+    """
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}], 
+        "generationConfig": {"temperature": 0.2}
+    }
+    
+    try:
+        res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+        res.raise_for_status()
+        raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        return raw_text, None
+    except Exception as e:
+        return None, str(e)
