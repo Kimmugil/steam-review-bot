@@ -206,12 +206,38 @@ def get_country_analysis_block(ai_data):
             blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "👀 실제 유저 평가 원문 보기"}, "annotations": {"color": "gray"}}], "children": [{"object": "block", "type": "quote", "quote": {"rich_text": [{"text": {"content": cat.get('quote', '')}, "annotations": {"color": "gray"}}]}}]}})
     return blocks
 
-def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, recent_label, smart_reason, news_data):
+# 💡 [새로 추가된 함수] Q&A 히스토리를 노션 블록으로 변환
+def get_qa_block(qa_history):
+    if not qa_history:
+        return []
+    
+    blocks = [
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🙋‍♀️ 추가 문의사항에 대한 답변"}}]}}
+    ]
+    
+    for qa in qa_history:
+        blocks.append({
+            "object": "block", "type": "paragraph", "paragraph": {
+                "rich_text": [{"text": {"content": f"Q. {qa['q']}"}, "annotations": {"bold": True, "color": "blue"}}]
+            }
+        })
+        blocks.append({
+            "object": "block", "type": "paragraph", "paragraph": {
+                "rich_text": [{"text": {"content": f"A. {qa['a']}"}}]
+            }
+        })
+        
+    blocks.append({"object": "block", "type": "divider", "divider": {}})
+    return blocks
+
+# 💡 [핵심 수정] qa_history 파라미터 추가
+def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, recent_label, smart_reason, news_data, qa_history):
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Content-Type": "application/json", "Notion-Version": "2022-06-28"}
     kst = timezone(timedelta(hours=9))
     now_kst = datetime.now(kst)
     iso_timestamp = now_kst.strftime('%Y-%m-%dT%H:%M:%S+09:00')
     page_title = f"{game_name} 평가 요약"
+    
     create_data = {
         "parent": {"database_id": NOTION_DATABASE_ID}, 
         "properties": {
@@ -220,6 +246,7 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
             "탈곡기 버전": {"rich_text": [{"text": {"content": APP_VERSION}}]}
         }
     }
+    
     try:
         res = requests.post("https://api.notion.com/v1/pages", headers=headers, data=json.dumps(create_data))
         res.raise_for_status()
@@ -241,10 +268,13 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
         elif section == "language_ratio": children_blocks.extend(get_language_ratio_block(store_stats))
         elif section == "country_analysis": children_blocks.extend(get_country_analysis_block(ai_data))
         
+    # 💡 [핵심 추가] Q&A 히스토리가 있으면 제일 마지막에 블록 이어 붙이기
+    if qa_history:
+        children_blocks.extend(get_qa_block(qa_history))
+        
     append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
     
-    # 💡 [핵심 픽스] 노션 API의 '3단계 깊이 중첩(Nesting) 제한' 우회 로직
-    # 토글(1) -> 표(2) -> 행(3) 은 한 번에 추가 불가. 표를 밖으로 빼서 토글 ID 발급 후 개별 주입!
+    # 💡 노션 API의 '3단계 깊이 중첩(Nesting) 제한' 에러 우회 분할 전송 로직 유지!
     for i in range(0, len(children_blocks), 100):
         chunk = children_blocks[i:i+100]
         deferred_tables = []
@@ -253,7 +283,6 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
             if block.get("type") == "toggle" and "children" in block["toggle"]:
                 clean_children = []
                 for child in block["toggle"]["children"]:
-                    # 표(Table) 발견 시 토글에서 분리하여 임시 보관
                     if child.get("type") == "table":
                         deferred_tables.append((idx, child))
                     else:
@@ -262,16 +291,13 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
                 if clean_children:
                     block["toggle"]["children"] = clean_children
                 else:
-                    # 빈 토글 껍데기만 노션에 먼저 전송
                     del block["toggle"]["children"]
 
         try:
-            # 1. 100개 블록(빈 토글 포함) 1차 배치 전송
             patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": chunk}))
             patch_res.raise_for_status() 
             created_blocks = patch_res.json().get('results', [])
             
-            # 2. 미리 빼두었던 표(Table)를 생성된 토글의 ID를 찾아 2차로 밀어넣기
             for idx, table_block in deferred_tables:
                 if idx < len(created_blocks):
                     toggle_id = created_blocks[idx]['id']
