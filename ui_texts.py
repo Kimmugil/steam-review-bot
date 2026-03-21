@@ -81,7 +81,9 @@ TEXTS = {
     "newbie_title_default": "🌱 뉴비 (하위 25%)",
     "normal_title_default": "🚶 일반 (중위 50%)",
     "core_title_default": "💀 코어 (상위 25%)",
-    "sample_opinion": "표본: {}개 | 여론: {}",
+    
+    # 💡 [핵심] 평균 플탐이 명확하게 표시되도록 변경!
+    "sample_opinion": "표본: {:,}개 | 평균 플탐: {}시간 | 여론: {}",
 
     "region_title": "### 🗺️ 권역별 세부 평가 분석",
     "divergence_insight": "권역별 주요 체크포인트\n\n{}",
