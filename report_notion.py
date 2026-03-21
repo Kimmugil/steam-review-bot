@@ -47,7 +47,7 @@ def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
     ]
     return blocks
 
-def get_global_summary_block(ai_data, recent_label, smart_reason):
+def get_global_summary_block(ai_data, recent_label, smart_reason, collection_period):
     blocks = [
         {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_summary_title']}}]}},
         {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['notion_summary_all']}, "annotations": {"bold": True}}]}}
@@ -55,7 +55,8 @@ def get_global_summary_block(ai_data, recent_label, smart_reason):
     for line in sort_sentiments(ai_data.get('final_summary_all', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['notion_summary_recent'].format(recent_label)}, "annotations": {"bold": True}}]}})
-    blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period'].format(smart_reason)}, "annotations": {"color": "gray"}}]}})
+    # 💡 [업데이트] 노션에도 정확한 기간 명시!
+    blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period_info'].format(collection_period, smart_reason)}, "annotations": {"color": "gray"}}]}})
     
     for line in sort_sentiments(ai_data.get('final_summary_recent', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
@@ -73,7 +74,7 @@ def get_playtime_analysis_block(ai_data, stats):
     comparison_insights = playtime_data.get('comparison_insights', [])
     if comparison_insights:
         list_items = [{"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}} for line in comparison_insights if isinstance(line, str) and line.strip()]
-        blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚖️"}, "color": "yellow_background", "rich_text": [{"text": {"content": "핵심 교차 인사이트"}, "annotations": {"bold": True}}], "children": list_items}})
+        blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚖️"}, "color": "yellow_background", "rich_text": [{"text": {"content": ui.TEXTS['notion_insight_core']}, "annotations": {"bold": True}}], "children": list_items}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('newbie_title', ui.TEXTS['newbie_title_default'])}, "annotations": {"color": "green", "bold": True}}]}})
     for line in sort_sentiments(playtime_data.get('newbie_summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
@@ -117,14 +118,14 @@ def get_country_analysis_block(ai_data):
         {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['country_analysis_desc']}, "annotations": {"color": "gray"}}]}}
     ]
     for country in ai_data.get('country_analysis', []):
-        blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"🚩 {country.get('country', '')}"}}]}})
+        blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['country_flag'].format(country.get('country', '')).replace("**", "")}}]}})
         for cat in country.get('categories', []):
             for line in sort_sentiments(cat.get('summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
             quote = cat.get('quote', {})
             if quote and quote.get('original'):
-                quote_children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"원문: {quote.get('original')}"}}]}}]
-                if quote.get('korean'): quote_children.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"번역: {quote.get('korean')}"}}]}})
-                blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['toggle_quote'].replace("👀 ", "")}, "annotations": {"color": "gray"}}], "children": quote_children}})
+                quote_children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['notion_quote_orig'].format(quote.get('original'))}}]}}]
+                if quote.get('korean'): quote_children.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['notion_quote_ko'].format(quote.get('korean'))}}]}})
+                blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_quote']}, "annotations": {"color": "gray"}}], "children": quote_children}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
@@ -140,7 +141,7 @@ def _create_notion_table(table_data_list, limit=None, is_region=False):
     return {"object": "block", "type": "table", "table": {"table_width": 7, "has_column_header": True, "children": rows}}
 
 def get_language_ratio_block(store_stats, smart_reason):
-    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_table_global_title']}}]}}]
+    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_table_global_title'].replace("### ", "")}}]}}]
     blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚠️"}, "color": "yellow_background", "rich_text": [{"text": {"content": ui.TEXTS['disclaimer_language'].replace("💡 ", "").replace("**", "")}}]}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['table_region_title'].replace("##### ", "")}}]}})
@@ -154,7 +155,7 @@ def get_language_ratio_block(store_stats, smart_reason):
     if store_stats['days_since_release'] < 30:
         blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['info_30_days']}, "annotations": {"color": "gray"}}]}})
     else:
-        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period_table'].format(smart_reason)}, "annotations": {"color": "gray"}}]}})
+        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period_info'].format(store_stats.get('collection_period', ''), smart_reason)}, "annotations": {"color": "gray"}}]}})
         blocks.append(_create_notion_table(store_stats['table_data_30'], limit=10))
         blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['toggle_30_table'].replace("👀 ", "")}}], "children": [_create_notion_table(store_stats['table_data_30'])]}})
         
@@ -195,7 +196,7 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
     children_blocks.extend(get_bot_info_block())
     children_blocks.extend(get_ai_one_liner_block(ai_data, game_name, release_date))
     children_blocks.extend(get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data))
-    children_blocks.extend(get_global_summary_block(ai_data, recent_label, smart_reason))
+    children_blocks.extend(get_global_summary_block(ai_data, recent_label, smart_reason, store_stats.get('collection_period', '')))
     children_blocks.extend(get_playtime_analysis_block(ai_data, store_stats))
     children_blocks.extend(get_region_analysis_block(ai_data))
     children_blocks.extend(get_country_analysis_block(ai_data))
