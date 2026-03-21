@@ -56,16 +56,27 @@ def fetch_latest_news(app_id):
     try:
         res = requests.get(sanitize_url(f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json"), timeout=5)
         news_items = res.json().get('appnews', {}).get('newsitems', [])
-        if not news_items: return None, None, None, None
+        if not news_items: return None, None, None, None, None
+        
         def parse_item(item):
             date_str = datetime.fromtimestamp(item.get('date', 0)).strftime('%Y-%m-%d')
-            return item['title'], item.get('contents', ''), item['url'], date_str
+            contents = item.get('contents', '')
+            
+            # 💡 [업데이트] 정규식으로 HTML 및 BBCode 내에서 첫 번째 이미지 URL 추출
+            img_url = None
+            img_match_html = re.search(r'<img[^>]+src=["\'](http[^"\']+)["\']', contents, re.IGNORECASE)
+            img_match_bb = re.search(r'\[img\](http.*?)\[/img\]', contents, re.IGNORECASE)
+            
+            if img_match_html: img_url = img_match_html.group(1)
+            elif img_match_bb: img_url = img_match_bb.group(1)
+            
+            return item['title'], contents, item['url'], date_str, img_url
+
         for item in news_items:
             if any(kw in item.get('title', '').lower() for kw in ['update', 'patch', '패치', '업데이트']): return parse_item(item)
         return parse_item(news_items[0])
-    except: return None, None, None, None
+    except: return None, None, None, None, None
 
-# 💡 [핵심 반영] 정확한 날짜 계산 로직 추가
 def get_smart_period(release_date):
     now = datetime.now()
     days_since = (now - release_date).days
@@ -115,7 +126,6 @@ def _fetch_single_lang_stats(app_id, lang):
         return lang, res_all
     except: return lang, {}
 
-# 💡 period_str을 파라미터로 받아서 stats 딕셔너리에 저장
 def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
     lang_stats_all_dict = {}
     sum_total, sum_pos = 0, 0
@@ -231,6 +241,6 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
         "newbie_avg": n_avg, "newbie_total": n_tot, "newbie_desc": n_desc,
         "norm_avg": norm_avg, "norm_total": norm_tot, "norm_desc": norm_desc,
         "core_avg": c_avg, "core_total": c_tot, "core_desc": c_desc,
-        "collection_period": period_str  # 💡 계산된 기간 문자열을 stats에 포함!
+        "collection_period": period_str 
     }
     return filtered_all, filtered_recent, store_stats
