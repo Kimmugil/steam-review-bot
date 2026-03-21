@@ -13,7 +13,7 @@ from report_notion import upload_to_notion
 
 st.set_page_config(page_title=ui.TEXTS["main_title"], page_icon="🚜", layout="wide")
 
-# 💡 [업데이트] 탭 영역이 상단에 고정되도록 CSS(Sticky) 완벽 적용!
+# 💡 [업데이트] 상단 고정 탭(Sticky) 완벽 작동 CSS!
 st.markdown("""
     <style>
         .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #F04452; color: white; text-align: center; padding: 8px; font-weight: bold; z-index: 9999; }
@@ -24,14 +24,16 @@ st.markdown("""
         button[kind="primary"]:hover { background-color: #E5AC00 !important; }
         .small-history { font-size: 0.85rem; line-height: 1.5; }
         
-        /* 🔥 스트림릿 탭 메뉴 상단 고정 매직 CSS */
-        [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        /* 🔥 스트림릿 탭 메뉴 상단 고정 (스크롤 시 착 붙음) */
+        div[data-testid="stTabs"] > div:first-of-type {
+            position: -webkit-sticky;
             position: sticky;
-            top: 45px;
+            top: 40px; 
             z-index: 990;
             background-color: var(--background-color);
             padding-top: 10px;
             padding-bottom: 5px;
+            border-bottom: 1px solid rgba(128,128,128,0.2);
         }
     </style>
 """, unsafe_allow_html=True)
