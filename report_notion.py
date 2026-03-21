@@ -5,6 +5,12 @@ from datetime import datetime, timedelta, timezone
 from config import NOTION_TOKEN, NOTION_DATABASE_ID, APP_VERSION
 import ui_texts as ui 
 
+# 💡 [업데이트] 카테고리 정렬 키 생성
+def get_cat_sort_key(cat_name):
+    if "[긍정" in cat_name: return 0
+    elif "[부정" in cat_name: return 1
+    return 2
+
 def sort_sentiments(lines):
     if not isinstance(lines, list): return []
     def get_sort_key(line):
@@ -18,8 +24,9 @@ def format_sentiment_line(line):
     elif line.startswith("[부정]"): return [{"text": {"content": "[부정] "}, "annotations": {"color": "red", "bold": True}}, {"text": {"content": line[4:].strip()}}]
     return [{"text": {"content": line}}]
 
+# 💡 [업데이트] 노션의 모든 Toggle 블록을 강제 회색 배경(gray_background)으로 변경
 def get_bot_info_block():
-    return [{"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['bot_info_title'], "link": None}, "annotations": {"color": "gray"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['bot_info_desc']}}]}}]}}]
+    return [{"object": "block", "type": "toggle", "toggle": {"color": "gray_background", "rich_text": [{"text": {"content": ui.TEXTS['bot_info_title'], "link": None}, "annotations": {"color": "default"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['bot_info_desc']}}]}}]}}]
 
 def get_ai_one_liner_block(ai_data, game_name, release_date):
     return [
@@ -32,7 +39,7 @@ def get_ai_one_liner_block(ai_data, game_name, release_date):
 def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
     blocks = [
         {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_metric_title']}}]}}, 
-        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_guide']}, "annotations": {"color": "gray"}}], "children": [
+        {"object": "block", "type": "toggle", "toggle": {"color": "gray_background", "rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_guide']}, "annotations": {"color": "default"}}], "children": [
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": f"스팀 공식 평점: {ui.TEXTS['tooltip_official']}"}}]}},
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": f"전체 누적 평점: {ui.TEXTS['tooltip_all']}"}}]}},
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": f"최근 동향: {smart_reason}"}}]}}
@@ -42,7 +49,7 @@ def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
             {"text": {"content": f"📈 전체 누적 평가: {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)\n"}},
             {"text": {"content": f"🔥 {recent_label}: {store_stats['recent_desc']} (분석 표본 {store_stats['recent_total']:,}개)"}, "annotations": {"bold": True, "color": "red"}}
         ]}},
-        {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "💡"}, "color": "blue_background", "rich_text": [{"text": {"content": ai_data.get('sentiment_analysis', '')}}]}},
+        {"object": "block", "type": "toggle", "toggle": {"color": "gray_background", "rich_text": [{"text": {"content": "👀 요약 브리핑 상세 보기"}}], "children": [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ai_data.get('sentiment_analysis', '')}}]}}]}},
         {"object": "block", "type": "divider", "divider": {}}
     ]
     return blocks
@@ -55,7 +62,7 @@ def get_global_summary_block(ai_data, recent_label, smart_reason, collection_per
     for line in sort_sentiments(ai_data.get('final_summary_all', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['notion_summary_recent'].format(recent_label)}, "annotations": {"bold": True}}]}})
-    blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period_info'].format(collection_period, smart_reason)}, "annotations": {"color": "gray"}}]}})
+    blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period_info'].format(collection_period, smart_reason).replace("  \n", " ")}, "annotations": {"color": "gray"}}]}})
     
     for line in sort_sentiments(ai_data.get('final_summary_recent', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
@@ -64,7 +71,10 @@ def get_global_summary_block(ai_data, recent_label, smart_reason, collection_per
 def get_category_summary_block(ai_data):
     if not ai_data.get('global_category_summary'): return []
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_category_summary_title'].replace("### ", "")}}]}}]
-    for cat in ai_data.get('global_category_summary', []):
+    
+    cats_sorted = sorted(ai_data.get('global_category_summary', []), key=lambda x: get_cat_sort_key(x.get('category', '')))
+    
+    for cat in cats_sorted:
         cat_name = cat.get('category', '')
         color = "blue" if "[긍정" in cat_name else ("red" if "[부정" in cat_name else "default")
         blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": cat_name}, "annotations": {"color": color}}]}})
@@ -73,27 +83,37 @@ def get_category_summary_block(ai_data):
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
-def get_ai_issue_pick_block(ai_data, smart_reason):
-    if not ai_data.get('ai_issue_pick'): return []
+def get_news_summary_block(news_data, ai_data):
+    if not news_data or not news_data[0]: return []
+    news_title, _, news_url, news_date = news_data[:4]
+    
     blocks = [
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_issue_pick_title'].replace("### ", "")}}]}},
-        # 💡 [업데이트] 이슈 픽 추출 기준(기간) 노션에도 추가 명시!
-        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS["issue_pick_desc"].format(smart_reason)}, "annotations": {"color": "gray"}}]}}
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_news_title'].replace("### ", "")}}]}}
     ]
-    for issue in ai_data.get('ai_issue_pick', []): 
-        blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": issue}}]}})
+    
+    # 이미지 렌더링 로직 (노션은 embed 블록 사용)
+    if len(news_data) > 4 and news_data[4]:
+        blocks.append({"object": "block", "type": "image", "image": {"type": "external", "external": {"url": news_data[4]}}})
+        
+    blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🔗"}, "color": "gray_background", "rich_text": [{"text": {"content": f"[{news_date}] ", "link": None}, "annotations": {"bold": True, "color": "gray"}}, {"text": {"content": news_title, "link": {"url": news_url}}, "annotations": {"bold": True, "underline": True}}]}})
+    
+    for line in ai_data.get('news_summary', []): 
+        blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
-def get_news_summary_block(news_data, ai_data):
-    if not news_data or not news_data[0]: return []
-    news_title, _, news_url, news_date = news_data
+def get_ai_issue_pick_block(ai_data, smart_reason):
     blocks = [
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_news_title'].replace("### ", "")}}]}}, 
-        {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🔗"}, "color": "gray_background", "rich_text": [{"text": {"content": f"[{news_date}] ", "link": None}, "annotations": {"bold": True, "color": "gray"}}, {"text": {"content": news_title, "link": {"url": news_url}}, "annotations": {"bold": True, "underline": True}}]}}
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_issue_pick_title'].replace("### ", "")}}]}},
+        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS["issue_pick_desc"].format(smart_reason)}, "annotations": {"color": "gray"}}]}}
     ]
-    for line in ai_data.get('news_summary', []): 
-        blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
+    issues = ai_data.get('ai_issue_pick', [])
+    if issues:
+        for issue in issues: 
+            blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": issue}}]}})
+    else:
+        blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "ℹ️"}, "color": "gray_background", "rich_text": [{"text": {"content": ui.TEXTS["no_issue_pick"]}}]}})
+        
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
@@ -102,7 +122,7 @@ def get_playtime_analysis_block(ai_data, stats):
     if not playtime_data: return []
     blocks = [
         {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_playtime_title']}}]}},
-        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_playtime']}, "annotations": {"color": "gray"}}], "children": [
+        {"object": "block", "type": "toggle", "toggle": {"color": "gray_background", "rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_playtime']}, "annotations": {"color": "default"}}], "children": [
             {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['tooltip_playtime']}}]}}
         ]}}
     ]
@@ -131,7 +151,7 @@ def get_region_analysis_block(ai_data):
     if not reg_data: return []
     blocks = [
         {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_region_title']}}]}},
-        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_region']}, "annotations": {"color": "gray"}}], "children": [
+        {"object": "block", "type": "toggle", "toggle": {"color": "gray_background", "rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_region']}, "annotations": {"color": "default"}}], "children": [
             {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['tooltip_region']}}]}}
         ]}}
     ]
@@ -142,7 +162,9 @@ def get_region_analysis_block(ai_data):
     for reg in reg_data.get('regions', []):
         blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['region_expander'].format(reg.get('region'), reg.get('trend'))}}]}})
         blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['keyword_label'].format(', '.join(reg.get('keywords', [])))}, "annotations": {"color": "gray"}}]}})
-        for cat in reg.get('categories', []):
+        
+        r_cats_sorted = sorted(reg.get('categories', []), key=lambda x: get_cat_sort_key(x.get('name', '')))
+        for cat in r_cats_sorted:
             cat_name = cat.get('name', '')
             if cat_name:
                 color = "blue" if "[긍정" in cat_name else ("red" if "[부정" in cat_name else "default")
@@ -160,7 +182,9 @@ def get_country_analysis_block(ai_data):
     ]
     for country in ai_data.get('country_analysis', []):
         blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['country_flag'].format(country.get('country', '')).replace("**", "")}}]}})
-        for cat in country.get('categories', []):
+        
+        c_cats_sorted = sorted(country.get('categories', []), key=lambda x: get_cat_sort_key(x.get('name', '')))
+        for cat in c_cats_sorted:
             cat_name = cat.get('name', '')
             if cat_name:
                 color = "blue" if "[긍정" in cat_name else ("red" if "[부정" in cat_name else "default")
@@ -171,7 +195,7 @@ def get_country_analysis_block(ai_data):
             if quote and quote.get('original'):
                 quote_children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['notion_quote_orig'].format(quote.get('original'))}}]}}]
                 if quote.get('korean'): quote_children.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['notion_quote_ko'].format(quote.get('korean'))}}]}})
-                blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_quote']}, "annotations": {"color": "gray"}}], "children": quote_children}})
+                blocks.append({"object": "block", "type": "toggle", "toggle": {"color": "gray_background", "rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_quote']}, "annotations": {"color": "default"}}], "children": quote_children}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
@@ -188,22 +212,22 @@ def _create_notion_table(table_data_list, limit=None, is_region=False):
 
 def get_language_ratio_block(store_stats, smart_reason):
     blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_table_global_title'].replace("### ", "")}}]}}]
-    blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚠️"}, "color": "yellow_background", "rich_text": [{"text": {"content": ui.TEXTS['disclaimer_language'].replace("💡 ", "").replace("**", "")}}]}})
+    blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚠️"}, "color": "gray_background", "rich_text": [{"text": {"content": ui.TEXTS['disclaimer_language'].replace("💡 ", "").replace("**", "")}}]}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['table_region_title'].replace("##### ", "")}}]}})
     blocks.append(_create_notion_table(store_stats['table_data_region'], is_region=True))
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['table_all_title'].replace("##### ", "")}}]}})
     blocks.append(_create_notion_table(store_stats['table_data_all'], limit=10))
-    blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['toggle_all_table'].replace("👀 ", "")}}], "children": [_create_notion_table(store_stats['table_data_all'])]}})
+    blocks.append({"object": "block", "type": "toggle", "toggle": {"color": "gray_background", "rich_text": [{"text": {"content": ui.TEXTS['toggle_all_table'].replace("👀 ", "")}}], "children": [_create_notion_table(store_stats['table_data_all'])]}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['table_30_title'].replace("##### ", "")}}]}})
     if store_stats['days_since_release'] < 30:
         blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['info_30_days']}, "annotations": {"color": "gray"}}]}})
     else:
-        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period_info'].format(store_stats.get('collection_period', ''), smart_reason)}, "annotations": {"color": "gray"}}]}})
+        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period_info'].format(store_stats.get('collection_period', ''), smart_reason).replace("  \n", " ")}, "annotations": {"color": "gray"}}]}})
         blocks.append(_create_notion_table(store_stats['table_data_30'], limit=10))
-        blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['toggle_30_table'].replace("👀 ", "")}}], "children": [_create_notion_table(store_stats['table_data_30'])]}})
+        blocks.append({"object": "block", "type": "toggle", "toggle": {"color": "gray_background", "rich_text": [{"text": {"content": ui.TEXTS['toggle_30_table'].replace("👀 ", "")}}], "children": [_create_notion_table(store_stats['table_data_30'])]}})
         
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
@@ -239,15 +263,15 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
     page_id = res.json()['id']
     children_blocks = []
     
-    # 💡 [업데이트] 노션 전송 순서 완벽 재배치! (스트림릿과 100% 동일한 순서)
+    # 💡 [업데이트] 노션 전송 순서도 스트림릿과 100% 동일하게 재배치
     children_blocks.extend(get_bot_info_block())
     children_blocks.extend(get_ai_one_liner_block(ai_data, game_name, release_date))
     children_blocks.extend(get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data))
     children_blocks.extend(get_global_summary_block(ai_data, recent_label, smart_reason, store_stats.get('collection_period', '')))
-    children_blocks.extend(get_category_summary_block(ai_data)) # 요약 밑으로 이동
+    children_blocks.extend(get_category_summary_block(ai_data))
     
-    children_blocks.extend(get_ai_issue_pick_block(ai_data, smart_reason)) # 새로운 그룹 시작
-    children_blocks.extend(get_news_summary_block(news_data, ai_data))
+    children_blocks.extend(get_news_summary_block(news_data, ai_data)) # 뉴스 먼저
+    children_blocks.extend(get_ai_issue_pick_block(ai_data, smart_reason)) # 이슈 픽
     
     children_blocks.extend(get_playtime_analysis_block(ai_data, store_stats))
     children_blocks.extend(get_region_analysis_block(ai_data))
