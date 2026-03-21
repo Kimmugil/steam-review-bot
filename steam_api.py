@@ -35,20 +35,22 @@ def fetch_store_official_rating(app_id):
 
 def get_steam_game_info(game_input):
     app_id = str(game_input).strip()
-    if not app_id.isdigit(): return None, None, None
+    if not app_id.isdigit(): return None, None, None, None
     try:
         res = requests.get(sanitize_url(f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean"), timeout=10)
         data = res.json()
-        if not data or app_id not in data or not data[app_id]['success']: return None, None, None
+        if not data or app_id not in data or not data[app_id]['success']: return None, None, None, None
         game_data = data[app_id]['data']
         exact_name = game_data['name'].encode('utf-8', 'ignore').decode('utf-8')
+        # 💡 [업데이트 14번] 스팀 API에서 제공하는 공식 헤더 이미지 URL 추출
+        header_image = game_data.get('header_image', '')
         try: 
             raw_date = game_data['release_date']['date']
             clean_date = re.sub(r'[^\d\s-]', '', raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", ""))
             release_date = datetime.strptime(clean_date.strip(), "%Y-%m-%d")
         except: release_date = datetime(2020, 1, 1)
-        return app_id, exact_name, release_date
-    except: return None, None, None
+        return app_id, exact_name, release_date, header_image
+    except: return None, None, None, None
 
 def fetch_latest_news(app_id):
     try:
@@ -152,7 +154,6 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
         lang_stats_30_dict = {k: v for k, v in lang_stats_30_dict.items() if v['total'] > 0}
     else: recent_total, recent_custom_desc = sum_total, all_desc
 
-    # 💡 [핵심] 권역별 분석을 위해 각 권역 대표 언어를 골고루 타겟에 포함시킴
     target_langs = set([l[0] for l in sorted(lang_stats_all_dict.items(), key=lambda x: x[1]['total'], reverse=True)[:3]])
     target_langs.add("koreana")
     for region in ["아시아", "영미/유럽권", "CIS", "중남미", "중동/기타"]:
@@ -165,8 +166,6 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
     for lang in target_langs:
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
         all_reviews_for_pt.extend([{'pt': r['playtime'], 'pos': r['is_positive']} for r in all_revs])
-        
-        # 권역 정보를 함께 태워보냄
         reg_name = REGION_MAP.get(lang, "기타")
         filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {reg_name} | ⏱️ {r['playtime']}h] {r['review']}" for r in all_revs][:20]
         if recent_days_val:
@@ -174,7 +173,6 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
             filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {reg_name} | ⏱️ {r['playtime']}h] {r['review']}" for r in rec_revs][:20]
         else: filtered_recent[lang] = filtered_all[lang]
 
-    # 💡 [업데이트] 플레이타임 3등분 로직 (하위 25%, 중위 50%, 상위 25%)
     all_reviews_for_pt.sort(key=lambda x: x['pt'])
     n_len = len(all_reviews_for_pt)
     if n_len >= 4:
@@ -194,7 +192,6 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
     norm_avg, norm_tot, norm_desc = calc_pt_stats(normals)
     c_avg, c_tot, c_desc = calc_pt_stats(cores)
 
-    # 테이블 데이터 빌드 (기존과 동일하므로 생략 없이 축약)
     def build_reg_table(lang_data, total):
         reg_stat = {}
         for l, s in lang_data.items():
