@@ -3,7 +3,6 @@ import pandas as pd
 import ui_texts as ui
 from ai_analyzer import ask_followup_question
 
-# 💡 [업데이트] 카테고리명을 정렬하기 위한 함수 (무조건 [긍정]이 앞서도록!)
 def get_cat_sort_key(cat_name):
     if "[긍정" in cat_name: return 0
     elif "[부정" in cat_name: return 1
@@ -26,10 +25,25 @@ def apply_eval_color(val):
     v = str(val)
     return "color: #3182F6" if "긍정" in v else ("color: #F04452" if "부정" in v else "color: #888888")
 
+# 💡 [업데이트] 점잖은 회색 배경을 가진 커스텀 컨테이너 렌더링 함수
+def render_gray_box(title, content_text=None, content_list=None):
+    html = '<div style="background-color: rgba(128, 128, 128, 0.08); padding: 16px; border-radius: 12px; margin-bottom: 16px;">'
+    if title:
+        html += f'<div style="font-weight: bold; font-size: 1.05em; margin-bottom: 8px;">{title}</div>'
+    if content_text:
+        text_html = content_text.replace('\n', '<br>')
+        html += f'<div style="line-height: 1.5;">{text_html}</div>'
+    if content_list:
+        html += '<ul style="margin: 0; padding-left: 20px; line-height: 1.5;">'
+        for item in content_list:
+            html += f'<li style="margin-bottom: 4px;">{item}</li>'
+        html += '</ul>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
 def render_report_tabs():
     ins, stats = st.session_state.insights, st.session_state.stats
     
-    # 💡 [업데이트] 알록달록했던 st.info를 싹 걷어내고 차분한 회색 토글(Expander)로 변경
     with st.expander(ui.TEXTS['bot_info_title']):
         st.markdown(ui.TEXTS['bot_info_desc'])
     
@@ -43,9 +57,8 @@ def render_report_tabs():
         with c_m2: st.metric(ui.TEXTS["metric_all"], stats['all_desc'], ui.TEXTS["metric_count"].format(stats['all_total']), help=ui.TEXTS['tooltip_all'])
         with c_m3: st.metric(ui.TEXTS["metric_recent"].format(st.session_state.recent_label), stats['recent_desc'], ui.TEXTS["metric_recent_count"].format(stats['recent_total']), help=st.session_state.smart_reason)
         
-        st.markdown(ui.TEXTS["summary_briefing"])
-        with st.expander("👀 요약 브리핑 상세 보기"):
-            st.write(ins.get('sentiment_analysis', ''))
+        # 💡 [업데이트] 파란 st.info나 토글 대신 점잖은 회색 박스로!
+        render_gray_box(title=ui.TEXTS["summary_briefing"], content_text=ins.get('sentiment_analysis', ''))
         
         c1, c2 = st.columns(2)
         with c1:
@@ -58,8 +71,6 @@ def render_report_tabs():
 
         st.divider()
         st.markdown(ui.TEXTS["category_summary_title"])
-        
-        # 💡 [업데이트] 세부 카테고리도 긍정이 먼저 렌더링되도록 정렬 로직 적용
         categories = ins.get('global_category_summary', [])
         categories_sorted = sorted(categories, key=lambda x: get_cat_sort_key(x.get('category', '')))
         
@@ -68,11 +79,9 @@ def render_report_tabs():
                 for line in sort_sentiments(cat.get('summary', [])): st.write(f"- {render_colored_text(line)}")
 
     with tab2:
-        # 💡 [업데이트] 최신 소식을 위로, 이슈 픽을 아래로! 상하 배치 적용
         st.markdown(ui.TEXTS["news_title"])
         news = st.session_state.news_data
         if news and news[0]:
-            # 뉴스 이미지 렌더링
             if len(news) > 4 and news[4]:
                 st.image(news[4], width=400)
             st.caption(f"🔗 [{news[3]}] {news[0]}")
@@ -80,7 +89,6 @@ def render_report_tabs():
         else: st.write(ui.TEXTS["no_news"])
         
         st.divider()
-        
         st.markdown(ui.TEXTS["issue_pick_title"])
         st.caption(ui.TEXTS["issue_pick_desc"].format(st.session_state.smart_reason))
         
@@ -94,7 +102,10 @@ def render_report_tabs():
         st.markdown(ui.TEXTS["playtime_title"], help=ui.TEXTS['tooltip_playtime'])
         pt = ins.get('playtime_analysis', {})
         if pt:
-            if pt.get('comparison_insights'): st.warning(ui.TEXTS["insight_core"] + "\n".join([f"- {i}" for i in pt.get('comparison_insights', [])]))
+            if pt.get('comparison_insights'): 
+                # 💡 [업데이트] 노란 경고창 대신 점잖은 회색 리스트 박스로!
+                render_gray_box(title=ui.TEXTS["insight_core_title"], content_list=pt.get('comparison_insights', []))
+                
             p1, p2, p3 = st.columns(3)
             with p1:
                 st.markdown(f"**{pt.get('newbie_title', ui.TEXTS['newbie_title_default'])}**")
@@ -112,13 +123,13 @@ def render_report_tabs():
     with tab4:
         st.markdown(ui.TEXTS["region_title"], help=ui.TEXTS['tooltip_region'])
         reg_data = ins.get('region_analysis', {})
-        if reg_data.get('divergence_insight'): st.success(ui.TEXTS["divergence_insight"].format(reg_data['divergence_insight']))
+        if reg_data.get('divergence_insight'): 
+            # 💡 [업데이트] 초록색 성공창 대신 점잖은 회색 박스로!
+            render_gray_box(title=ui.TEXTS["divergence_insight_title"], content_text=reg_data['divergence_insight'])
         
         for reg in reg_data.get('regions', []):
             with st.expander(ui.TEXTS["region_expander"].format(reg.get('region'), reg.get('trend'))):
                 st.caption(ui.TEXTS["keyword_label"].format(', '.join(reg.get('keywords', []))))
-                
-                # 💡 [업데이트] 권역 내 카테고리도 긍정부터 정렬!
                 r_cats_sorted = sorted(reg.get('categories', []), key=lambda x: get_cat_sort_key(x.get('name', '')))
                 
                 for cat in r_cats_sorted:
@@ -132,8 +143,6 @@ def render_report_tabs():
         
         for country in ins.get('country_analysis', []):
             st.markdown(ui.TEXTS["country_flag"].format(country.get('country', '')))
-            
-            # 💡 [업데이트] 국가 내 카테고리도 정렬
             c_cats_sorted = sorted(country.get('categories', []), key=lambda x: get_cat_sort_key(x.get('name', '')))
             
             for cat in c_cats_sorted:
