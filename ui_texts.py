@@ -84,7 +84,7 @@ TEXTS = {
     "sample_opinion": "표본: {}개 | 여론: {}",
 
     "region_title": "### 🗺️ 권역별 세부 평가 분석",
-    "divergence_insight": "**💡 권역별 다이버전스 인사이트**\n\n{}",
+    "divergence_insight": "권역별 주요 체크포인트\n\n{}",
     "region_expander": "📍 {} (동향: {})",
     "keyword_label": "🔑 주요 키워드: {}",
     
@@ -96,7 +96,7 @@ TEXTS = {
     "toggle_quote": "👀 유저 리뷰 원문 보기",
 
     "table_global_title": "### 🌐 글로벌 언어 및 권역 통계표",
-    "disclaimer_language": "💡 스팀 리뷰 특성상 유저의 실제 국적이 아닌 **'리뷰 작성 언어'**를 기준으로 분류됩니다. (영어 리뷰 비중이 실제보다 높게 나타날 수 있음)",
+    "disclaimer_language": "💡 스팀 리뷰 특성상 유저의 실제 국적이 아닌 '리뷰 작성 언어'를 기준으로 분류됩니다. (영어 리뷰 비중이 실제보다 높게 나타날 수 있음)",
     "table_region_title": "##### 🗺️ 주요 권역별 누적 리뷰 비중",
     "table_all_title": "##### 🥇 언어별 누적 리뷰 비중 TOP 10",
     "toggle_all_table": "👀 언어별 누적 리뷰 비중 (전체 보기)",
