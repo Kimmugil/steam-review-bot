@@ -75,13 +75,17 @@ def get_playtime_analysis_block(ai_data, stats):
         list_items = [{"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}} for line in comparison_insights if isinstance(line, str) and line.strip()]
         blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚖️"}, "color": "yellow_background", "rich_text": [{"text": {"content": ui.TEXTS['notion_insight_core']}, "annotations": {"bold": True}}], "children": list_items}})
     
+    # 💡 [버그 수정] 노션에서도 표본, 평균 플탐, 여론이 보이도록 단락 추가
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('newbie_title', ui.TEXTS['newbie_title_default'])}, "annotations": {"color": "green", "bold": True}}]}})
+    blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['sample_opinion'].format(stats.get('newbie_total', 0), stats.get('newbie_avg', 0), stats.get('newbie_desc', ui.TEXTS['steam_eval_none']))}, "annotations": {"color": "gray"}}]}})
     for line in sort_sentiments(playtime_data.get('newbie_summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('normal_title', ui.TEXTS['normal_title_default'])}, "annotations": {"color": "blue", "bold": True}}]}})
+    blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['sample_opinion'].format(stats.get('norm_total', 0), stats.get('norm_avg', 0), stats.get('norm_desc', ui.TEXTS['steam_eval_none']))}, "annotations": {"color": "gray"}}]}})
     for line in sort_sentiments(playtime_data.get('normal_summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
 
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('core_title', ui.TEXTS['core_title_default'])}, "annotations": {"color": "purple", "bold": True}}]}})
+    blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['sample_opinion'].format(stats.get('core_total', 0), stats.get('core_avg', 0), stats.get('core_desc', ui.TEXTS['steam_eval_none']))}, "annotations": {"color": "gray"}}]}})
     for line in sort_sentiments(playtime_data.get('core_summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "divider", "divider": {}})
@@ -122,7 +126,6 @@ def get_country_analysis_block(ai_data):
     for country in ai_data.get('country_analysis', []):
         blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['country_flag'].format(country.get('country', '')).replace("**", "")}}]}})
         for cat in country.get('categories', []):
-            # 💡 [버그 수정] 노션에서도 카테고리명 (긍/부정 제목) 렌더링 복구 완료!
             cat_name = cat.get('name', '')
             if cat_name:
                 color = "blue" if "[긍정" in cat_name else ("red" if "[부정" in cat_name else "default")
