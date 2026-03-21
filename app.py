@@ -4,6 +4,7 @@ import time
 import threading
 import re
 import pandas as pd
+import ui_texts as ui  # 💡 [핵심] 분리한 텍스트 모듈 임포트!
 from config import APP_VERSION, NOTION_PUBLIC_URL, GEMINI_API_KEY, NOTION_TOKEN, TICKER_INTERVAL, ENV_NAME
 from updates import UPDATE_HISTORY
 from messages import WAITING_MESSAGES
@@ -13,7 +14,6 @@ from notion_exporter import upload_to_notion
 
 st.set_page_config(page_title="스팀 리뷰 탈곡기", page_icon="🚜", layout="wide")
 
-# 💡 [공통 규칙] 긍정/부정 정렬 함수 추가 (긍정이 먼저 오도록)
 def sort_sentiments(lines):
     if not isinstance(lines, list): return []
     def get_sort_key(line):
@@ -80,17 +80,17 @@ def main():
 
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
-        st.title("🚜 스팀 리뷰 탈곡기")
-        st.markdown("스팀 상점 주소나 App ID를 입력하여 글로벌 유저들의 진짜 민심을 탈탈 털어보세요.")
+        st.title(ui.TEXTS["main_title"])
+        st.markdown(ui.TEXTS["main_desc"])
     with col_h2: st.write(""); st.link_button("👉 통합 리포트 열람", NOTION_PUBLIC_URL, use_container_width=True)
     
     st.write(""); render_step_indicator(st.session_state.step)
 
     if st.session_state.step == 0:
         with st.container(border=True):
-            st.subheader("🎮 Step 1. 분석할 게임 찾기")
+            st.subheader(ui.TEXTS["step1_title"])
             raw_input = st.text_input("스팀 URL 또는 App ID", placeholder="예: https://store.steampowered.com/app/2215430", label_visibility="collapsed")
-            st.caption("ℹ️ 스팀 상점 페이지의 주소 전체를 복사해서 붙여넣거나, App ID 숫자만 입력하셔도 됩니다.")
+            st.caption(ui.TEXTS["step1_caption"])
             
             app_id = extract_id(raw_input)
             game_candidate_name, game_candidate_img, game_candidate_date = None, None, None
@@ -106,7 +106,7 @@ def main():
                     st.markdown(f"#### 🌾 **{game_candidate_name}** 리뷰를 탈곡할까요?")
                     if game_candidate_date: st.caption(f"이 게임은 {game_candidate_date.strftime('%Y년 %m월 %d일')} 스팀에 출시되었습니다.")
                         
-            if st.button("🚀 리뷰 탈곡하기", use_container_width=True, type="primary"):
+            if st.button(ui.TEXTS["btn_analyze"], use_container_width=True, type="primary"):
                 if not app_id: st.warning("유효한 App ID 또는 주소를 입력해 주세요."); return
                 
                 target_name = game_candidate_name if game_candidate_name else "게임"
@@ -145,8 +145,8 @@ def main():
                     except Exception as e: status.update(label="에러", state="error"); st.error(str(e))
 
     elif st.session_state.step == 1:
-        st.subheader(f"Step 2. [{st.session_state.game_name}] 리포트 검수")
-        st.info("💡 발행 전 생성된 데이터를 검토하고, 추가 질문이 있다면 AI와 대화할 수 있습니다.")
+        st.subheader(f"Step 2. [{st.session_state.game_name}] {ui.TEXTS['step2_title']}")
+        st.info(ui.TEXTS['step2_desc'])
         ins, stats = st.session_state.insights, st.session_state.stats
         tab1, tab2, tab3, tab4 = st.tabs(["📊 주요 요약", "⏱️ 플탐 분석", "🌐 권역 & 언어", "🙋‍♀️ AI 질문"])
         
@@ -154,25 +154,24 @@ def main():
             st.markdown(f"""<div class="toss-card"><h4 style="margin-top:0;">🤖 AI 한줄평</h4><p style="font-size:1.1rem;">❝ {ins.get("critic_one_liner", "")} ❞</p><span style="color:#888; font-size:0.9rem;">{st.session_state.rel_date_str} 스팀에 출시된 [{st.session_state.game_name}]에 대한 AI 분석 결과입니다.</span></div>""", unsafe_allow_html=True)
             
             c_m1, c_m2, c_m3 = st.columns(3)
-            # 💡 [명세서 반영] 누락되었던 툴팁(help) 원상 복구
-            with c_m1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'), help="스팀 상점을 통해 직접 구매한 유저만 반영된 점수입니다.")
-            with c_m2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개", help="키 등록 및 무료 플레이 등 모든 유저를 포함한 포괄적 민심입니다.")
+            with c_m1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'), help=ui.TEXTS['tooltip_official'])
+            with c_m2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개", help=ui.TEXTS['tooltip_all'])
             with c_m3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개", help=st.session_state.smart_reason)
             
             st.markdown("##### 🎯 종합 여론 브리핑"); st.info(ins.get('sentiment_analysis', ''))
             
             c1, c2 = st.columns(2)
-            # 💡 [명세서 반영] 긍/부정 정렬 (sort_sentiments) 적용
             with c1:
                 st.markdown("**📈 누적 여론 동향**")
                 for line in sort_sentiments(ins.get('final_summary_all', [])): st.write(render_colored_text(line))
             with c2:
                 st.markdown(f"**🔥 {st.session_state.recent_label} 동향**")
+                # 💡 [명세서 반영] 집계 기간 안내 (최근 동향)
+                st.caption(f"📅 집계 기간: {st.session_state.smart_reason}")
                 for line in sort_sentiments(ins.get('final_summary_recent', [])): st.write(render_colored_text(line))
 
         with tab2:
-            # 💡 [명세서 반영] 플레이타임 툴팁 추가
-            st.markdown("### ⏱️ 플레이타임별 민심 교차 분석", help="전체 리뷰를 플레이타임순으로 정렬 후, 하위 25%(뉴비), 중위 50%(일반), 상위 25%(코어)로 분할하여 여론을 비교합니다.")
+            st.markdown("### ⏱️ 플레이타임별 민심 교차 분석", help=ui.TEXTS['tooltip_playtime'])
             pt = ins.get('playtime_analysis', {})
             if pt:
                 if pt.get('comparison_insights'): st.warning("**⚖️ 핵심 인사이트**\n" + "\n".join([f"- {i}" for i in pt.get('comparison_insights', [])]))
@@ -191,7 +190,7 @@ def main():
                     for l in sort_sentiments(pt.get('core_summary', [])): st.write(f"- {render_colored_text(l)}")
 
         with tab3:
-            st.markdown("### 🗺️ 권역별 세부 평가 분석", help="전 세계를 5대 권역으로 맵핑하여 문화권별 여론의 차이를 분석합니다.")
+            st.markdown("### 🗺️ 권역별 세부 평가 분석", help=ui.TEXTS['tooltip_region'])
             reg_data = ins.get('region_analysis', {})
             if reg_data.get('divergence_insight'): st.success(f"**💡 권역별 다이버전스 인사이트**\n\n{reg_data['divergence_insight']}")
             
@@ -201,6 +200,10 @@ def main():
                     for cat in reg.get('categories', []):
                         st.write(f"**{render_colored_text(cat.get('name'))}**: {' '.join(cat.get('summary', []))}")
             st.divider(); st.markdown("### 🌍 글로벌 언어 및 권역 통계표")
+            
+            # 💡 [명세서 반영] 권역/언어 분리 기준 및 영어 쏠림 안내 문구 출력
+            st.warning(ui.TEXTS["disclaimer_language"])
+            
             def apply_eval_color(val):
                 v = str(val)
                 return "color: #3182F6" if "긍정적" in v else ("color: #F04452" if "부정적" in v else "color: #888888")
@@ -230,11 +233,14 @@ def main():
             st.markdown("##### 🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10")
             if stats['days_since_release'] < 30: st.info("ℹ️ 출시일로부터 30일 이후부터 지원하는 표입니다.")
             else:
+                # 💡 [명세서 반영] 30일 표 데이터의 실제 집계 기간 출력
+                st.caption(f"📅 표 집계 기간: {st.session_state.smart_reason}")
                 st.dataframe(st_30_top, hide_index=True, use_container_width=True)
                 with st.expander("👀 최근 30일 누적 리뷰 비중 (전체보기)"): st.dataframe(st_30_full, hide_index=True, use_container_width=True)
 
         with tab4:
-            st.markdown("### 🙋‍♀️ AI에게 추가 질문하기")
+            st.markdown(f"### {ui.TEXTS['qa_title']}")
+            st.caption(ui.TEXTS['qa_desc'])
             if st.session_state.qa_history:
                 for qa in st.session_state.qa_history: st.markdown(f"**Q. {qa['q']}**"); st.info(f"**A.** {qa['a']}")
             
@@ -258,11 +264,11 @@ def main():
             st.markdown("### 📝 최종 발행 및 다음 스텝")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔄 노션 발행 없이 다른 게임 분석하기", use_container_width=True):
+                if st.button(ui.TEXTS["btn_reset"], use_container_width=True):
                     for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]: st.session_state[k] = None
                     st.session_state.step = 0; st.rerun()
             with col2:
-                if st.button("📤 노션 리포트 최종 발행", type="primary", use_container_width=True):
+                if st.button(ui.TEXTS["btn_notion"], use_container_width=True, type="primary"):
                     with st.status("노션으로 쏘는 중..."):
                         pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, st.session_state.stats, ins, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data, st.session_state.qa_history)
                         if pid: st.session_state.page_id = pid; st.session_state.step = 2; st.rerun()
@@ -270,7 +276,7 @@ def main():
     elif st.session_state.step == 2:
         st.balloons(); st.success("🎉 리포트 발행 완료!")
         st.markdown(f'<div class="toss-card" style="text-align:center;"><a href="https://notion.so/{st.session_state.page_id.replace("-", "")}" target="_blank" style="font-size:1.5em; color:#3182F6; font-weight:700; text-decoration:none;">🔗 생성된 노션 리포트 확인하기</a></div>', unsafe_allow_html=True)
-        if st.button("🔄 다른 게임 분석하기", use_container_width=True, type="primary"):
+        if st.button(ui.TEXTS["btn_reset"], use_container_width=True, type="primary"):
             for k in [k for k in st.session_state.keys() if k != 'history']: del st.session_state[k]
             st.rerun()
 
