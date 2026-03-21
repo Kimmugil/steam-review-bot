@@ -105,9 +105,9 @@ def main():
                         p_bar.progress(20)
                         
                         info_txt.write(ui.TEXTS["loading_2"])
-                        rday, rlabel, rreason = get_smart_period(rdate)
+                        rday, rlabel, rreason, rperiod = get_smart_period(rdate)  # 💡 변경됨
                         news = fetch_latest_news(rid)
-                        all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate)
+                        all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)  # 💡 파라미터 추가
                         if stats['all_total'] == 0: raise Exception(ui.TEXTS["loading_error_data"])
                         p_bar.progress(50)
                         
@@ -152,7 +152,9 @@ def main():
     elif st.session_state.step == 2:
         st.balloons(); st.success(ui.TEXTS["publish_success"])
         st.markdown(f'<div class="toss-card" style="text-align:center;"><a href="https://notion.so/{st.session_state.page_id.replace("-", "")}" target="_blank" style="font-size:1.5em; color:#3182F6; font-weight:700; text-decoration:none;">🔗 {ui.TEXTS["publish_link"]}</a></div>', unsafe_allow_html=True)
-        if st.button(ui.TEXTS["btn_reset"], use_container_width=True, type="primary"):
+        
+        # 💡 [버그 수정] 발행 후 띄우는 버튼은 btn_reset_after_publish 사용
+        if st.button(ui.TEXTS["btn_reset_after_publish"], use_container_width=True, type="primary"):
             for k in [k for k in st.session_state.keys() if k != 'history']: del st.session_state[k]
             st.rerun()
 
