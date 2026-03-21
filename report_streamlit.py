@@ -18,7 +18,7 @@ def render_colored_text(text):
 
 def apply_eval_color(val):
     v = str(val)
-    return "color: #3182F6" if "긍정적" in v else ("color: #F04452" if "부정적" in v else "color: #888888")
+    return "color: #3182F6" if "긍정" in v else ("color: #F04452" if "부정" in v else "color: #888888")
 
 def render_report_tabs():
     ins, stats = st.session_state.insights, st.session_state.stats
