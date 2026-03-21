@@ -23,22 +23,22 @@ def get_bot_info_block():
 
 def get_ai_one_liner_block(ai_data, game_name, release_date):
     return [
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🤖 AI 한줄평"}}]}}, 
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['ai_one_liner_title']}}]}}, 
         {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "💬"}, "color": "gray_background", "rich_text": [{"text": {"content": f"❝ {ai_data.get('critic_one_liner', '')} ❞", "link": None}, "annotations": {"bold": True, "color": "blue"}}]}},
-        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"{release_date} 스팀에 출시된 [{game_name}]에 대한 AI 분석 결과입니다."}, "annotations": {"color": "gray"}}]}},
+        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['ai_one_liner_desc'].format(release_date, game_name)}, "annotations": {"color": "gray"}}]}},
         {"object": "block", "type": "divider", "divider": {}}
     ]
 
 def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
     blocks = [
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "📊 스팀 민심 온도계"}}]}}, 
-        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 각 평점 지표별 산출 기준 안내"}, "annotations": {"color": "gray"}}], "children": [
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_metric_title']}}]}}, 
+        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_guide']}, "annotations": {"color": "gray"}}], "children": [
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": f"스팀 공식 평점: {ui.TEXTS['tooltip_official']}"}}]}},
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": f"전체 누적 평점: {ui.TEXTS['tooltip_all']}"}}]}},
             {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": f"최근 동향: {smart_reason}"}}]}}
         ]}},
         {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
-            {"text": {"content": f"🛑 스팀 공식 평점: {store_stats.get('official_desc', '평가 없음')}\n"}},
+            {"text": {"content": f"🛑 스팀 공식 평점: {store_stats.get('official_desc', ui.TEXTS['steam_eval_none'])}\n"}},
             {"text": {"content": f"📈 전체 누적 평가: {store_stats['all_desc']} (총 {store_stats['all_total']:,}개)\n"}},
             {"text": {"content": f"🔥 {recent_label}: {store_stats['recent_desc']} (분석 표본 {store_stats['recent_total']:,}개)"}, "annotations": {"bold": True, "color": "red"}}
         ]}},
@@ -49,13 +49,13 @@ def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
 
 def get_global_summary_block(ai_data, recent_label, smart_reason):
     blocks = [
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🎯 전 국가 망라 최종 요약"}}]}},
-        {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "📈 전체 누적 주요 여론"}, "annotations": {"bold": True}}]}}
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_summary_title']}}]}},
+        {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['notion_summary_all']}, "annotations": {"bold": True}}]}}
     ]
     for line in sort_sentiments(ai_data.get('final_summary_all', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"🔥 {recent_label} 주요 여론"}, "annotations": {"bold": True}}]}})
-    blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"📅 집계 기간: {smart_reason}"}, "annotations": {"color": "gray"}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['notion_summary_recent'].format(recent_label)}, "annotations": {"bold": True}}]}})
+    blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period'].format(smart_reason)}, "annotations": {"color": "gray"}}]}})
     
     for line in sort_sentiments(ai_data.get('final_summary_recent', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
@@ -65,8 +65,8 @@ def get_playtime_analysis_block(ai_data, stats):
     playtime_data = ai_data.get('playtime_analysis', {})
     if not playtime_data: return []
     blocks = [
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "⏱️ 플레이타임별 민심 교차 분석"}}]}},
-        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 플레이타임 산출 기준 안내"}, "annotations": {"color": "gray"}}], "children": [
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_playtime_title']}}]}},
+        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_playtime']}, "annotations": {"color": "gray"}}], "children": [
             {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['tooltip_playtime']}}]}}
         ]}}
     ]
@@ -75,13 +75,13 @@ def get_playtime_analysis_block(ai_data, stats):
         list_items = [{"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}} for line in comparison_insights if isinstance(line, str) and line.strip()]
         blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚖️"}, "color": "yellow_background", "rich_text": [{"text": {"content": "핵심 교차 인사이트"}, "annotations": {"bold": True}}], "children": list_items}})
     
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('newbie_title', '🌱 뉴비 여론')}, "annotations": {"color": "green", "bold": True}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('newbie_title', ui.TEXTS['newbie_title_default'])}, "annotations": {"color": "green", "bold": True}}]}})
     for line in sort_sentiments(playtime_data.get('newbie_summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('normal_title', '🚶 일반 여론')}, "annotations": {"color": "blue", "bold": True}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('normal_title', ui.TEXTS['normal_title_default'])}, "annotations": {"color": "blue", "bold": True}}]}})
     for line in sort_sentiments(playtime_data.get('normal_summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
 
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('core_title', '💀 코어 여론')}, "annotations": {"color": "purple", "bold": True}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('core_title', ui.TEXTS['core_title_default'])}, "annotations": {"color": "purple", "bold": True}}]}})
     for line in sort_sentiments(playtime_data.get('core_summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "divider", "divider": {}})
@@ -91,18 +91,18 @@ def get_region_analysis_block(ai_data):
     reg_data = ai_data.get('region_analysis', {})
     if not reg_data: return []
     blocks = [
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🗺️ 권역별 세부 평가 분석"}}]}},
-        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "ℹ️ 권역 맵핑 기준 안내"}, "annotations": {"color": "gray"}}], "children": [
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_region_title']}}]}},
+        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['notion_toggle_region']}, "annotations": {"color": "gray"}}], "children": [
             {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['tooltip_region']}}]}}
         ]}}
     ]
     
     if reg_data.get('divergence_insight'):
-        blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "💡"}, "color": "purple_background", "rich_text": [{"text": {"content": "다이버전스(권역별 여론 차이) 인사이트\n", "link": None}, "annotations": {"bold": True}}, {"text": {"content": reg_data['divergence_insight']}}]}})
+        blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "💡"}, "color": "purple_background", "rich_text": [{"text": {"content": ui.TEXTS['divergence_insight'].format(reg_data['divergence_insight']).replace("**", "")}}]}})
         
     for reg in reg_data.get('regions', []):
-        blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": f"📍 {reg.get('region')} (동향: {reg.get('trend')})"}}]}})
-        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"🔑 주요 키워드: {', '.join(reg.get('keywords', []))}"}, "annotations": {"color": "gray"}}]}})
+        blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['region_expander'].format(reg.get('region'), reg.get('trend'))}}]}})
+        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['keyword_label'].format(', '.join(reg.get('keywords', [])))}, "annotations": {"color": "gray"}}]}})
         for cat in reg.get('categories', []):
             color = "blue" if "[긍정" in cat.get('name', '') else ("red" if "[부정" in cat.get('name', '') else "default")
             blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": cat.get('name', '')}, "annotations": {"bold": True, "color": color}}]}})
@@ -113,7 +113,7 @@ def get_region_analysis_block(ai_data):
 
 def get_country_analysis_block(ai_data):
     blocks = [
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌍 리뷰 작성 언어(국가)별 분석"}}]}},
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_country_title']}}]}},
         {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['country_analysis_desc']}, "annotations": {"color": "gray"}}]}}
     ]
     for country in ai_data.get('country_analysis', []):
@@ -122,15 +122,15 @@ def get_country_analysis_block(ai_data):
             for line in sort_sentiments(cat.get('summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
             quote = cat.get('quote', {})
             if quote and quote.get('original'):
-                # 💡 [명세서 반영] 노션에서는 원문 보기를 토글 안에 숨김
                 quote_children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"원문: {quote.get('original')}"}}]}}]
                 if quote.get('korean'): quote_children.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"번역: {quote.get('korean')}"}}]}})
-                blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "👀 유저 리뷰 원문 보기"}, "annotations": {"color": "gray"}}], "children": quote_children}})
+                blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['toggle_quote'].replace("👀 ", "")}, "annotations": {"color": "gray"}}], "children": quote_children}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
 def _create_notion_table(table_data_list, limit=None, is_region=False):
-    rows = [{"type": "table_row", "table_row": {"cells": [[{"text": {"content": "순위"}, "annotations": {"bold": True, "color": "gray"}}], [{"text": {"content": "권역" if is_region else "언어"}, "annotations": {"bold": True, "color": "gray"}}], [{"text": {"content": "리뷰 수"}, "annotations": {"bold": True, "color": "gray"}}], [{"text": {"content": "비중"}, "annotations": {"bold": True, "color": "gray"}}], [{"text": {"content": "👍 긍정 비율"}, "annotations": {"bold": True, "color": "blue"}}], [{"text": {"content": "👎 부정 비율"}, "annotations": {"bold": True, "color": "red"}}], [{"text": {"content": "📊 평가 결과"}, "annotations": {"bold": True, "color": "purple"}}]]}}]
+    col2 = ui.TEXTS['col_region'] if is_region else ui.TEXTS['col_lang']
+    rows = [{"type": "table_row", "table_row": {"cells": [[{"text": {"content": ui.TEXTS['col_rank']}, "annotations": {"bold": True, "color": "gray"}}], [{"text": {"content": col2}, "annotations": {"bold": True, "color": "gray"}}], [{"text": {"content": ui.TEXTS['col_count']}, "annotations": {"bold": True, "color": "gray"}}], [{"text": {"content": ui.TEXTS['col_ratio']}, "annotations": {"bold": True, "color": "gray"}}], [{"text": {"content": ui.TEXTS['col_pos']}, "annotations": {"bold": True, "color": "blue"}}], [{"text": {"content": ui.TEXTS['col_neg']}, "annotations": {"bold": True, "color": "red"}}], [{"text": {"content": ui.TEXTS['col_eval']}, "annotations": {"bold": True, "color": "purple"}}]]}}]
     target_list = table_data_list[:limit] if limit else table_data_list
     for r in target_list:
         eval_val = str(r['eval'])
@@ -140,30 +140,30 @@ def _create_notion_table(table_data_list, limit=None, is_region=False):
     return {"object": "block", "type": "table", "table": {"table_width": 7, "has_column_header": True, "children": rows}}
 
 def get_language_ratio_block(store_stats, smart_reason):
-    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🌐 글로벌 언어 및 권역 통계표"}}]}}]
-    blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚠️"}, "color": "yellow_background", "rich_text": [{"text": {"content": ui.TEXTS['disclaimer_language'].replace("💡 ", "")}}]}})
+    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_table_global_title']}}]}}]
+    blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚠️"}, "color": "yellow_background", "rich_text": [{"text": {"content": ui.TEXTS['disclaimer_language'].replace("💡 ", "").replace("**", "")}}]}})
     
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🗺️ 주요 권역별 누적 리뷰 비중"}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['table_region_title'].replace("##### ", "")}}]}})
     blocks.append(_create_notion_table(store_stats['table_data_region'], is_region=True))
     
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🥇 언어별 누적 리뷰 비중 TOP 10"}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['table_all_title'].replace("##### ", "")}}]}})
     blocks.append(_create_notion_table(store_stats['table_data_all'], limit=10))
-    blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "👀 언어별 누적 리뷰 비중 (전체 보기)"}}], "children": [_create_notion_table(store_stats['table_data_all'])]}})
+    blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['toggle_all_table'].replace("👀 ", "")}}], "children": [_create_notion_table(store_stats['table_data_all'])]}})
     
-    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10"}}]}})
+    blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['table_30_title'].replace("##### ", "")}}]}})
     if store_stats['days_since_release'] < 30:
-        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "ℹ️ 출시일로부터 30일 이후부터 지원하는 표입니다."}, "annotations": {"color": "gray"}}]}})
+        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['info_30_days']}, "annotations": {"color": "gray"}}]}})
     else:
-        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"📅 표 집계 기간: {smart_reason}"}, "annotations": {"color": "gray"}}]}})
+        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period_table'].format(smart_reason)}, "annotations": {"color": "gray"}}]}})
         blocks.append(_create_notion_table(store_stats['table_data_30'], limit=10))
-        blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "👀 최근 30일 누적 리뷰 비중 (전체보기)"}}], "children": [_create_notion_table(store_stats['table_data_30'])]}})
+        blocks.append({"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": ui.TEXTS['toggle_30_table'].replace("👀 ", "")}}], "children": [_create_notion_table(store_stats['table_data_30'])]}})
         
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
 def get_qa_block(qa_history):
     if not qa_history: return []
-    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "🙋‍♀️ 추가 문의사항 답변"}}]}}]
+    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_qa_title']}}]}}]
     for qa in qa_history:
         blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": f"Q. {qa['q']}"}, "annotations": {"bold": True, "color": "blue"}}]}})
         blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🤖"}, "color": "gray_background", "rich_text": [{"text": {"content": f"{qa['a']}"}}]}})
