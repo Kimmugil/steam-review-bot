@@ -13,7 +13,7 @@ from report_notion import upload_to_notion
 
 st.set_page_config(page_title=ui.TEXTS["main_title"], page_icon="🚜", layout="wide")
 
-# 💡 [업데이트] 상단 고정 탭(Sticky) 완벽 작동 CSS!
+# 💡 [업데이트] 상단 고정(Sticky Tab) 강제 오버라이드 및 회색 박스 CSS
 st.markdown("""
     <style>
         .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #F04452; color: white; text-align: center; padding: 8px; font-weight: bold; z-index: 9999; }
@@ -24,16 +24,16 @@ st.markdown("""
         button[kind="primary"]:hover { background-color: #E5AC00 !important; }
         .small-history { font-size: 0.85rem; line-height: 1.5; }
         
-        /* 🔥 스트림릿 탭 메뉴 상단 고정 (스크롤 시 착 붙음) */
-        div[data-testid="stTabs"] > div:first-of-type {
-            position: -webkit-sticky;
-            position: sticky;
-            top: 40px; 
-            z-index: 990;
-            background-color: var(--background-color);
-            padding-top: 10px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid rgba(128,128,128,0.2);
+        /* 🔥 스트림릿 탭 메뉴 챡! 상단 고정 매직 CSS */
+        div[data-testid="stTabs"] > div:first-child {
+            position: -webkit-sticky !important;
+            position: sticky !important;
+            top: 2.8rem !important; 
+            z-index: 999 !important;
+            background-color: var(--background-color) !important;
+            padding-top: 10px !important;
+            padding-bottom: 5px !important;
+            border-bottom: 1px solid rgba(128,128,128,0.2) !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -144,7 +144,7 @@ def main():
 
     elif st.session_state.step == 1:
         st.subheader(f"Step 2. [{st.session_state.game_name}] {ui.TEXTS['step2_title']}")
-        st.info(ui.TEXTS['step2_desc'])
+        # 💡 [업데이트] 여기서 출력하던 st.info(step2_desc) 제거됨
         
         ui_render.render_report_tabs()
 
