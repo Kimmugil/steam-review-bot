@@ -43,7 +43,6 @@ def render_report_tabs():
             for line in sort_sentiments(ins.get('final_summary_all', [])): st.write(render_colored_text(line))
         with c2:
             st.markdown(ui.TEXTS["trend_recent"].format(st.session_state.recent_label))
-            # 💡 [업데이트] 수집 기간 명확하게 표시
             st.caption(ui.TEXTS["date_period_info"].format(stats.get('collection_period', ''), st.session_state.smart_reason))
             for line in sort_sentiments(ins.get('final_summary_recent', [])): st.write(render_colored_text(line))
 
@@ -75,7 +74,10 @@ def render_report_tabs():
             with st.expander(ui.TEXTS["region_expander"].format(reg.get('region'), reg.get('trend'))):
                 st.caption(ui.TEXTS["keyword_label"].format(', '.join(reg.get('keywords', []))))
                 for cat in reg.get('categories', []):
-                    st.write(f"**{render_colored_text(cat.get('name'))}**: {' '.join(cat.get('summary', []))}")
+                    # 💡 [버그 수정] 카테고리명을 확실하게 분리 렌더링!
+                    cat_name = cat.get('name', '')
+                    if cat_name: st.markdown(f"**{render_colored_text(cat_name)}**")
+                    for line in sort_sentiments(cat.get('summary', [])): st.write(f"- {render_colored_text(line)}")
         
         st.divider()
         st.markdown(ui.TEXTS["country_title"])
@@ -84,7 +86,13 @@ def render_report_tabs():
         for country in ins.get('country_analysis', []):
             st.markdown(ui.TEXTS["country_flag"].format(country.get('country', '')))
             for cat in country.get('categories', []):
-                st.write(f"  - {render_colored_text(cat.get('name'))}: {', '.join([render_colored_text(x) for x in sort_sentiments(cat.get('summary', []))])}")
+                # 💡 [버그 수정] 카테고리명과 요약문 분리 렌더링 적용 완료!
+                cat_name = cat.get('name', '')
+                if cat_name: st.markdown(f"**{render_colored_text(cat_name)}**")
+                
+                for line in sort_sentiments(cat.get('summary', [])): 
+                    st.write(f"- {render_colored_text(line)}")
+                
                 quote = cat.get('quote', {})
                 if quote and quote.get('original'):
                     st.markdown(ui.TEXTS["quote_original"].format(quote.get('original')))
@@ -118,7 +126,6 @@ def render_report_tabs():
         st.markdown(ui.TEXTS["table_30_title"])
         if stats['days_since_release'] < 30: st.info(ui.TEXTS["info_30_days"])
         else:
-            # 💡 [업데이트] 표에도 수집 기간 명확하게 표시
             st.caption(ui.TEXTS["date_period_info"].format(stats.get('collection_period', ''), st.session_state.smart_reason))
             st.dataframe(st_30_top, hide_index=True, use_container_width=True)
             with st.expander(ui.TEXTS["toggle_30_table"]): st.dataframe(st_30_full, hide_index=True, use_container_width=True)
