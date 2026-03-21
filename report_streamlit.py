@@ -43,7 +43,8 @@ def render_report_tabs():
             for line in sort_sentiments(ins.get('final_summary_all', [])): st.write(render_colored_text(line))
         with c2:
             st.markdown(ui.TEXTS["trend_recent"].format(st.session_state.recent_label))
-            st.caption(ui.TEXTS["date_period"].format(st.session_state.smart_reason))
+            # 💡 [업데이트] 수집 기간 명확하게 표시
+            st.caption(ui.TEXTS["date_period_info"].format(stats.get('collection_period', ''), st.session_state.smart_reason))
             for line in sort_sentiments(ins.get('final_summary_recent', [])): st.write(render_colored_text(line))
 
     with tab2:
@@ -117,7 +118,8 @@ def render_report_tabs():
         st.markdown(ui.TEXTS["table_30_title"])
         if stats['days_since_release'] < 30: st.info(ui.TEXTS["info_30_days"])
         else:
-            st.caption(ui.TEXTS["date_period_table"].format(st.session_state.smart_reason))
+            # 💡 [업데이트] 표에도 수집 기간 명확하게 표시
+            st.caption(ui.TEXTS["date_period_info"].format(stats.get('collection_period', ''), st.session_state.smart_reason))
             st.dataframe(st_30_top, hide_index=True, use_container_width=True)
             with st.expander(ui.TEXTS["toggle_30_table"]): st.dataframe(st_30_full, hide_index=True, use_container_width=True)
 
