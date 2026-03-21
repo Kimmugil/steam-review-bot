@@ -13,6 +13,7 @@ from report_notion import upload_to_notion
 
 st.set_page_config(page_title=ui.TEXTS["main_title"], page_icon="🚜", layout="wide")
 
+# 💡 [업데이트] 탭 영역이 상단에 고정되도록 CSS(Sticky) 완벽 적용!
 st.markdown("""
     <style>
         .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #F04452; color: white; text-align: center; padding: 8px; font-weight: bold; z-index: 9999; }
@@ -22,6 +23,16 @@ st.markdown("""
         button[kind="primary"] { background-color: #FFC000 !important; color: #111111 !important; border: none !important; font-weight: 700 !important; border-radius: 12px !important; padding: 10px 24px !important; }
         button[kind="primary"]:hover { background-color: #E5AC00 !important; }
         .small-history { font-size: 0.85rem; line-height: 1.5; }
+        
+        /* 🔥 스트림릿 탭 메뉴 상단 고정 매직 CSS */
+        [data-testid="stTabs"] [data-baseweb="tab-list"] {
+            position: sticky;
+            top: 45px;
+            z-index: 990;
+            background-color: var(--background-color);
+            padding-top: 10px;
+            padding-bottom: 5px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -105,9 +116,9 @@ def main():
                         p_bar.progress(20)
                         
                         info_txt.write(ui.TEXTS["loading_2"])
-                        rday, rlabel, rreason, rperiod = get_smart_period(rdate)  # 💡 변경됨
+                        rday, rlabel, rreason, rperiod = get_smart_period(rdate)
                         news = fetch_latest_news(rid)
-                        all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)  # 💡 파라미터 추가
+                        all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)
                         if stats['all_total'] == 0: raise Exception(ui.TEXTS["loading_error_data"])
                         p_bar.progress(50)
                         
@@ -153,7 +164,6 @@ def main():
         st.balloons(); st.success(ui.TEXTS["publish_success"])
         st.markdown(f'<div class="toss-card" style="text-align:center;"><a href="https://notion.so/{st.session_state.page_id.replace("-", "")}" target="_blank" style="font-size:1.5em; color:#3182F6; font-weight:700; text-decoration:none;">🔗 {ui.TEXTS["publish_link"]}</a></div>', unsafe_allow_html=True)
         
-        # 💡 [버그 수정] 발행 후 띄우는 버튼은 btn_reset_after_publish 사용
         if st.button(ui.TEXTS["btn_reset_after_publish"], use_container_width=True, type="primary"):
             for k in [k for k in st.session_state.keys() if k != 'history']: del st.session_state[k]
             st.rerun()
