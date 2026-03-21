@@ -23,25 +23,21 @@ def sanitize_url(url):
 
 def fetch_store_official_rating(app_id):
     url = f"https://store.steampowered.com/app/{app_id}/?l=korean"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+    headers = {"User-Agent": "Mozilla/5.0"}
     cookies = {"birthtime": "0", "lastagecheckage": "1-0-1900", "wants_mature_content": "1"}
     try:
         res = requests.get(url, headers=headers, cookies=cookies, timeout=10)
         res.raise_for_status()
         html = res.text
         rating_match = re.search(r'<span class="game_review_summary[^>]*>([^<]+)</span>', html)
-        rating_text = rating_match.group(1).strip() if rating_match else "평가 없음"
-        return rating_text, 0
-    except Exception:
-        return None, None
+        return rating_match.group(1).strip() if rating_match else "평가 없음", 0
+    except: return None, None
 
 def get_steam_game_info(game_input):
     app_id = str(game_input).strip()
     if not app_id.isdigit(): return None, None, None
-    details_url = sanitize_url(f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean")
     try:
-        res = requests.get(details_url, timeout=10)
-        res.raise_for_status()
+        res = requests.get(sanitize_url(f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean"), timeout=10)
         data = res.json()
         if not data or app_id not in data or not data[app_id]['success']: return None, None, None
         game_data = data[app_id]['data']
@@ -55,31 +51,23 @@ def get_steam_game_info(game_input):
     except: return None, None, None
 
 def fetch_latest_news(app_id):
-    url = sanitize_url(f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json")
     try:
-        res = requests.get(url, timeout=5)
-        res.raise_for_status()
+        res = requests.get(sanitize_url(f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json"), timeout=5)
         news_items = res.json().get('appnews', {}).get('newsitems', [])
         if not news_items: return None, None, None, None
         def parse_item(item):
             date_str = datetime.fromtimestamp(item.get('date', 0)).strftime('%Y-%m-%d')
             return item['title'], item.get('contents', ''), item['url'], date_str
         for item in news_items:
-            title_lower = item.get('title', '').lower()
-            if any(kw in title_lower for kw in ['update', 'patch', '패치', '업데이트']): return parse_item(item)
+            if any(kw in item.get('title', '').lower() for kw in ['update', 'patch', '패치', '업데이트']): return parse_item(item)
         return parse_item(news_items[0])
-    except: pass
-    return None, None, None, None
+    except: return None, None, None, None
 
-# 💡 [핵심 픽스] 출시일 기준 절반 자르기 동적 계산 로직 반영
 def get_smart_period(release_date):
     days_since = (datetime.now() - release_date).days
-    if days_since < 6: 
-        return 3, "출시 초기", "출시된 지 며칠 지나지 않은 극초기 신작입니다. 발매 직후의 평가 변동성이 매우 큰 시기이므로, 최신 민심을 파악하기 위해 최소 기준인 최근 3일간의 동향을 분석했습니다."
-    elif days_since < 40: 
-        target_days = days_since // 2
-        return target_days, f"최근 {target_days}일", f"출시 후 40일이 경과하지 않은 신작입니다. 오픈 초기의 거품이나 기술적 이슈가 걷힌 후의 실제 민심을 확인하기 위해, 전체 서비스 기간의 절반인 최근 {target_days}일간의 동향을 집중적으로 분석했습니다."
-    return 30, "최근 30일", "출시 후 일정 기간 이상 경과하여 서비스가 안정화된 게임입니다. 현재 시점의 실질적인 유저 여론과 최근 패치/업데이트에 대한 반응을 확인하기 위해 최근 30일간의 장기 동향을 분석했습니다."
+    if days_since < 6: return 3, "출시 초기", "출시 직후 민심을 파악하기 위해 최근 3일간의 동향을 분석했습니다."
+    elif days_since < 40: return days_since // 2, f"최근 {days_since // 2}일", f"오픈 초기 노이즈를 배제하기 위해 출시일의 절반인 최근 {days_since // 2}일간의 동향을 분석했습니다."
+    return 30, "최근 30일", "서비스가 안정화된 상태로 최근 30일간의 장기 동향을 분석했습니다."
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     reviews = []
@@ -89,75 +77,25 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
     cursor = "*"
     for _ in range(3): 
         try:
-            res = requests.get(base_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=10)
-            res.raise_for_status()
-            data = res.json()
-            if not data.get('reviews'): break
-            for r in data['reviews']:
+            res = requests.get(base_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=10).json()
+            if not res.get('reviews'): break
+            for r in res['reviews']:
                 reviews.append({
                     "language": lang, "is_positive": r['voted_up'],
                     "playtime": round(r['author'].get('playtime_at_review', 0) / 60, 1),
                     "steam_id": str(r['author'].get('steamid', '익명'))[-4:],
-                    "review": r['review'][:400].replace('\n', ' ').encode('utf-8', 'ignore').decode('utf-8')
+                    "review": r['review'][:400].replace('\n', ' ')
                 })
-            cursor = data.get('cursor', '*')
+            cursor = res.get('cursor', '*')
             if not cursor: break
         except: break
     return reviews
 
 def _fetch_single_lang_stats(app_id, lang):
     try:
-        url_all = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all")
-        res_all = requests.get(url_all, timeout=5).json().get('query_summary', {})
+        res_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5).json().get('query_summary', {})
         return lang, res_all
-    except:
-        return lang, {}
-
-def _build_region_table_data(lang_data_dict, total_all_reviews):
-    region_stats = {}
-    for lang_code, stats in lang_data_dict.items():
-        region = REGION_MAP.get(lang_code, "🌐 기타")
-        if region not in region_stats:
-            region_stats[region] = {"total": 0, "positive": 0}
-        region_stats[region]["total"] += stats["total"]
-        region_stats[region]["positive"] += stats["positive"]
-    
-    sorted_regions = sorted(region_stats.items(), key=lambda x: x[1]['total'], reverse=True)
-    table_data = []
-    for idx, (region_name, stats) in enumerate(sorted_regions):
-        count = stats['total']
-        pos = stats['positive']
-        neg = count - pos
-        ratio = (count / total_all_reviews) * 100 if total_all_reviews > 0 else 0
-        pos_ratio = (pos / count) * 100 if count > 0 else 0
-        neg_ratio = (neg / count) * 100 if count > 0 else 0
-        eval_desc = calculate_custom_score(pos / count if count > 0 else 0, count)
-        
-        table_data.append({
-            "rank": f"{idx+1}위", "region": region_name, "count": count, 
-            "ratio": f"{ratio:.1f}%", "pos_ratio": f"{pos_ratio:.1f}%", "neg_ratio": f"{neg_ratio:.1f}%", "eval": eval_desc
-        })
-    return table_data
-
-def _build_lang_table_data(lang_data_dict, total_all_reviews):
-    sorted_langs = sorted(lang_data_dict.items(), key=lambda x: x[1]['total'], reverse=True)
-    table_data = []
-    for idx, (lang_code, stats) in enumerate(sorted_langs):
-        count, pos = stats['total'], stats['positive']
-        neg = stats['total'] - stats['positive']
-        ratio = (count / total_all_reviews) * 100 if total_all_reviews > 0 else 0
-        pos_ratio = (pos / count) * 100 if count > 0 else 0
-        neg_ratio = (neg / count) * 100 if count > 0 else 0
-        eval_desc = calculate_custom_score(pos / count if count > 0 else 0, count)
-        
-        raw_lang = get_lang_name(lang_code)
-        clean_lang = raw_lang.split(" ", 1)[-1].strip() if " " in raw_lang else raw_lang
-        
-        table_data.append({
-            "rank": f"{idx+1}위", "lang": clean_lang, "lang_with_flag": raw_lang, "count": count, 
-            "ratio": f"{ratio:.1f}%", "pos_ratio": f"{pos_ratio:.1f}%", "neg_ratio": f"{neg_ratio:.1f}%", "eval": eval_desc
-        })
-    return table_data
+    except: return lang, {}
 
 def fetch_steam_reviews(app_id, recent_days_val, release_date):
     lang_stats_all_dict = {}
@@ -176,110 +114,108 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
     official_desc, _ = fetch_store_official_rating(app_id)
     if not official_desc or official_desc == "평가 없음":
         try:
-            res_steam = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json()
-            summ = res_steam.get('query_summary', {})
+            summ = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json().get('query_summary', {})
             score_code = summ.get('review_score', 0)
-            if score_code == 0 and summ.get('total_reviews', 0) > 0:
-                official_desc = calculate_custom_score(summ.get('total_positive', 0) / summ.get('total_reviews', 0), summ.get('total_reviews', 0))
+            if score_code == 0 and summ.get('total_reviews', 0) > 0: official_desc = calculate_custom_score(summ.get('total_positive', 0) / summ.get('total_reviews', 0), summ.get('total_reviews', 0))
             else: official_desc = SCORE_MAP.get(score_code, "평가 없음")
         except: official_desc = "평가 없음"
 
-    all_time_total_reviews = sum_total
     all_desc = calculate_custom_score(sum_pos / sum_total, sum_total) if sum_total > 0 else "평가 없음"
-    
     lang_stats_30_dict = {lang: {'total': 0, 'positive': 0} for lang in LANG_MAP.keys()}
     recent_total, recent_pos = 0, 0
     recent_custom_desc = "평가 없음"
 
     if recent_days_val:
-        cutoff_date = datetime.now() - timedelta(days=recent_days_val)
-        cutoff_ts = int(cutoff_date.timestamp())
-        
+        cutoff_ts = int((datetime.now() - timedelta(days=recent_days_val)).timestamp())
         sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&num_per_page=100&purchase_type=all")
         cursor = "*"
-        
         for _ in range(50):
             try:
-                res = requests.get(sample_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=5)
-                data = res.json()
+                data = requests.get(sample_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=5).json()
                 revs = data.get('reviews', [])
                 if not revs: break
-                
                 stop_fetching = False
                 for r in revs:
                     if r.get('timestamp_created', 0) < cutoff_ts:
-                        stop_fetching = True
-                        break 
-                        
+                        stop_fetching = True; break 
                     recent_total += 1
-                    is_pos = r.get('voted_up', False)
-                    if is_pos: recent_pos += 1
-                    
+                    if r.get('voted_up', False): recent_pos += 1
                     r_lang = r.get('language')
                     if r_lang in lang_stats_30_dict:
                         lang_stats_30_dict[r_lang]['total'] += 1
-                        if is_pos: lang_stats_30_dict[r_lang]['positive'] += 1
-                            
+                        if r.get('voted_up', False): lang_stats_30_dict[r_lang]['positive'] += 1
                 if stop_fetching: break
-                    
                 cursor = data.get('cursor', '*')
                 if not cursor: break
             except: break
-            
-        if recent_total > 0: 
-            recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
-        
+        if recent_total > 0: recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
         lang_stats_30_dict = {k: v for k, v in lang_stats_30_dict.items() if v['total'] > 0}
-    else:
-        recent_total, recent_custom_desc = all_time_total_reviews, all_desc
+    else: recent_total, recent_custom_desc = sum_total, all_desc
 
-    table_data_all = _build_lang_table_data(lang_stats_all_dict, sum_total)
-    table_data_30 = _build_lang_table_data(lang_stats_30_dict, sum([v['total'] for v in lang_stats_30_dict.values()]))
-    table_data_region = _build_region_table_data(lang_stats_all_dict, sum_total)
-    days_since_release = (datetime.now() - release_date).days
+    # 💡 [핵심] 권역별 분석을 위해 각 권역 대표 언어를 골고루 타겟에 포함시킴
+    target_langs = set([l[0] for l in sorted(lang_stats_all_dict.items(), key=lambda x: x[1]['total'], reverse=True)[:3]])
+    target_langs.add("koreana")
+    for region in ["아시아", "영미/유럽권", "CIS", "중남미", "중동/기타"]:
+        langs_in_region = [l for l in lang_stats_all_dict.keys() if REGION_MAP.get(l, '기타') == region]
+        if langs_in_region:
+            top_lang_in_reg = sorted(langs_in_region, key=lambda x: lang_stats_all_dict[x]['total'], reverse=True)[0]
+            target_langs.add(top_lang_in_reg)
 
-    top_langs_keys = [l[0] for l in sorted(lang_stats_all_dict.items(), key=lambda x: x[1]['total'], reverse=True)[:3]]
-    if "koreana" not in top_langs_keys: top_langs_keys.append("koreana")
-    
-    filtered_all, filtered_recent, all_reviews_for_pt = {l: [] for l in top_langs_keys}, {l: [] for l in top_langs_keys}, []
-    for lang in top_langs_keys:
+    filtered_all, filtered_recent, all_reviews_for_pt = {l: [] for l in target_langs}, {l: [] for l in target_langs}, []
+    for lang in target_langs:
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
         all_reviews_for_pt.extend([{'pt': r['playtime'], 'pos': r['is_positive']} for r in all_revs])
-        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in all_revs][:20]
+        
+        # 권역 정보를 함께 태워보냄
+        reg_name = REGION_MAP.get(lang, "기타")
+        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {reg_name} | ⏱️ {r['playtime']}h] {r['review']}" for r in all_revs][:20]
         if recent_days_val:
             rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val)
-            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | ⏱️ {r['playtime']}h | ID: {r['steam_id']}] {r['review']}" for r in rec_revs][:20]
+            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {reg_name} | ⏱️ {r['playtime']}h] {r['review']}" for r in rec_revs][:20]
         else: filtered_recent[lang] = filtered_all[lang]
 
+    # 💡 [업데이트] 플레이타임 3등분 로직 (하위 25%, 중위 50%, 상위 25%)
     all_reviews_for_pt.sort(key=lambda x: x['pt'])
     n_len = len(all_reviews_for_pt)
     if n_len >= 4:
-        q1 = n_len // 4
-        q3 = n_len * 3 // 4
+        q1, q3 = n_len // 4, n_len * 3 // 4
         newbies = all_reviews_for_pt[:q1]
+        normals = all_reviews_for_pt[q1:q3]
         cores = all_reviews_for_pt[q3:]
     else:
-        mid = n_len // 2
-        newbies = all_reviews_for_pt[:mid]
-        cores = all_reviews_for_pt[mid:]
+        newbies, normals, cores = all_reviews_for_pt, [], []
     
     def calc_pt_stats(group):
         if not group: return 0, 0, "평가 없음"
-        avg = round(sum(x['pt'] for x in group) / len(group), 1)
         pos = sum(1 for x in group if x['pos'])
-        desc = calculate_custom_score(pos / len(group), len(group))
-        return avg, len(group), desc
+        return round(sum(x['pt'] for x in group) / len(group), 1), len(group), calculate_custom_score(pos / len(group), len(group))
 
     n_avg, n_tot, n_desc = calc_pt_stats(newbies)
+    norm_avg, norm_tot, norm_desc = calc_pt_stats(normals)
     c_avg, c_tot, c_desc = calc_pt_stats(cores)
 
+    # 테이블 데이터 빌드 (기존과 동일하므로 생략 없이 축약)
+    def build_reg_table(lang_data, total):
+        reg_stat = {}
+        for l, s in lang_data.items():
+            rg = REGION_MAP.get(l, "🌐 기타")
+            if rg not in reg_stat: reg_stat[rg] = {"total": 0, "positive": 0}
+            reg_stat[rg]["total"] += s["total"]
+            reg_stat[rg]["positive"] += s["positive"]
+        return [{"rank": f"{i+1}위", "region": rg, "count": s['total'], "ratio": f"{(s['total']/total)*100:.1f}%" if total>0 else "0%", "pos_ratio": f"{(s['positive']/s['total'])*100:.1f}%", "neg_ratio": f"{((s['total']-s['positive'])/s['total'])*100:.1f}%", "eval": calculate_custom_score(s['positive']/s['total'], s['total'])} for i, (rg, s) in enumerate(sorted(reg_stat.items(), key=lambda x: x[1]['total'], reverse=True))]
+
+    def build_lang_table(lang_data, total):
+        return [{"rank": f"{i+1}위", "lang": get_lang_name(l).split(" ", 1)[-1].strip(), "lang_with_flag": get_lang_name(l), "count": s['total'], "ratio": f"{(s['total']/total)*100:.1f}%" if total>0 else "0%", "pos_ratio": f"{(s['positive']/s['total'])*100:.1f}%", "neg_ratio": f"{((s['total']-s['positive'])/s['total'])*100:.1f}%", "eval": calculate_custom_score(s['positive']/s['total'], s['total'])} for i, (l, s) in enumerate(sorted(lang_data.items(), key=lambda x: x[1]['total'], reverse=True))]
+
     store_stats = {
-        "official_desc": official_desc, "all_desc": all_desc, "all_total": all_time_total_reviews,
-        "recent_desc": recent_custom_desc, "recent_total": recent_total, 
-        "total_lang_counts": lang_stats_all_dict,
-        "table_data_all": table_data_all, "table_data_30": table_data_30, "table_data_region": table_data_region,
-        "days_since_release": days_since_release,
+        "official_desc": official_desc, "all_desc": all_desc, "all_total": sum_total,
+        "recent_desc": recent_custom_desc, "recent_total": recent_total,
+        "table_data_all": build_lang_table(lang_stats_all_dict, sum_total), 
+        "table_data_30": build_lang_table(lang_stats_30_dict, sum([v['total'] for v in lang_stats_30_dict.values()])), 
+        "table_data_region": build_reg_table(lang_stats_all_dict, sum_total),
+        "days_since_release": (datetime.now() - release_date).days,
         "newbie_avg": n_avg, "newbie_total": n_tot, "newbie_desc": n_desc,
+        "norm_avg": norm_avg, "norm_total": norm_tot, "norm_desc": norm_desc,
         "core_avg": c_avg, "core_total": c_tot, "core_desc": c_desc
     }
     return filtered_all, filtered_recent, store_stats
