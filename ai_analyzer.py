@@ -1,62 +1,89 @@
-import requests
-import json
 from config import GEMINI_API_KEY
-from steam_api import get_lang_name
-from prompts import build_prompt
+import json
+import requests
 
-def analyze_with_gemini(game_name, review_data_all, review_data_recent, store_stats, recent_label, news_data, user_feedback=""):
-    # 💡 [핵심 픽스] x[1]['total']로 접근해야 타입 에러가 안 나고 정상 정렬됨!
-    top_langs_str = ", ".join([f"{get_lang_name(k)}: {v['total']:,}개" for k, v in sorted(store_stats['total_lang_counts'].items(), key=lambda x: x[1]['total'], reverse=True)[:7]])
+def analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats, recent_label, news_data, feedback=None):
+    backticks = "`" * 3
+    json_format = f"{backticks}json"
     
-    review_text = "==== [전체 누적 평가 주요 리뷰] ====\n"
-    for lang, revs in review_data_all.items():
-        if revs: review_text += f"\n[{get_lang_name(lang)}]\n" + "\n".join(revs)
-        
-    review_text += f"\n\n==== [{recent_label} 주요 리뷰] ====\n"
-    for lang, revs in review_data_recent.items():
-        if revs: review_text += f"\n[{get_lang_name(lang)}]\n" + "\n".join(revs)
-        
-    if news_data:
-        news_title, news_contents, news_url, news_date = news_data
-    else:
-        news_title, news_contents, news_url, news_date = None, None, None, None
+    prompt = f"""
+    당신은 글로벌 게임 퍼블리셔의 수석 데이터 분석가입니다.
+    '{game_name}' 게임에 대한 글로벌 유저 리뷰 데이터와 최신 소식을 다각도로 분석하여 JSON 포맷으로 리포트를 작성하세요.
+    
+    [입력 데이터]
+    - 누적 평점: {store_stats['all_desc']} (총 {store_stats['all_total']}개)
+    - {recent_label} 평점: {store_stats['recent_desc']} (총 {store_stats['recent_total']}개)
+    - 최근 공지/뉴스: {news_data[0] if news_data[0] else '없음'}
+    - 누적 리뷰 표본: {json.dumps(reviews_all, ensure_ascii=False)}
+    - 최근 리뷰 표본: {json.dumps(reviews_recent, ensure_ascii=False)}
+    - 추가 분석 요청: {feedback if feedback else '없음'}
 
-    news_text = f"\n[최신 게임 업데이트/공지]\n- 업로드 날짜: {news_date}\n- 제목: {news_title}\n- 내용: {news_contents[:1500]}" if news_title else "제공된 최신 뉴스가 없습니다."
-        
-    prompt = build_prompt(game_name, store_stats, recent_label, top_langs_str, news_text, review_text, user_feedback)
+    [분석 및 작성 지침]
+    1. 데이터 객관성: 제공된 데이터 외의 추측을 배제합니다.
+    2. 플레이타임 교차 분석 (하위 25% 뉴비, 중위 50% 일반, 상위 25% 코어): 세 그룹 간의 평가 차이를 명확히 교차 분석해야 합니다.
+    3. 권역별 세부 평가 분석: 아시아, 영미/유럽권, CIS, 중남미, 중동/기타 5개 권역으로 나누어 분석합니다.
+       - 각 권역별로 긍정/부정 평가 및 키워드를 도출합니다.
+       - 만약 2개 이상의 권역에서 주요 여론이 확연히 다를 경우(예: 아시아 부정적, 서구권 긍정적) 그 원인과 특징을 `divergence_insight`에 서술하고, 비슷할 경우 빈 문자열("")로 둡니다.
+
+    [출력 JSON 구조 - 반드시 아래 키를 유지할 것]
+    {json_format}
+    {{
+      "critic_one_liner": "게임에 대한 날카로운 한줄평 (이모지 포함)",
+      "sentiment_analysis": "전체 및 최근 동향을 비교한 요약 브리핑 (3문장 내외)",
+      "final_summary_all": ["[긍정] 또는 [부정] 으로 시작하는 누적 여론 요약 문장 3개"],
+      "final_summary_recent": ["[긍정] 또는 [부정] 으로 시작하는 최근 여론 요약 문장 3개"],
+      "playtime_analysis": {{
+        "comparison_insights": ["뉴비, 일반, 코어 유저 간의 시각차에 대한 핵심 인사이트 2개"],
+        "newbie_title": "🌱 뉴비 여론 (하위 25%)",
+        "newbie_summary": ["뉴비 유저들의 주요 평가 요약 2개"],
+        "normal_title": "🚶 일반 여론 (중위 50%)",
+        "normal_summary": ["일반 유저들의 주요 평가 요약 2개"],
+        "core_title": "💀 코어 여론 (상위 25%)",
+        "core_summary": ["코어 유저들의 주요 평가 요약 2개"]
+      }},
+      "ai_issue_pick": ["최근 리뷰나 뉴스에서 두드러지는 특이점이나 논란거리 2~3개"],
+      "news_summary": ["최신 뉴스와 패치노트 내용에 대한 유저 반응 연결 요약 2개"],
+      "global_category_summary": [
+         {{ "category": "[긍정] 또는 [부정] 카테고리명", "summary": ["해당 카테고리 요약 2개"] }}
+      ],
+      "region_analysis": {{
+        "divergence_insight": "권역별 여론이 상이할 경우 그 이유와 특징 분석 (비슷하면 빈 문자열)",
+        "regions": [
+            {{
+                "region": "권역명 (아시아, 영미/유럽권 등)",
+                "trend": "대체로 긍정적 등",
+                "keywords": ["키워드1", "키워드2"],
+                "categories": [
+                    {{ "name": "[긍정] 또는 [부정] 카테고리명", "summary": ["요약"] }}
+                ]
+            }}
+        ]
+      }},
+      "country_analysis": [
+         {{
+            "language": "언어명 (한국어 등)",
+            "categories": [
+                {{ "name": "[긍정] 또는 [부정] 카테고리명", "summary": ["요약"], "quote": "실제 해당 언어의 인상 깊은 유저 리뷰 원문 인용" }}
+            ]
+         }}
+      ]
+    }}
+    {backticks}
+    """
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
-    
     payload = {
         "contents": [{"parts": [{"text": prompt}]}], 
-        "generationConfig": {
-            "responseMimeType": "application/json", 
-            "temperature": 0.1
-        }
+        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}
     }
     
     try:
         res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
         res.raise_for_status()
-        raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-        
-        bt = "`" * 3
-        if raw_text.startswith(f"{bt}json"): raw_text = raw_text[7:]
-        if raw_text.startswith(bt): raw_text = raw_text[3:]
-        if raw_text.endswith(bt): raw_text = raw_text[:-3]
-        raw_text = raw_text.strip()
-        
+        raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
         return json.loads(raw_text), None
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 429: return None, "429 Client Error"
-        return None, f"API 에러 ({e.response.status_code})"
-    except json.JSONDecodeError as e:
-        return None, f"JSON_DECODE_ERROR: {str(e)}"
-    except Exception as e: 
-        error_msg = str(e)
-        if GEMINI_API_KEY and GEMINI_API_KEY in error_msg:
-            error_msg = error_msg.replace(GEMINI_API_KEY, "********")
-        return None, error_msg
+    except Exception as e:
+        return None, f"AI 분석 실패: {str(e)}"
 
 def ask_followup_question(game_name, store_stats, insights, question):
     from config import GEMINI_API_KEY
@@ -65,28 +92,16 @@ def ask_followup_question(game_name, store_stats, insights, question):
     
     prompt = f"""
     넌 글로벌 게임 사업 PM이야. '{game_name}'에 대해 이미 작성된 분석 리포트와 데이터를 바탕으로, 팀원의 추가 질문에 빠르고 객관적으로 답변해줘.
-    
     [팀원 질문]: {question}
-    
-    [참고 데이터 - 초기 분석 결과]:
-    {json.dumps(insights, ensure_ascii=False)}
-    
-    답변 작성 규칙:
-    1. 팩트 기반으로 3~4문장 이내로 핵심만 대답할 것.
-    2. 제공된 데이터 내에서 유추할 수 없는 내용은 "제공된 데이터에서는 확인이 어렵습니다"라고 할 것.
-    3. 노션에 텍스트로 들어갈 예정이므로 마크다운 볼드체 등 특수기호는 가급적 사용하지 말 것.
+    [참고 데이터]: {json.dumps(insights, ensure_ascii=False)}
+    답변 작성 규칙: 팩트 기반으로 3~4문장 이내 핵심만 대답. 특수기호 최소화.
     """
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}], 
-        "generationConfig": {"temperature": 0.2}
-    }
+    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}}
     
     try:
         res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
         res.raise_for_status()
-        raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-        return raw_text, None
-    except Exception as e:
-        return None, str(e)
+        return res.json()['candidates'][0]['content']['parts'][0]['text'].strip(), None
+    except Exception as e: return None, str(e)
