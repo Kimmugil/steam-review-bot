@@ -54,15 +54,16 @@ def render_report_tabs():
             p1, p2, p3 = st.columns(3)
             with p1:
                 st.markdown(f"**{pt.get('newbie_title', ui.TEXTS['newbie_title_default'])}**")
-                st.caption(ui.TEXTS["sample_opinion"].format(stats.get('newbie_total', 0), stats.get('newbie_desc', ui.TEXTS['steam_eval_none'])))
+                # 💡 [버그 수정] 표본수, 평균 플탐, 여론 완벽 주입
+                st.caption(ui.TEXTS["sample_opinion"].format(stats.get('newbie_total', 0), stats.get('newbie_avg', 0), stats.get('newbie_desc', ui.TEXTS['steam_eval_none'])))
                 for l in sort_sentiments(pt.get('newbie_summary', [])): st.write(f"- {render_colored_text(l)}")
             with p2:
                 st.markdown(f"**{pt.get('normal_title', ui.TEXTS['normal_title_default'])}**")
-                st.caption(ui.TEXTS["sample_opinion"].format(stats.get('norm_total', 0), stats.get('norm_desc', ui.TEXTS['steam_eval_none'])))
+                st.caption(ui.TEXTS["sample_opinion"].format(stats.get('norm_total', 0), stats.get('norm_avg', 0), stats.get('norm_desc', ui.TEXTS['steam_eval_none'])))
                 for l in sort_sentiments(pt.get('normal_summary', [])): st.write(f"- {render_colored_text(l)}")
             with p3:
                 st.markdown(f"**{pt.get('core_title', ui.TEXTS['core_title_default'])}**")
-                st.caption(ui.TEXTS["sample_opinion"].format(stats.get('core_total', 0), stats.get('core_desc', ui.TEXTS['steam_eval_none'])))
+                st.caption(ui.TEXTS["sample_opinion"].format(stats.get('core_total', 0), stats.get('core_avg', 0), stats.get('core_desc', ui.TEXTS['steam_eval_none'])))
                 for l in sort_sentiments(pt.get('core_summary', [])): st.write(f"- {render_colored_text(l)}")
 
     with tab3:
@@ -74,7 +75,6 @@ def render_report_tabs():
             with st.expander(ui.TEXTS["region_expander"].format(reg.get('region'), reg.get('trend'))):
                 st.caption(ui.TEXTS["keyword_label"].format(', '.join(reg.get('keywords', []))))
                 for cat in reg.get('categories', []):
-                    # 💡 [버그 수정] 카테고리명을 확실하게 분리 렌더링!
                     cat_name = cat.get('name', '')
                     if cat_name: st.markdown(f"**{render_colored_text(cat_name)}**")
                     for line in sort_sentiments(cat.get('summary', [])): st.write(f"- {render_colored_text(line)}")
@@ -86,7 +86,6 @@ def render_report_tabs():
         for country in ins.get('country_analysis', []):
             st.markdown(ui.TEXTS["country_flag"].format(country.get('country', '')))
             for cat in country.get('categories', []):
-                # 💡 [버그 수정] 카테고리명과 요약문 분리 렌더링 적용 완료!
                 cat_name = cat.get('name', '')
                 if cat_name: st.markdown(f"**{render_colored_text(cat_name)}**")
                 
