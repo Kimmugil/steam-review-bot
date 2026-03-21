@@ -3,20 +3,21 @@ import urllib.parse
 import re
 import concurrent.futures
 from datetime import datetime, timedelta
+import ui_texts as ui  
 from config import LANG_MAP, SCORE_MAP, REGION_MAP
 
 def get_lang_name(lang_code):
     return LANG_MAP.get(lang_code, f"🏳️ {lang_code}")
 
 def calculate_custom_score(pos_ratio, total):
-    if total == 0: return "평가 없음"
-    if pos_ratio >= 0.95: return "압도적으로 긍정적"
-    elif pos_ratio >= 0.80: return "매우 긍정적"
-    elif pos_ratio >= 0.70: return "대체로 긍정적"
-    elif pos_ratio >= 0.40: return "복합적"
-    elif pos_ratio >= 0.20: return "대체로 부정적"
-    elif pos_ratio >= 0.01: return "매우 부정적"
-    return "압도적으로 부정적"
+    if total == 0: return ui.TEXTS["steam_eval_none"]
+    if pos_ratio >= 0.95: return ui.TEXTS["steam_eval_op"]
+    elif pos_ratio >= 0.80: return ui.TEXTS["steam_eval_vp"]
+    elif pos_ratio >= 0.70: return ui.TEXTS["steam_eval_mp"]
+    elif pos_ratio >= 0.40: return ui.TEXTS["steam_eval_mixed"]
+    elif pos_ratio >= 0.20: return ui.TEXTS["steam_eval_mn"]
+    elif pos_ratio >= 0.01: return ui.TEXTS["steam_eval_vn"]
+    return ui.TEXTS["steam_eval_on"]
 
 def sanitize_url(url):
     return "".join(char for char in url if 32 <= ord(char) <= 126).strip()
@@ -30,7 +31,7 @@ def fetch_store_official_rating(app_id):
         res.raise_for_status()
         html = res.text
         rating_match = re.search(r'<span class="game_review_summary[^>]*>([^<]+)</span>', html)
-        return rating_match.group(1).strip() if rating_match else "평가 없음", 0
+        return rating_match.group(1).strip() if rating_match else ui.TEXTS["steam_eval_none"], 0
     except: return None, None
 
 def get_steam_game_info(game_input):
@@ -42,7 +43,6 @@ def get_steam_game_info(game_input):
         if not data or app_id not in data or not data[app_id]['success']: return None, None, None, None
         game_data = data[app_id]['data']
         exact_name = game_data['name'].encode('utf-8', 'ignore').decode('utf-8')
-        # 💡 [업데이트 14번] 스팀 API에서 제공하는 공식 헤더 이미지 URL 추출
         header_image = game_data.get('header_image', '')
         try: 
             raw_date = game_data['release_date']['date']
@@ -65,11 +65,27 @@ def fetch_latest_news(app_id):
         return parse_item(news_items[0])
     except: return None, None, None, None
 
+# 💡 [핵심 반영] 정확한 날짜 계산 로직 추가
 def get_smart_period(release_date):
-    days_since = (datetime.now() - release_date).days
-    if days_since < 6: return 3, "출시 초기", "출시 직후 민심을 파악하기 위해 최근 3일간의 동향을 분석했습니다."
-    elif days_since < 40: return days_since // 2, f"최근 {days_since // 2}일", f"오픈 초기 노이즈를 배제하기 위해 출시일의 절반인 최근 {days_since // 2}일간의 동향을 분석했습니다."
-    return 30, "최근 30일", "서비스가 안정화된 상태로 최근 30일간의 장기 동향을 분석했습니다."
+    now = datetime.now()
+    days_since = (now - release_date).days
+    
+    if days_since < 6: 
+        days = 3
+        label = ui.TEXTS["steam_period_early"]
+        reason = ui.TEXTS["steam_period_early_desc"]
+    elif days_since < 40: 
+        days = days_since // 2
+        label = ui.TEXTS["steam_period_mid"].format(days)
+        reason = ui.TEXTS["steam_period_mid_desc"]
+    else:
+        days = 30
+        label = ui.TEXTS["steam_period_long"]
+        reason = ui.TEXTS["steam_period_long_desc"]
+        
+    start_date = now - timedelta(days=days)
+    period_str = f"{start_date.strftime('%Y.%m.%d')} ~ {now.strftime('%Y.%m.%d')}"
+    return days, label, reason, period_str
 
 def fetch_lang_reviews(app_id, lang, day_range=None):
     reviews = []
@@ -99,7 +115,8 @@ def _fetch_single_lang_stats(app_id, lang):
         return lang, res_all
     except: return lang, {}
 
-def fetch_steam_reviews(app_id, recent_days_val, release_date):
+# 💡 period_str을 파라미터로 받아서 stats 딕셔너리에 저장
+def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
     lang_stats_all_dict = {}
     sum_total, sum_pos = 0, 0
     
@@ -114,18 +131,18 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
                 sum_pos += p_all
 
     official_desc, _ = fetch_store_official_rating(app_id)
-    if not official_desc or official_desc == "평가 없음":
+    if not official_desc or official_desc == ui.TEXTS["steam_eval_none"]:
         try:
             summ = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json().get('query_summary', {})
             score_code = summ.get('review_score', 0)
             if score_code == 0 and summ.get('total_reviews', 0) > 0: official_desc = calculate_custom_score(summ.get('total_positive', 0) / summ.get('total_reviews', 0), summ.get('total_reviews', 0))
-            else: official_desc = SCORE_MAP.get(score_code, "평가 없음")
-        except: official_desc = "평가 없음"
+            else: official_desc = SCORE_MAP.get(score_code, ui.TEXTS["steam_eval_none"])
+        except: official_desc = ui.TEXTS["steam_eval_none"]
 
-    all_desc = calculate_custom_score(sum_pos / sum_total, sum_total) if sum_total > 0 else "평가 없음"
+    all_desc = calculate_custom_score(sum_pos / sum_total, sum_total) if sum_total > 0 else ui.TEXTS["steam_eval_none"]
     lang_stats_30_dict = {lang: {'total': 0, 'positive': 0} for lang in LANG_MAP.keys()}
     recent_total, recent_pos = 0, 0
-    recent_custom_desc = "평가 없음"
+    recent_custom_desc = ui.TEXTS["steam_eval_none"]
 
     if recent_days_val:
         cutoff_ts = int((datetime.now() - timedelta(days=recent_days_val)).timestamp())
@@ -166,7 +183,7 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
     for lang in target_langs:
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
         all_reviews_for_pt.extend([{'pt': r['playtime'], 'pos': r['is_positive']} for r in all_revs])
-        reg_name = REGION_MAP.get(lang, "기타")
+        reg_name = REGION_MAP.get(lang, ui.TEXTS["steam_etc"])
         filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {reg_name} | ⏱️ {r['playtime']}h] {r['review']}" for r in all_revs][:20]
         if recent_days_val:
             rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val)
@@ -184,7 +201,7 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
         newbies, normals, cores = all_reviews_for_pt, [], []
     
     def calc_pt_stats(group):
-        if not group: return 0, 0, "평가 없음"
+        if not group: return 0, 0, ui.TEXTS["steam_eval_none"]
         pos = sum(1 for x in group if x['pos'])
         return round(sum(x['pt'] for x in group) / len(group), 1), len(group), calculate_custom_score(pos / len(group), len(group))
 
@@ -195,7 +212,7 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
     def build_reg_table(lang_data, total):
         reg_stat = {}
         for l, s in lang_data.items():
-            rg = REGION_MAP.get(l, "🌐 기타")
+            rg = REGION_MAP.get(l, f"🌐 {ui.TEXTS['steam_etc']}")
             if rg not in reg_stat: reg_stat[rg] = {"total": 0, "positive": 0}
             reg_stat[rg]["total"] += s["total"]
             reg_stat[rg]["positive"] += s["positive"]
@@ -213,6 +230,7 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date):
         "days_since_release": (datetime.now() - release_date).days,
         "newbie_avg": n_avg, "newbie_total": n_tot, "newbie_desc": n_desc,
         "norm_avg": norm_avg, "norm_total": norm_tot, "norm_desc": norm_desc,
-        "core_avg": c_avg, "core_total": c_tot, "core_desc": c_desc
+        "core_avg": c_avg, "core_total": c_tot, "core_desc": c_desc,
+        "collection_period": period_str  # 💡 계산된 기간 문자열을 stats에 포함!
     }
     return filtered_all, filtered_recent, store_stats
