@@ -18,13 +18,11 @@ def render_colored_text(text):
     elif "[부정]" in text: return f":red[{text}]"
     return text
 
-# 💡 [업데이트 15번] 토스형 UI 완벽 개편 - 프로그레스 바 강제 노란색 변경 및 진정한 카드 형태 구현!
 st.markdown("""
     <style>
         .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #F04452; color: white; text-align: center; padding: 8px; font-weight: bold; z-index: 9999; }
         .main .block-container { padding-top: 50px; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; }
         
-        /* 토스 스타일 부드러운 카드 UI */
         .toss-card { 
             background-color: var(--secondary-background-color); 
             padding: 24px; 
@@ -33,12 +31,10 @@ st.markdown("""
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
         }
         
-        /* 💡 15번: 스트림릿 프로그레스 바 기본 파란색 -> 노란색 강제 덮어쓰기! */
         .stProgress > div > div > div > div {
             background-color: #FFC000 !important;
         }
 
-        /* 메인 버튼 노란색 포인트 */
         button[kind="primary"] {
             background-color: #FFC000 !important;
             color: #111111 !important;
@@ -49,7 +45,6 @@ st.markdown("""
         }
         button[kind="primary"]:hover { background-color: #E5AC00 !important; }
         
-        /* 💡 13번: 업데이트 이력 텍스트 작게 */
         .small-history { font-size: 0.85rem; line-height: 1.5; }
     </style>
 """, unsafe_allow_html=True)
@@ -105,7 +100,6 @@ def main():
         st.divider()
         st.caption(f"Version: {APP_VERSION}")
         
-        # 💡 [업데이트 13번] 이력 텍스트 크기 줄이기 적용
         with st.expander("🛠️ 업데이트 이력"): 
             st.markdown(f"<div class='small-history'>\n\n{UPDATE_HISTORY}\n\n</div>", unsafe_allow_html=True)
 
@@ -130,18 +124,23 @@ def main():
             app_id = extract_id(raw_input)
             game_candidate_name = None
             game_candidate_img = None
+            game_candidate_date = None
             
             if app_id:
-                rid, game_candidate_name, rdate, game_candidate_img = get_steam_game_info(app_id)
+                rid, game_candidate_name, game_candidate_date, game_candidate_img = get_steam_game_info(app_id)
             
             if game_candidate_name:
-                # 💡 [업데이트 14번] 입력 시 게임 썸네일 이미지 및 동적 문구 렌더링!
                 st.markdown("---")
                 img_col, txt_col = st.columns([1, 4])
                 with img_col:
                     if game_candidate_img: st.image(game_candidate_img, use_container_width=True)
                 with txt_col:
                     st.markdown(f"#### 🌾 **{game_candidate_name}** 리뷰를 탈곡할까요?")
+                    # 💡 [추가 요청 반영] 출시일 회색 안내 텍스트 렌더링!
+                    if game_candidate_date:
+                        formatted_date = game_candidate_date.strftime("%Y년 %m월 %d일")
+                        st.caption(f"이 게임은 {formatted_date} 스팀에 출시되었습니다.")
+                        
                 btn_text = "🚀 리뷰 탈곡하기"
             else:
                 btn_text = "🚀 리뷰 탈곡하기"
@@ -159,7 +158,8 @@ def main():
                         if not game_candidate_name:
                             rid, name, rdate, img_url = get_steam_game_info(app_id)
                         else:
-                            name, img_url = game_candidate_name, game_candidate_img
+                            name, rdate, img_url = game_candidate_name, game_candidate_date, game_candidate_img
+                            
                         if not rid: raise Exception("게임 정보 불러오기 실패")
                         p_bar.progress(20)
                         
@@ -214,7 +214,6 @@ def main():
         tab1, tab2, tab3, tab4 = st.tabs(["📊 주요 요약", "⏱️ 플탐 분석", "🌐 권역 & 언어", "🙋‍♀️ AI 질문"])
         
         with tab1:
-            # 💡 [업데이트 15번 & 17번] 진정한 토스형 카드 디자인 및 서브 텍스트 복구
             st.markdown(f"""
                 <div class="toss-card">
                     <h4 style="margin-top:0;">🤖 AI 한줄평</h4>
