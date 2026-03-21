@@ -55,7 +55,6 @@ def get_global_summary_block(ai_data, recent_label, smart_reason, collection_per
     for line in sort_sentiments(ai_data.get('final_summary_all', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['notion_summary_recent'].format(recent_label)}, "annotations": {"bold": True}}]}})
-    # 💡 [업데이트] 노션에도 정확한 기간 명시!
     blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['date_period_info'].format(collection_period, smart_reason)}, "annotations": {"color": "gray"}}]}})
     
     for line in sort_sentiments(ai_data.get('final_summary_recent', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
@@ -105,8 +104,11 @@ def get_region_analysis_block(ai_data):
         blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['region_expander'].format(reg.get('region'), reg.get('trend'))}}]}})
         blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['keyword_label'].format(', '.join(reg.get('keywords', [])))}, "annotations": {"color": "gray"}}]}})
         for cat in reg.get('categories', []):
-            color = "blue" if "[긍정" in cat.get('name', '') else ("red" if "[부정" in cat.get('name', '') else "default")
-            blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": cat.get('name', '')}, "annotations": {"bold": True, "color": color}}]}})
+            cat_name = cat.get('name', '')
+            if cat_name:
+                color = "blue" if "[긍정" in cat_name else ("red" if "[부정" in cat_name else "default")
+                blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": cat_name}, "annotations": {"bold": True, "color": color}}]}})
+            
             for line in sort_sentiments(cat.get('summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
     blocks.append({"object": "block", "type": "divider", "divider": {}})
@@ -120,6 +122,12 @@ def get_country_analysis_block(ai_data):
     for country in ai_data.get('country_analysis', []):
         blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": ui.TEXTS['country_flag'].format(country.get('country', '')).replace("**", "")}}]}})
         for cat in country.get('categories', []):
+            # 💡 [버그 수정] 노션에서도 카테고리명 (긍/부정 제목) 렌더링 복구 완료!
+            cat_name = cat.get('name', '')
+            if cat_name:
+                color = "blue" if "[긍정" in cat_name else ("red" if "[부정" in cat_name else "default")
+                blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": cat_name}, "annotations": {"bold": True, "color": color}}]}})
+            
             for line in sort_sentiments(cat.get('summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
             quote = cat.get('quote', {})
             if quote and quote.get('original'):
