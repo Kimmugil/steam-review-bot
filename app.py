@@ -18,21 +18,27 @@ def render_colored_text(text):
     elif "[부정]" in text: return f":red[{text}]"
     return text
 
-# 💡 [업데이트 7번] 토스(Toss) 스타일 UI/UX CSS 주입 (다크/라이트 호환, 노란색 포인트)
+# 💡 [업데이트 15번] 토스형 UI 완벽 개편 - 프로그레스 바 강제 노란색 변경 및 진정한 카드 형태 구현!
 st.markdown("""
     <style>
         .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #F04452; color: white; text-align: center; padding: 8px; font-weight: bold; z-index: 9999; }
-        .main .block-container { padding-top: 50px; font-family: 'Pretendard', sans-serif; }
+        .main .block-container { padding-top: 50px; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; }
         
-        /* 토스 스타일 카드 UI */
+        /* 토스 스타일 부드러운 카드 UI */
         .toss-card { 
-            background-color: rgba(128, 128, 128, 0.08); 
+            background-color: var(--secondary-background-color); 
             padding: 24px; 
             border-radius: 16px; 
-            margin-bottom: 16px; 
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
         }
         
-        /* 토스 스타일 Primary 버튼 (황금빛 노란색 + 검정 텍스트) */
+        /* 💡 15번: 스트림릿 프로그레스 바 기본 파란색 -> 노란색 강제 덮어쓰기! */
+        .stProgress > div > div > div > div {
+            background-color: #FFC000 !important;
+        }
+
+        /* 메인 버튼 노란색 포인트 */
         button[kind="primary"] {
             background-color: #FFC000 !important;
             color: #111111 !important;
@@ -41,9 +47,10 @@ st.markdown("""
             border-radius: 12px !important;
             padding: 10px 24px !important;
         }
-        button[kind="primary"]:hover {
-            background-color: #E5AC00 !important;
-        }
+        button[kind="primary"]:hover { background-color: #E5AC00 !important; }
+        
+        /* 💡 13번: 업데이트 이력 텍스트 작게 */
+        .small-history { font-size: 0.85rem; line-height: 1.5; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -74,7 +81,7 @@ def main():
     if "history" not in st.session_state: st.session_state.history = []
     if "step" not in st.session_state:
         st.session_state.step = 0
-        st.session_state.update({"app_id": None, "game_name": None, "insights": None, "qa_history": []})
+        st.session_state.update({"app_id": None, "game_name": None, "insights": None, "qa_history": [], "header_image": None})
 
     with st.sidebar:
         st.markdown(f"### 📍 환경: `{ENV_NAME}`")
@@ -91,19 +98,20 @@ def main():
                         "insights": h['insights'], "stats": h['stats'], "recent_label": h['recent_label'], 
                         "news_data": h['news_data'], "smart_reason": h['smart_reason'], 
                         "reviews_all": h['reviews_all'], "reviews_recent": h['reviews_recent'],
-                        "qa_history": h.get('qa_history', [])
+                        "qa_history": h.get('qa_history', []), "header_image": h.get('header_image', None)
                     })
                     st.session_state.step = 1
                     st.rerun()
         st.divider()
         st.caption(f"Version: {APP_VERSION}")
-        # 💡 [복구 10번] 업데이트 이력 다시 살려냄!
-        with st.expander("🛠️ 업데이트 이력"): st.markdown(UPDATE_HISTORY)
+        
+        # 💡 [업데이트 13번] 이력 텍스트 크기 줄이기 적용
+        with st.expander("🛠️ 업데이트 이력"): 
+            st.markdown(f"<div class='small-history'>\n\n{UPDATE_HISTORY}\n\n</div>", unsafe_allow_html=True)
 
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
         st.title("🚜 스팀 리뷰 탈곡기")
-        # 💡 [복구 10번] 설명 텍스트 살려냄!
         st.markdown("스팀 상점 주소나 App ID를 입력하여 글로벌 유저들의 진짜 민심을 탈탈 털어보세요.")
     with col_h2:
         st.write("")
@@ -116,19 +124,24 @@ def main():
         with st.container(border=True):
             st.subheader("🎮 Step 1. 분석할 게임 찾기")
             
-            # 💡 [업데이트 9번] 입력창 하단 설명(가이드) 고정 배치
             raw_input = st.text_input("스팀 URL 또는 App ID 입력", placeholder="예: https://store.steampowered.com/app/2215430", label_visibility="collapsed")
             st.caption("ℹ️ 스팀 상점 페이지의 주소(URL) 전체를 복사해서 붙여넣거나, 주소에 포함된 숫자(App ID)만 입력하셔도 됩니다.")
             
             app_id = extract_id(raw_input)
             game_candidate_name = None
+            game_candidate_img = None
             
-            # 💡 [업데이트 12번] 입력 시 바로 <OOO> 리뷰를 탈곡할까요? 띄워주기
             if app_id:
-                rid, game_candidate_name, rdate = get_steam_game_info(app_id)
+                rid, game_candidate_name, rdate, game_candidate_img = get_steam_game_info(app_id)
             
             if game_candidate_name:
-                st.markdown(f"#### 🌾 **{game_candidate_name}** 리뷰를 탈곡할까요?")
+                # 💡 [업데이트 14번] 입력 시 게임 썸네일 이미지 및 동적 문구 렌더링!
+                st.markdown("---")
+                img_col, txt_col = st.columns([1, 4])
+                with img_col:
+                    if game_candidate_img: st.image(game_candidate_img, use_container_width=True)
+                with txt_col:
+                    st.markdown(f"#### 🌾 **{game_candidate_name}** 리뷰를 탈곡할까요?")
                 btn_text = "🚀 리뷰 탈곡하기"
             else:
                 btn_text = "🚀 리뷰 탈곡하기"
@@ -136,19 +149,17 @@ def main():
             if st.button(btn_text, use_container_width=True, type="primary"):
                 if not app_id: st.warning("유효한 App ID 또는 주소를 입력해 주세요."); return
                 
-                # 💡 [업데이트 12번] 상태 메시지 게임명 포함으로 변경
                 target_name = game_candidate_name if game_candidate_name else "게임"
                 with st.status(f"[{target_name}] 스팀 리뷰 탈곡 중... 🌾", expanded=True) as status:
                     try:
-                        # 💡 [복구 10번] 프로그레스 바 및 전광판 텍스트 복구
                         p_bar = st.progress(0)
                         info_txt = st.empty()
                         
                         info_txt.write("🔍 1/5: 게임 기본 정보 확인 중...")
                         if not game_candidate_name:
-                            rid, name, rdate = get_steam_game_info(app_id)
+                            rid, name, rdate, img_url = get_steam_game_info(app_id)
                         else:
-                            name = game_candidate_name
+                            name, img_url = game_candidate_name, game_candidate_img
                         if not rid: raise Exception("게임 정보 불러오기 실패")
                         p_bar.progress(20)
                         
@@ -168,7 +179,6 @@ def main():
                             finally: event.set()
                         threading.Thread(target=run_ai).start()
                         
-                        # 💡 [복구 10번] 팁 메시지 깜빡거리는 전광판 복구
                         while not event.is_set(): 
                             ticker.info(f"💡 {random.choice(WAITING_MESSAGES)}")
                             time.sleep(TICKER_INTERVAL)
@@ -179,9 +189,9 @@ def main():
                             "app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), 
                             "insights": res_box[0], "stats": stats, "recent_label": rlabel, 
                             "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r,
-                            "qa_history": []
+                            "qa_history": [], "header_image": img_url
                         })
-                        history_item = {k: st.session_state[k] for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history"]}
+                        history_item = {k: st.session_state[k] for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]}
                         st.session_state.history = [h for h in st.session_state.history if h['app_id'] != rid]
                         st.session_state.history.append(history_item)
                         
@@ -200,14 +210,23 @@ def main():
         st.info("💡 발행 전 생성된 데이터를 검토하고, 추가 질문이 있다면 AI와 대화할 수 있습니다.")
         
         ins, stats = st.session_state.insights, st.session_state.stats
+        
         tab1, tab2, tab3, tab4 = st.tabs(["📊 주요 요약", "⏱️ 플탐 분석", "🌐 권역 & 언어", "🙋‍♀️ AI 질문"])
         
         with tab1:
-            st.markdown(f'<div class="toss-card"><b>💬 AI 한줄평:</b><br>{ins.get("critic_one_liner", "")}</div>', unsafe_allow_html=True)
-            col1, col2, col3 = st.columns(3)
-            with col1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'))
-            with col2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
-            with col3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
+            # 💡 [업데이트 15번 & 17번] 진정한 토스형 카드 디자인 및 서브 텍스트 복구
+            st.markdown(f"""
+                <div class="toss-card">
+                    <h4 style="margin-top:0;">🤖 AI 한줄평</h4>
+                    <p style="font-size:1.1rem;">❝ {ins.get("critic_one_liner", "")} ❞</p>
+                    <span style="color:#888; font-size:0.9rem;">{st.session_state.rel_date_str} 스팀에 출시된 [{st.session_state.game_name}]에 대한 AI 분석 결과입니다.</span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            c_m1, c_m2, c_m3 = st.columns(3)
+            with c_m1: st.metric("🛑 스팀 공식 평점", stats.get('official_desc', '평가 없음'))
+            with c_m2: st.metric("📈 전체 누적 평점", stats['all_desc'], f"{stats['all_total']:,}개")
+            with c_m3: st.metric(f"🔥 {st.session_state.recent_label}", stats['recent_desc'], f"{stats['recent_total']:,}개")
             
             st.markdown("##### 🎯 종합 여론 브리핑")
             st.info(ins.get('sentiment_analysis', ''))
@@ -256,8 +275,8 @@ def main():
             st.markdown("### 🌍 글로벌 언어 및 권역 통계표")
             def apply_eval_color(val):
                 val_str = str(val)
-                if "긍정적" in val_str: return "color: #3182F6" # Toss Blue
-                elif "부정적" in val_str: return "color: #F04452" # Toss Red
+                if "긍정적" in val_str: return "color: #3182F6" 
+                elif "부정적" in val_str: return "color: #F04452" 
                 return "color: #888888"
 
             df_cols_region = ["순위", "권역", "리뷰 수", "비중", "👍 긍정 비율", "👎 부정 비율", "📊 평가 결과"]
@@ -268,7 +287,6 @@ def main():
             st.markdown("##### 🗺️ 주요 권역별 누적 리뷰 비중")
             st.dataframe(styled_region, hide_index=True, use_container_width=True)
 
-            # 💡 [복구 10번] 누락되었던 언어별 테이블 전체 복구!
             df_cols = ["순위", "언어", "리뷰 수", "비중", "👍 긍정 비율", "👎 부정 비율", "📊 평가 결과"]
             df_all = pd.DataFrame([[r['rank'], r['lang'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_all']], columns=df_cols)
             df_30 = pd.DataFrame([[r['rank'], r['lang'], f"{r['count']:,}개", r['ratio'], r['pos_ratio'], r['neg_ratio'], r['eval']] for r in stats['table_data_30']], columns=df_cols)
@@ -327,14 +345,17 @@ def main():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("🔄 노션 발행 없이 다른 게임 분석하기", use_container_width=True):
-                    keys_to_clear = ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history"]
+                    keys_to_clear = ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]
                     for k in keys_to_clear: st.session_state[k] = None
                     st.session_state.step = 0; st.rerun()
             with col2:
                 if st.button("📤 노션 리포트 최종 발행", type="primary", use_container_width=True):
                     with st.status("노션으로 데이터를 쏘고 있습니다..."):
                         pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, st.session_state.stats, ins, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data, st.session_state.qa_history)
-                        st.session_state.page_id = pid; st.session_state.step = 2; st.rerun()
+                        if pid:
+                            st.session_state.page_id = pid; st.session_state.step = 2; st.rerun()
+                        else:
+                            st.error("노션 발행 중 문제가 발생했습니다.")
 
     elif st.session_state.step == 2:
         st.balloons()
