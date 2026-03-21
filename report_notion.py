@@ -75,7 +75,6 @@ def get_playtime_analysis_block(ai_data, stats):
         list_items = [{"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}} for line in comparison_insights if isinstance(line, str) and line.strip()]
         blocks.append({"object": "block", "type": "callout", "callout": {"icon": {"emoji": "⚖️"}, "color": "yellow_background", "rich_text": [{"text": {"content": ui.TEXTS['notion_insight_core']}, "annotations": {"bold": True}}], "children": list_items}})
     
-    # 💡 [버그 수정] 노션에서도 표본, 평균 플탐, 여론이 보이도록 단락 추가
     blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": playtime_data.get('newbie_title', ui.TEXTS['newbie_title_default'])}, "annotations": {"color": "green", "bold": True}}]}})
     blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['sample_opinion'].format(stats.get('newbie_total', 0), stats.get('newbie_avg', 0), stats.get('newbie_desc', ui.TEXTS['steam_eval_none']))}, "annotations": {"color": "gray"}}]}})
     for line in sort_sentiments(playtime_data.get('newbie_summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
@@ -88,6 +87,39 @@ def get_playtime_analysis_block(ai_data, stats):
     blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ui.TEXTS['sample_opinion'].format(stats.get('core_total', 0), stats.get('core_avg', 0), stats.get('core_desc', ui.TEXTS['steam_eval_none']))}, "annotations": {"color": "gray"}}]}})
     for line in sort_sentiments(playtime_data.get('core_summary', [])): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     
+    blocks.append({"object": "block", "type": "divider", "divider": {}})
+    return blocks
+
+# 💡 [복구 완료] 노션 엑스포터에도 날아간 3개의 분석 블록 완벽 복원!
+def get_ai_issue_pick_block(ai_data):
+    if not ai_data.get('ai_issue_pick'): return []
+    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_issue_pick_title'].replace("### ", "")}}]}}]
+    for issue in ai_data.get('ai_issue_pick', []): 
+        blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": issue}}]}})
+    blocks.append({"object": "block", "type": "divider", "divider": {}})
+    return blocks
+
+def get_news_summary_block(news_data, ai_data):
+    if not news_data or not news_data[0]: return []
+    news_title, _, news_url, news_date = news_data
+    blocks = [
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_news_title'].replace("### ", "")}}]}}, 
+        {"object": "block", "type": "callout", "callout": {"icon": {"emoji": "🔗"}, "color": "gray_background", "rich_text": [{"text": {"content": f"[{news_date}] ", "link": None}, "annotations": {"bold": True, "color": "gray"}}, {"text": {"content": news_title, "link": {"url": news_url}}, "annotations": {"bold": True, "underline": True}}]}}
+    ]
+    for line in ai_data.get('news_summary', []): 
+        blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"text": {"content": line}}]}})
+    blocks.append({"object": "block", "type": "divider", "divider": {}})
+    return blocks
+
+def get_category_summary_block(ai_data):
+    if not ai_data.get('global_category_summary'): return []
+    blocks = [{"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": ui.TEXTS['notion_category_summary_title'].replace("### ", "")}}]}}]
+    for cat in ai_data.get('global_category_summary', []):
+        cat_name = cat.get('category', '')
+        color = "blue" if "[긍정" in cat_name else ("red" if "[부정" in cat_name else "default")
+        blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": cat_name}, "annotations": {"color": color}}]}})
+        for line in sort_sentiments(cat.get('summary', [])): 
+            blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": format_sentiment_line(line)}})
     blocks.append({"object": "block", "type": "divider", "divider": {}})
     return blocks
 
@@ -209,6 +241,12 @@ def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, rece
     children_blocks.extend(get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data))
     children_blocks.extend(get_global_summary_block(ai_data, recent_label, smart_reason, store_stats.get('collection_period', '')))
     children_blocks.extend(get_playtime_analysis_block(ai_data, store_stats))
+    
+    # 💡 [복구 완료] 노션 엑스포터 본문 조립 단계에 3가지 기능 블록 부활
+    children_blocks.extend(get_ai_issue_pick_block(ai_data))
+    children_blocks.extend(get_news_summary_block(news_data, ai_data))
+    children_blocks.extend(get_category_summary_block(ai_data))
+    
     children_blocks.extend(get_region_analysis_block(ai_data))
     children_blocks.extend(get_country_analysis_block(ai_data))
     children_blocks.extend(get_language_ratio_block(store_stats, smart_reason))
