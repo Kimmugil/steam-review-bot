@@ -15,19 +15,18 @@ from report_notion import upload_to_notion
 
 st.set_page_config(page_title=ui.TEXTS["main_title"], page_icon="🚜", layout="wide")
 
-# 💡 [업데이트] 전반적인 UI 톤앤매너 및 Hero 섹션/입력창 구조 개편을 위한 강력한 CSS
 st.markdown("""
     <style>
         /* 기본 폰트 및 여백 설정 */
-        .main .block-container { padding-top: 2rem; font-family: 'Pretendard', sans-serif; }
+        .main .block-container { padding-top: 2rem; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; }
         .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #E24B4A; color: white; text-align: center; padding: 8px; font-weight: bold; z-index: 9999; }
         .small-history { font-size: 0.85rem; line-height: 1.5; }
-        .stProgress > div > div > div > div { background-color: #222 !important; } /* 프로그레스바 어둡게 */
+        .stProgress > div > div > div > div { background-color: #222 !important; }
 
-        /* 탭 상단 고정 매직 CSS (유지) */
+        /* 탭 상단 고정 매직 CSS */
         div[data-testid="stTabs"] > div:first-child {
             position: -webkit-sticky !important; position: sticky !important;
-            top: 45px !important; z-index: 990 !important;
+            top: 40px !important; z-index: 990 !important;
             background-color: var(--background-color) !important;
             padding-top: 10px !important; padding-bottom: 5px !important;
             border-bottom: 1px solid rgba(128,128,128,0.2) !important;
@@ -36,11 +35,11 @@ st.markdown("""
         /* ① Hero 섹션 (이미지+소개 나란히) CSS */
         .hero-container {
             display: flex; gap: 2rem; align-items: center;
-            background-color: var(--secondary-background-color);
+            background-color: rgba(128, 128, 128, 0.05);
             border-radius: 16px; padding: 2rem;
             margin-bottom: 2rem;
         }
-        .hero-img { flex-shrink: 0; width: 320px; } /* 이미지 폭 고정 (비율 유지됨) */
+        .hero-img { flex-shrink: 0; width: 320px; }
         .hero-img img { width: 100%; height: auto; border-radius: 12px; display: block; object-fit: cover; }
         .hero-text { flex: 1; min-width: 0; }
         .hero-text h2 { font-size: 24px; font-weight: bold; margin-bottom: 0.5rem; }
@@ -75,6 +74,17 @@ st.markdown("""
         div[data-testid="stButton"] button[kind="primary"] {
             background-color: #222 !important; color: white !important; border: none !important;
         }
+        
+        /* 리포트 상단 게임 정보 영역 */
+        .game-hero { display: flex; gap: 24px; align-items: stretch; margin-bottom: 1.5rem; }
+        .game-hero-img { width: 260px; min-width: 260px; border-radius: 12px; overflow: hidden; flex-shrink: 0; }
+        .game-hero-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; display: block; }
+        .game-hero-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+        .game-hero-name { font-size: 28px; font-weight: bold; margin-bottom: 4px; line-height: 1.3; }
+        .game-hero-meta { font-size: 14px; color: rgba(128,128,128,0.8); margin-bottom: 16px; }
+        .game-hero-oneliner { flex: 1; font-size: 17px; line-height: 1.7; font-style: italic; color: var(--color-text-primary); padding: 16px 20px; background: rgba(128,128,128,0.07); border-radius: 10px; display: flex; align-items: center; }
+
+        .finish-card { border: 1.5px solid rgba(128,128,128,0.25); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -88,6 +98,23 @@ def extract_id(s):
     clean_s = s.strip()
     match = re.search(r'app/(\d+)', clean_s)
     return match.group(1) if match else (clean_s if clean_s.isdigit() else None)
+
+def render_game_hero(game_name, rel_date_str, header_image, one_liner=""):
+    img_html = f'<img src="{header_image}" alt="{game_name}">' if header_image else \
+               f'<div style="width:100%;height:100%;background:rgba(128,128,128,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:40px;">🎮</div>'
+    one_liner_html = f'<div class="game-hero-oneliner">❝ {one_liner} ❞</div>' if one_liner else ""
+    released_label = ui.TEXTS.get("game_hero_released", "출시일")
+    st.markdown(f'''
+    <div class="game-hero">
+        <div class="game-hero-img">{img_html}</div>
+        <div class="game-hero-info">
+            <div>
+                <div class="game-hero-name">{game_name}</div>
+                <div class="game-hero-meta">{released_label}: {rel_date_str}</div>
+            </div>
+            {one_liner_html}
+        </div>
+    </div>''', unsafe_allow_html=True)
 
 def main():
     if "history" not in st.session_state: st.session_state.history = []
@@ -116,7 +143,6 @@ def main():
     
     st.write("")
     
-    # 💡 [업데이트] 상단에 스텝 인디케이터를 점잖은 CSS로 고정 렌더링
     step_done_cls = "done" if st.session_state.step > 0 else ""
     step_active_cls = "active" if st.session_state.step == 0 else ""
     st.markdown(f'''
@@ -128,9 +154,8 @@ def main():
     ''', unsafe_allow_html=True)
 
     if st.session_state.step == 0:
-        hero_image_path = ui.TEXTS.get("hero_image_path", "")
+        hero_image_path = ui.TEXTS.get("hero_image_path", "image/tractor.png")
         
-        # 💡 [핵심 업데이트] Hero 섹션 렌더링 (이미지 왼쪽 고정, 텍스트 오른쪽 채우기)
         if hero_image_path and os.path.exists(hero_image_path):
             with open(hero_image_path, "rb") as image_file:
                 encoded_string = base64.b64encode(image_file.read()).decode()
@@ -147,10 +172,8 @@ def main():
                 </div>
             </div>''', unsafe_allow_html=True)
         else:
-            # Fallback (이미지가 없을 때)
-            st.info("Hero Image Path를 설정하면 상단 디자인이 개선됩니다.")
+            st.info("💡 image/tractor.png 이미지를 찾을 수 없습니다.")
 
-        # 💡 [핵심 업데이트] 오직 입력창 작업에만 집중하는 깔끔한 컨테이너
         with st.container():
             st.markdown('<div class="work-container">', unsafe_allow_html=True)
             
@@ -158,7 +181,6 @@ def main():
             st.markdown(f'<p style="color:#666; margin-bottom:1rem;">{ui.TEXTS["step1_caption"]}</p>', unsafe_allow_html=True)
             raw_input = st.text_input("Input", placeholder=ui.TEXTS["input_placeholder"], label_visibility="collapsed")
             
-            # 입력값 처리 및 분석 버튼
             app_id = extract_id(raw_input)
             game_candidate_name, game_candidate_date, game_candidate_img = None, None, None
             if app_id: rid, game_candidate_name, game_candidate_date, game_candidate_img = get_steam_game_info(app_id)
@@ -208,16 +230,22 @@ def main():
                         st.session_state.step = 1; status.update(label=ui.TEXTS["status_complete"], state="complete"); st.rerun()
                     except Exception as e: status.update(label=ui.TEXTS["status_error"], state="error"); st.error(str(e))
             
-            st.markdown('</div>', unsafe_allow_html=True) # work-container 닫기
+            st.markdown('</div>', unsafe_allow_html=True)
 
     elif st.session_state.step == 1:
-        # Step 2 이상 렌더링 로직 (이미지 없음, 리포트 탭만 표시)
-        ui_render.render_game_hero(st.session_state.game_name, st.session_state.rel_date_str, st.session_state.header_image)
+        one_liner = ""
+        if st.session_state.insights:
+            one_liner = re.sub(r'\*\*', '', str(st.session_state.insights.get("critic_one_liner", "")))
+        
+        # 💡 [버그 수정 완료] 이 부분이 에러 났던 곳! 정상적인 내부 함수 호출로 복구됨.
+        render_game_hero(st.session_state.game_name, st.session_state.rel_date_str, st.session_state.header_image, one_liner)
+        
+        # UI 모듈을 통해 탭 렌더링 호출
         ui_render.render_report_tabs()
 
         st.divider()
         with st.container(border=True):
-            st.markdown(ui.TEXTS["publish_title"])
+            st.markdown(f'<p style="font-size:16px;font-weight:bold;margin-bottom:1rem;">{ui.TEXTS["publish_title_label"]}</p>', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
                 if st.button(ui.TEXTS["btn_reset"], use_container_width=True):
@@ -230,10 +258,17 @@ def main():
                         if pid: st.session_state.page_id = pid; st.session_state.step = 2; st.rerun()
 
     elif st.session_state.step == 2:
-        # Step 3 발행 완료 페이지
         st.balloons(); st.success(ui.TEXTS["publish_success"])
-        st.markdown(f'<div class="finish-card"><a href="https://notion.so/{st.session_state.page_id.replace("-", "")}" target="_blank" style="font-size:1.5em; color:#3182F6; font-weight:bold; text-decoration:none;">🔗 {ui.TEXTS["publish_link"]}</a></div>', unsafe_allow_html=True)
+        pid_clean = st.session_state.page_id.replace("-", "")
+        st.markdown(f'''
+        <div class="finish-card">
+            <p style="font-size:14px;color:rgba(128,128,128,0.7);margin-bottom:16px;">{ui.TEXTS["publish_notion_released"]}</p>
+            <a href="https://notion.so/{pid_clean}" target="_blank" class="hbtn hbtn-filled" style="max-width:360px;margin:0 auto 16px;">
+                🔗 {ui.TEXTS["publish_link"]}
+            </a>
+        </div>''', unsafe_allow_html=True)
         
+        st.write("")
         if st.button(ui.TEXTS["btn_reset_after_publish"], use_container_width=True, type="primary"):
             for k in [k for k in st.session_state.keys() if k != 'history']: del st.session_state[k]
             st.rerun()
