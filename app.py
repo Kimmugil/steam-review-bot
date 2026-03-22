@@ -3,7 +3,7 @@ import random
 import time
 import threading
 import re
-import ui_texts as ui  
+import ui_texts as ui
 from config import APP_VERSION, NOTION_PUBLIC_URL, GEMINI_API_KEY, NOTION_TOKEN, TICKER_INTERVAL, ENV_NAME
 from updates import UPDATE_HISTORY
 from steam_api import get_steam_game_info, fetch_latest_news, get_smart_period, fetch_steam_reviews
@@ -16,34 +16,46 @@ st.set_page_config(page_title=ui.TEXTS["main_title"], page_icon="🚜", layout="
 st.markdown("""
     <style>
         .main .block-container { padding-top: 2rem; padding-bottom: 3rem; }
-        .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #E24B4A; color: white; text-align: center; padding: 7px; font-size: 13px; font-weight: 500; z-index: 9999; }
+        .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #E24B4A; color: white; text-align: center; padding: 7px; font-size: 14px; font-weight: 500; z-index: 9999; }
+        .small-history { font-size: 0.85rem; line-height: 1.5; }
 
         /* 프라이머리 버튼 */
-        button[kind="primary"] { background-color: var(--color-text-primary) !important; color: var(--color-background-primary) !important; border: none !important; font-weight: 500 !important; border-radius: 10px !important; }
+        button[kind="primary"] { background-color: var(--color-text-primary) !important; color: var(--color-background-primary) !important; border: none !important; font-weight: 500 !important; font-size: 15px !important; border-radius: 10px !important; }
         button[kind="primary"]:hover { opacity: 0.82 !important; }
+
+        /* 일반(secondary) 버튼 — 아웃라인 명시 */
+        button[kind="secondary"] { background-color: transparent !important; color: var(--color-text-primary) !important; border: 1px solid var(--color-border-primary) !important; font-size: 15px !important; border-radius: 10px !important; }
+        button[kind="secondary"]:hover { background-color: var(--color-background-secondary) !important; }
+
+        /* link_button 아웃라인 */
+        a[data-testid="stLinkButton"] > button { border: 1px solid var(--color-border-primary) !important; font-size: 15px !important; border-radius: 10px !important; }
 
         /* 프로그레스바 */
         .stProgress > div > div > div > div { background-color: var(--color-text-primary) !important; }
 
         /* 스텝 인디케이터 */
-        .step-indicator { display: flex; margin-bottom: 2rem; border-bottom: 0.5px solid var(--color-border-tertiary); }
-        .step-item { flex: 1; text-align: center; font-size: 12px; padding: 10px 0; color: var(--color-text-tertiary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .step-wrap { display: flex; margin-bottom: 2rem; border-bottom: 0.5px solid var(--color-border-tertiary); }
+        .step-item { flex: 1; text-align: center; font-size: 15px; padding: 11px 0; color: var(--color-text-tertiary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
         .step-item.active { color: var(--color-text-primary); border-bottom: 2px solid var(--color-text-primary); font-weight: 500; }
         .step-item.done { color: var(--color-text-secondary); border-bottom: 2px solid var(--color-border-secondary); }
 
         /* 탭 상단 고정 */
         div[data-testid="stTabs"] > div:first-child { position: -webkit-sticky !important; position: sticky !important; top: 0 !important; z-index: 999 !important; background-color: var(--background-color) !important; padding-top: 8px !important; padding-bottom: 0 !important; border-bottom: 0.5px solid var(--color-border-tertiary) !important; }
 
+        /* AI 대기 중 슬라이딩 애니메이션 바 */
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(500%); } }
+        .anim-bar-wrap { height: 4px; border-radius: 2px; background: var(--color-border-tertiary); overflow: hidden; margin: 10px 0 6px; }
+        .anim-bar-inner { height: 100%; width: 20%; border-radius: 2px; background: var(--color-text-primary); animation: shimmer 1.5s ease-in-out infinite; }
+
         /* 발행 완료 카드 */
         .finish-card { border: 0.5px solid var(--color-border-tertiary); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
-
-        /* 사이드바 */
-        .small-history { font-size: 0.82rem; line-height: 1.6; }
     </style>
 """, unsafe_allow_html=True)
 
-if ENV_NAME == "DEV": st.markdown(f'<div class="fixed-banner">{ui.TEXTS["dev_banner"]}</div>', unsafe_allow_html=True)
-if not GEMINI_API_KEY or not NOTION_TOKEN: st.error(ui.TEXTS["api_error"]); st.stop()
+if ENV_NAME == "DEV":
+    st.markdown(f'<div class="fixed-banner">{ui.TEXTS["dev_banner"]}</div>', unsafe_allow_html=True)
+if not GEMINI_API_KEY or not NOTION_TOKEN:
+    st.error(ui.TEXTS["api_error"]); st.stop()
 
 def extract_id(s):
     if not s: return None
@@ -54,7 +66,7 @@ def extract_id(s):
 def render_step_indicator(current_step):
     steps = [ui.TEXTS["step_1"], ui.TEXTS["step_2"], ui.TEXTS["step_3"]]
     classes = ["active" if i == current_step else ("done" if i < current_step else "") for i in range(3)]
-    html = '<div class="step-indicator">' + "".join([f'<div class="step-item {c}">{s}</div>' for s, c in zip(steps, classes)]) + '</div>'
+    html = '<div class="step-wrap">' + "".join([f'<div class="step-item {c}">{s}</div>' for s, c in zip(steps, classes)]) + '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
 def main():
@@ -66,20 +78,23 @@ def main():
     with st.sidebar:
         st.markdown(ui.TEXTS["env_label"].format(ENV_NAME)); st.divider()
         st.markdown(ui.TEXTS["recent_history_title"])
-        if not st.session_state.history: st.caption(ui.TEXTS["no_history"])
+        if not st.session_state.history:
+            st.caption(ui.TEXTS["no_history"])
         else:
             st.caption(ui.TEXTS["click_history"])
             for idx, h in enumerate(reversed(st.session_state.history[-5:])):
                 if st.button(ui.TEXTS["btn_history_item"].format(h['game_name']), key=f"hist_{idx}_{h['app_id']}", use_container_width=True):
                     st.session_state.update({k: h.get(k) for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]})
                     st.session_state.step = 1; st.rerun()
-        st.divider(); st.caption(ui.TEXTS["version_label"].format(APP_VERSION))
-        with st.expander(ui.TEXTS["update_history_title"]): st.markdown(f"<div class='small-history'>\n\n{UPDATE_HISTORY}\n\n</div>", unsafe_allow_html=True)
+        st.divider()
+        st.caption(ui.TEXTS["version_label"].format(APP_VERSION))
+        with st.expander(ui.TEXTS["update_history_title"]):
+            st.markdown(f"<div class='small-history'>\n\n{UPDATE_HISTORY}\n\n</div>", unsafe_allow_html=True)
 
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
         st.title(ui.TEXTS["main_title"])
-        st.markdown(f'<p style="color: var(--color-text-secondary); font-size: 15px; margin-top: -0.5rem;">{ui.TEXTS["main_desc"]}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="color:var(--color-text-secondary);font-size:16px;margin-top:-0.5rem;">{ui.TEXTS["main_desc"]}</p>', unsafe_allow_html=True)
     with col_h2:
         st.write("")
         st.link_button(ui.TEXTS["report_link"], NOTION_PUBLIC_URL, use_container_width=True)
@@ -87,6 +102,7 @@ def main():
     st.write("")
     render_step_indicator(st.session_state.step)
 
+    # ── Step 0 ───────────────────────────────────────────────────────────
     if st.session_state.step == 0:
         with st.container(border=True):
             st.subheader(ui.TEXTS["step1_title"])
@@ -95,8 +111,8 @@ def main():
 
             app_id = extract_id(raw_input)
             game_candidate_name, game_candidate_date, game_candidate_img = None, None, None
-
-            if app_id: rid, game_candidate_name, game_candidate_date, game_candidate_img = get_steam_game_info(app_id)
+            if app_id:
+                rid, game_candidate_name, game_candidate_date, game_candidate_img = get_steam_game_info(app_id)
 
             if game_candidate_name:
                 st.markdown("---")
@@ -105,7 +121,8 @@ def main():
                     if game_candidate_img: st.image(game_candidate_img, use_container_width=True)
                 with txt_col:
                     st.markdown(ui.TEXTS["prompt_analyze_game"].format(game_candidate_name))
-                    if game_candidate_date: st.caption(ui.TEXTS["prompt_release_date"].format(game_candidate_date.strftime('%Y년 %m월 %d일')))
+                    if game_candidate_date:
+                        st.caption(ui.TEXTS["prompt_release_date"].format(game_candidate_date.strftime('%Y년 %m월 %d일')))
 
             if st.button(ui.TEXTS["btn_analyze"], use_container_width=True, type="primary"):
                 if not app_id: st.warning(ui.TEXTS["warn_invalid_id"]); return
@@ -113,62 +130,113 @@ def main():
                 target_name = game_candidate_name if game_candidate_name else "게임"
                 with st.status(ui.TEXTS["status_analyzing"].format(target_name), expanded=True) as status:
                     try:
-                        p_bar = st.progress(0); info_txt = st.empty()
-                        info_txt.write(ui.TEXTS["loading_1"])
-                        if not game_candidate_name: rid, name, rdate, img_url = get_steam_game_info(app_id)
-                        else: name, rdate, img_url = game_candidate_name, game_candidate_date, game_candidate_img
+                        p_bar = st.progress(0)
+                        info_txt = st.empty()
+
+                        # 1단계: 게임 정보
+                        info_txt.markdown('<p style="font-size:15px;color:var(--color-text-secondary);">🔍 게임 기본 정보 확인 중...</p>', unsafe_allow_html=True)
+                        if not game_candidate_name:
+                            rid, name, rdate, img_url = get_steam_game_info(app_id)
+                        else:
+                            name, rdate, img_url = game_candidate_name, game_candidate_date, game_candidate_img
                         if not rid: raise Exception(ui.TEXTS["loading_error_info"])
                         p_bar.progress(20)
 
-                        info_txt.write(ui.TEXTS["loading_2"])
+                        # 2단계: 리뷰 수집
+                        info_txt.markdown('<p style="font-size:15px;color:var(--color-text-secondary);">📥 스팀 리뷰 데이터 수집 중… (가장 오래 걸리는 단계예요)</p>', unsafe_allow_html=True)
                         rday, rlabel, rreason, rperiod = get_smart_period(rdate)
                         news = fetch_latest_news(rid)
                         all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)
                         if stats['all_total'] == 0: raise Exception(ui.TEXTS["loading_error_data"])
-                        p_bar.progress(50)
+                        p_bar.progress(55)
 
-                        info_txt.write(ui.TEXTS["loading_3"])
-                        ticker = st.empty(); res_box, event = [None, None], threading.Event()
+                        # 3단계: AI 분석 — 슬라이딩 바 + 메시지 + 55→95 천천히 증가
+                        info_txt.markdown('<p style="font-size:15px;color:var(--color-text-secondary);">🧠 AI 다차원 분석 중… 잠시만 기다려 주세요</p>', unsafe_allow_html=True)
+                        anim_slot = st.empty()
+                        ticker = st.empty()
+                        anim_html = '<div class="anim-bar-wrap"><div class="anim-bar-inner"></div></div>'
+
+                        res_box, event = [None, None], threading.Event()
                         def run_ai():
                             try: res_box[0], res_box[1] = analyze_with_gemini(name, all_r, rec_r, stats, rlabel, news)
                             except Exception as ex: res_box[1] = str(ex)
                             finally: event.set()
                         threading.Thread(target=run_ai).start()
-                        while not event.is_set(): ticker.info(f"💡 {random.choice(ui.TEXTS['WAITING_MESSAGES'])}"); time.sleep(TICKER_INTERVAL)
+
+                        prog = 55
+                        while not event.is_set():
+                            anim_slot.markdown(anim_html, unsafe_allow_html=True)
+                            ticker.info(f"💡 {random.choice(ui.TEXTS['WAITING_MESSAGES'])}")
+                            if prog < 93: prog += 1; p_bar.progress(prog)
+                            time.sleep(TICKER_INTERVAL)
+
+                        anim_slot.empty(); ticker.empty()
                         if res_box[1]: raise Exception(res_box[1])
 
-                        st.session_state.update({"app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), "insights": res_box[0], "stats": stats, "recent_label": rlabel, "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r, "qa_history": [], "header_image": img_url})
+                        info_txt.markdown('<p style="font-size:15px;color:var(--color-text-secondary);">✅ 분석 완료!</p>', unsafe_allow_html=True)
+                        p_bar.progress(100)
+
+                        st.session_state.update({
+                            "app_id": rid, "game_name": name,
+                            "rel_date_str": rdate.strftime("%Y년 %m월 %d일"),
+                            "insights": res_box[0], "stats": stats, "recent_label": rlabel,
+                            "news_data": news, "smart_reason": rreason,
+                            "reviews_all": all_r, "reviews_recent": rec_r,
+                            "qa_history": [], "header_image": img_url
+                        })
                         history_item = {k: st.session_state[k] for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]}
                         st.session_state.history = [h for h in st.session_state.history if h['app_id'] != rid] + [history_item]
+                        st.session_state.step = 1
+                        status.update(label=ui.TEXTS["status_complete"], state="complete")
+                        st.rerun()
 
-                        ticker.empty(); info_txt.write(ui.TEXTS["loading_4"]); p_bar.progress(100)
-                        st.session_state.step = 1; status.update(label=ui.TEXTS["status_complete"], state="complete"); st.rerun()
-                    except Exception as e: status.update(label=ui.TEXTS["status_error"], state="error"); st.error(str(e))
+                    except Exception as e:
+                        status.update(label=ui.TEXTS["status_error"], state="error")
+                        st.error(str(e))
 
+    # ── Step 1 ───────────────────────────────────────────────────────────
     elif st.session_state.step == 1:
-        st.markdown(f'<p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 1rem;">Step 2 · {st.session_state.game_name}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-size:14px;color:var(--color-text-tertiary);margin-bottom:1rem;">Step 2 · {st.session_state.game_name}</p>', unsafe_allow_html=True)
         ui_render.render_report_tabs()
 
         st.divider()
         with st.container(border=True):
-            st.markdown(ui.TEXTS["publish_title"])
+            st.markdown('<p style="font-size:16px;font-weight:500;margin-bottom:0.5rem;">📝 최종 발행 및 다음 스텝</p>', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
                 if st.button(ui.TEXTS["btn_reset"], use_container_width=True):
-                    for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]: st.session_state[k] = None
+                    for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]:
+                        st.session_state[k] = None
                     st.session_state.step = 0; st.rerun()
             with col2:
                 if st.button(ui.TEXTS["btn_notion"], use_container_width=True, type="primary"):
                     with st.status(ui.TEXTS["publish_loading"]):
-                        pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, st.session_state.stats, st.session_state.insights, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data, st.session_state.qa_history)
-                        if pid: st.session_state.page_id = pid; st.session_state.step = 2; st.rerun()
+                        pid = upload_to_notion(
+                            st.session_state.app_id, st.session_state.game_name,
+                            st.session_state.rel_date_str, st.session_state.stats,
+                            st.session_state.insights, st.session_state.recent_label,
+                            st.session_state.smart_reason, st.session_state.news_data,
+                            st.session_state.qa_history)
+                        if pid:
+                            st.session_state.page_id = pid
+                            st.session_state.step = 2; st.rerun()
 
+    # ── Step 2 ───────────────────────────────────────────────────────────
     elif st.session_state.step == 2:
-        st.balloons(); st.success(ui.TEXTS["publish_success"])
+        st.balloons()
+        st.success(ui.TEXTS["publish_success"])
         pid_clean = st.session_state.page_id.replace("-", "")
-        st.markdown(f'<div class="finish-card"><p style="font-size:13px; color: var(--color-text-tertiary); margin-bottom: 12px;">노션 리포트가 발행되었습니다</p><a href="https://notion.so/{pid_clean}" target="_blank" style="font-size:17px; color: var(--color-text-primary); font-weight:500; text-decoration:none;">🔗 {ui.TEXTS["publish_link"]}</a></div>', unsafe_allow_html=True)
+        st.markdown(f'''
+        <div class="finish-card">
+            <p style="font-size:14px;color:var(--color-text-tertiary);margin-bottom:12px;">노션 리포트가 발행되었습니다</p>
+            <a href="https://notion.so/{pid_clean}" target="_blank"
+               style="font-size:18px;font-weight:500;color:var(--color-text-primary);text-decoration:none;">
+               🔗 {ui.TEXTS["publish_link"]}
+            </a>
+        </div>''', unsafe_allow_html=True)
         if st.button(ui.TEXTS["btn_reset_after_publish"], use_container_width=True, type="primary"):
-            for k in [k for k in st.session_state.keys() if k != 'history']: del st.session_state[k]
+            for k in [k for k in st.session_state.keys() if k != 'history']:
+                del st.session_state[k]
             st.rerun()
 
 if __name__ == "__main__": main()
