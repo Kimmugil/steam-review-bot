@@ -3,7 +3,9 @@ import random
 import time
 import threading
 import re
-import ui_texts as ui
+import os
+import base64  # 💡 로컬 이미지 렌더링을 위한 base64 인코딩 모듈 추가
+import ui_texts as ui  
 from config import APP_VERSION, NOTION_PUBLIC_URL, GEMINI_API_KEY, NOTION_TOKEN, TICKER_INTERVAL, ENV_NAME
 from updates import UPDATE_HISTORY
 from steam_api import get_steam_game_info, fetch_latest_news, get_smart_period, fetch_steam_reviews
@@ -169,12 +171,17 @@ def main():
 
     if st.session_state.step == 0:
         hero_image_path = ui.TEXTS.get("hero_image_path", "")
-        if hero_image_path:
-            # HTML로 직접 렌더링 — 세로 최대 300px 고정, 가로는 비율 유지
+        
+        # 💡 [핵심 수정] 로컬 이미지를 Base64로 인코딩하여 HTML에 직접 삽입
+        if hero_image_path and os.path.exists(hero_image_path):
+            with open(hero_image_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode()
+            img_src = f"data:image/png;base64,{encoded_string}"
+            
             st.markdown(f'''
             <div style="display:flex;gap:24px;align-items:center;margin-bottom:1rem;">
                 <div style="flex-shrink:0;">
-                    <img src="{hero_image_path}"
+                    <img src="{img_src}"
                          style="height:300px;width:auto;max-width:100%;border-radius:12px;display:block;object-fit:cover;">
                 </div>
                 <div>
@@ -183,6 +190,7 @@ def main():
                 </div>
             </div>''', unsafe_allow_html=True)
         else:
+            # 이미지가 없을 경우의 Fallback
             st.markdown(f'''
             <div class="tractor-hero">
                 <div style="font-size:48px;line-height:1;">🚜</div>
