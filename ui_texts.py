@@ -44,8 +44,37 @@ TEXTS = {
     "publish_loading": "노션으로 쏘는 중...",
 
     "step2_title": "리포트 검수",
-    # 💡 [업데이트] 불필요한 설명 제거
-    "step2_desc": "", 
+    "step2_desc": "",
+
+    "loading_step1": "🔍 게임 기본 정보 확인 중...",
+    "loading_step2": "📥 스팀 리뷰 수집 중…",
+    "loading_step2_sub": "(가장 오래 걸려요)",
+    "loading_step3": "🧠 AI 다차원 분석 중…",
+    "loading_step3_sub": "리뷰를 읽고 인사이트를 뽑고 있어요",
+    "loading_complete": "✅ 분석 완료!",
+
+    "game_hero_released": "출시일",
+    "game_hero_one_liner_label": "AI 한줄평",
+
+    "hero_image_path": "",
+    "hero_section_title": "🌾 탈곡기에 오신 것을 환영합니다",
+    "hero_section_desc": "스팀 상점 주소나 App ID를 넣으면, 전 세계 유저 리뷰를 탈탈 털어 글로벌 민심을 분석해드려요.",
+
+    "publish_notion_released": "노션 리포트가 발행되었습니다",
+    "publish_title_label": "📝 최종 발행 및 다음 스텝",
+
+    "sec_trend": "📈 전체 여론 동향",
+    "sec_category": "📁 카테고리별 상세 평가",
+    "sec_news": "📢 최신 소식",
+    "sec_issue": "🚨 주요 이슈 픽",
+    "sec_playtime": "⏱ 플레이타임별 민심 교차 분석",
+    "sec_region": "🗺️ 권역별 세부 평가",
+    "sec_country": "🌍 리뷰 작성 언어별 분석",
+    "sec_stats": "🌐 글로벌 언어 및 권역 통계표",
+    "sec_qa": "🙋 AI에게 추가 질문하기",
+
+    "period_toggle_label": "ℹ️ 왜 이 기간으로 분석했나요?",
+    "period_collect": "📅 수집 기간: {}",
     
     "tab_summary": "📊 주요 평가 요약",
     "tab_news_issue": "📢 최신 소식 및 체크포인트",
@@ -54,7 +83,7 @@ TEXTS = {
     "tab_qa": "🙋‍♀️ AI에게 질문하기",
 
     "bot_info_title": "ℹ️ 탈곡기 안내 및 리포트 해석시 유의사항",
-    "bot_info_desc": "본 리포트는 스팀(Steam)의 유저 리뷰 원문 데이터를 수집하여 AI 텍스트 분석 엔진을 통해 주요 내용을 추출한 결과물입니다. AI는 실수할 수 있음을 고려해 주세요.\n\n리뷰는 유저의 실제 국적이 아닌 '리뷰 작성 시 설정된 언어'를 기준으로 집계됩니다. 따라서 글로벌 공용어인 '영어' 리뷰 비중이 실제 영미권 유저 수보다 높게 나타날 수 있습니다.",
+    "bot_info_desc": "본 리포트는 스팀의 유저 리뷰 원문 데이터를 수집하여 AI 텍스트 분석 엔진을 통해 주요 내용을 추출한 결과물입니다. AI는 실수할 수 있음을 고려해 주세요.\n\n리뷰는 유저의 실제 국적이 아닌 '리뷰 작성 시 설정된 언어'를 기준으로 집계됩니다. 따라서 글로벌 공용어인 '영어' 리뷰 비중이 실제 영미권 유저 수보다 높게 나타날 수 있습니다.",
     
     "ai_one_liner_title": "🤖 AI 한줄평",
     "ai_one_liner_desc": "{} 스팀에 출시된 [{}]에 대한 AI 분석 결과입니다.",
@@ -89,7 +118,7 @@ TEXTS = {
 
     "playtime_title": "### ⏱️ 플레이타임별 민심 교차 분석",
     # 💡 [업데이트] 회색 박스에 넣기 위해 마크다운 기호 제외
-    "insight_core_title": "핵심 교차 인사이트",
+    "insight_core_title": "⚖️ 핵심 교차 인사이트",
     "newbie_title_default": "🌱 뉴비 여론 (하위 25%)",
     "normal_title_default": "🚶 일반 여론 (중위 50%)",
     "core_title_default": "💀 코어 여론 (상위 25%)",
@@ -206,7 +235,7 @@ TEXTS = {
     [출력 JSON 형식]:
     {json_format}
     {{
-      "critic_one_liner": "한줄평",
+      "critic_one_liner": "한줄평 (이모지 포함)",
       "sentiment_analysis": "민심 코멘트 (공식 평점과 전체 평점 간의 차이가 있다면 이에 대한 분석 포함)",
       "final_summary_all": ["[긍정] 코멘트1", "[부정] 코멘트2"],
       "final_summary_recent": ["[긍정] 코멘트1", "[부정] 코멘트2"],
