@@ -33,7 +33,7 @@ def cat_chip(name):
         return '<span style="background:#FCEBEB;color:#791F1F;font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;margin-right:8px;">부정</span>'
     return ''
 
-# 긍/부정 뱃지 + 본문 — 본문 16px, 뱃지 12px
+# 긍/부정 뱃지 + 본문 — 본문 16px
 def s_html(line):
     if "[긍정]" in line:
         body = line.replace("[긍정]", "").strip()
@@ -43,7 +43,7 @@ def s_html(line):
         return f'<div style="display:flex;gap:10px;align-items:baseline;margin-bottom:10px;"><span style="background:#FCEBEB;color:#791F1F;font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0;">부정</span><span style="font-size:16px;line-height:1.65;color:var(--color-text-primary);">{body}</span></div>'
     return f'<div style="font-size:16px;line-height:1.65;margin-bottom:10px;color:var(--color-text-primary);">{line}</div>'
 
-# 섹션 레이블 (12px 대문자)
+# 섹션 레이블
 def sec(text):
     st.markdown(f'<p style="font-size:12px;font-weight:500;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.07em;margin:2rem 0 0.75rem;">{text}</p>', unsafe_allow_html=True)
 
@@ -62,7 +62,7 @@ def gray_box(title, body_text=None, items=None):
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
-# 리뷰 원문 인용 (좌측 선, 줄바꿈 안전, 회색)
+# 리뷰 원문 인용
 def quote_box(original, korean=None):
     orig = str(original).replace("<", "&lt;").replace(">", "&gt;")
     html = '<div style="border-left:2px solid var(--color-border-secondary);padding:10px 14px;margin:10px 0 16px;border-radius:0;">'
@@ -82,12 +82,13 @@ def render_report_tabs():
     with st.expander(ui.TEXTS['bot_info_title']):
         st.markdown(f'<p style="font-size:15px;line-height:1.7;color:var(--color-text-secondary);">{ui.TEXTS["bot_info_desc"]}</p>', unsafe_allow_html=True)
 
-    # 4탭: 요약 / 소식+이슈 / 분석 / 글로벌+Q&A
-    tab1, tab2, tab3, tab4 = st.tabs([
+    # 5탭: 주요 요약 / 소식+이슈 / 플레이타임 / 글로벌 / AI Q&A
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 주요 요약",
         "📰 소식 & 이슈",
-        "⏱ 플레이타임 분석",
-        "🌍 글로벌 & Q&A",
+        "⏱ 플레이타임",
+        "🌍 글로벌 분석",
+        "🙋 AI 질문",
     ])
 
     # ════════════════════════════════════════════════════
@@ -97,7 +98,7 @@ def render_report_tabs():
         # 한줄평
         st.markdown(f'''
         <div style="border:0.5px solid var(--color-border-tertiary);border-radius:14px;padding:2rem 1.75rem;text-align:center;margin-bottom:1.5rem;">
-            <div style="font-size:13px;color:var(--color-text-tertiary);margin-bottom:10px;letter-spacing:0.03em;">{st.session_state.rel_date_str} 출시 · {st.session_state.game_name}</div>
+            <div style="font-size:13px;color:var(--color-text-tertiary);margin-bottom:10px;">{st.session_state.rel_date_str} 출시 · {st.session_state.game_name}</div>
             <div style="font-size:21px;font-weight:500;line-height:1.6;color:var(--color-text-primary);">❝ {ins.get("critic_one_liner", "")} ❞</div>
         </div>''', unsafe_allow_html=True)
 
@@ -156,7 +157,6 @@ def render_report_tabs():
     # ════════════════════════════════════════════════════
     with tab2:
         c_news, c_issue = st.columns(2)
-
         with c_news:
             sec("최신 소식")
             news = st.session_state.news_data
@@ -176,11 +176,9 @@ def render_report_tabs():
         with c_issue:
             sec("주요 이슈 픽")
             st.markdown(f'<p style="font-size:13px;color:var(--color-text-tertiary);margin-bottom:12px;">{ui.TEXTS["issue_pick_desc"]}</p>', unsafe_allow_html=True)
-            issues = ins.get('ai_issue_pick', [])
-            if issues:
-                for line in issues:
-                    st.markdown(f'<div style="font-size:16px;line-height:1.65;margin-bottom:12px;color:var(--color-text-primary);">📍 {line}</div>', unsafe_allow_html=True)
-            else:
+            for line in ins.get('ai_issue_pick', []):
+                st.markdown(f'<div style="font-size:16px;line-height:1.65;margin-bottom:12px;color:var(--color-text-primary);">📍 {line}</div>', unsafe_allow_html=True)
+            if not ins.get('ai_issue_pick'):
                 st.markdown(f'<p style="font-size:15px;color:var(--color-text-tertiary);">{ui.TEXTS["no_issue_pick"]}</p>', unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════
@@ -210,7 +208,7 @@ def render_report_tabs():
                         st.markdown(s_html(line), unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════
-    # Tab 4: 글로벌 & Q&A
+    # Tab 4: 글로벌 분석
     # ════════════════════════════════════════════════════
     with tab4:
         # 권역별 분석
@@ -294,18 +292,21 @@ def render_report_tabs():
                 with st.expander("전체 보기"):
                     st.dataframe(s_30_f, hide_index=True, use_container_width=True)
 
-        st.divider()
+    # ════════════════════════════════════════════════════
+    # Tab 5: AI 질문하기 (독립 탭)
+    # ════════════════════════════════════════════════════
+    with tab5:
+        st.markdown('<p style="font-size:18px;font-weight:500;margin-bottom:4px;">AI에게 추가 질문하기</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-size:15px;color:var(--color-text-secondary);margin-bottom:1.5rem;">{ui.TEXTS["qa_desc"]}</p>', unsafe_allow_html=True)
 
-        # Q&A
-        sec("AI에게 추가 질문하기")
-        st.markdown(f'<p style="font-size:14px;color:var(--color-text-secondary);margin-bottom:1rem;">{ui.TEXTS["qa_desc"]}</p>', unsafe_allow_html=True)
-
+        # 기존 Q&A 목록
         if st.session_state.get('qa_history'):
             for qa in st.session_state.qa_history:
-                st.markdown(f'<p style="font-size:16px;font-weight:500;margin-bottom:4px;">Q. {qa["q"]}</p>', unsafe_allow_html=True)
+                st.markdown(f'<p style="font-size:16px;font-weight:500;margin-bottom:5px;">Q. {qa["q"]}</p>', unsafe_allow_html=True)
                 st.info(f"A. {qa['a']}")
             st.divider()
 
+        # 새 질문 입력
         q_input = st.text_input("QA Input", placeholder=ui.TEXTS["qa_input_ph"], label_visibility="collapsed")
         if st.button(ui.TEXTS["qa_btn"], type="primary"):
             if q_input:
@@ -318,7 +319,7 @@ def render_report_tabs():
 
         if st.session_state.get('current_a'):
             st.markdown("---")
-            st.markdown(f'<p style="font-size:16px;font-weight:500;margin-bottom:4px;">Q. {st.session_state.current_q}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-size:16px;font-weight:500;margin-bottom:5px;">Q. {st.session_state.current_q}</p>', unsafe_allow_html=True)
             st.success(f"A. {st.session_state.current_a}")
             if st.button(ui.TEXTS["qa_add_btn"]):
                 st.session_state.qa_history.append({"q": st.session_state.current_q, "a": st.session_state.current_a})
