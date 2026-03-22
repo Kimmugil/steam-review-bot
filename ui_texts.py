@@ -24,14 +24,14 @@ TEXTS = {
     "qa_btn": "💬 질문하기",
     "qa_add_btn": "✅ 리포트에 추가",
 
-    "step1_title": "🎮 탈곡할 게임의 스팀 상점 URL을 넣어주세요.",
+    "step1_title": "확인하고 싶은 게임의 스팀 상점 URL을 넣어주세요.",
     "step1_caption": "ℹ️ 스팀 상점 페이지의 주소(URL) 전체를 복사해서 붙여넣거나, 주소에 포함된 숫자(App ID)만 입력하셔도 됩니다.",
     "input_placeholder": "예: https://store.steampowered.com/app/2215430",
     "prompt_analyze_game": "#### 🌾 **{}** 스팀 리뷰를 탈곡합니다.",
     "prompt_release_date": "이 게임은 {} 스팀에 출시되었습니다.",
     "warn_invalid_id": "유효한 App ID 또는 주소를 입력해 주세요.",
     
-    "status_analyzing": "[{}] 스팀 리뷰 탈곡 중... 🌾",
+    "status_analyzing": "[{}] 탈곡 중... 🌾",
     "loading_1": "🔍 게임 기본 정보 확인 중...",
     "loading_error_info": "게임 정보 불러오기 실패",
     "loading_2": "📥 데이터 수집 중...",
