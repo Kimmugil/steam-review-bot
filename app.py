@@ -15,40 +15,107 @@ st.set_page_config(page_title=ui.TEXTS["main_title"], page_icon="🚜", layout="
 
 st.markdown("""
     <style>
+        /* ── 레이아웃 ─────────────────────────────────────────── */
         .main .block-container { padding-top: 2rem; padding-bottom: 3rem; }
         .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #E24B4A; color: white; text-align: center; padding: 7px; font-size: 14px; font-weight: 500; z-index: 9999; }
         .small-history { font-size: 0.85rem; line-height: 1.5; }
 
-        /* 프라이머리 버튼 */
-        button[kind="primary"] { background-color: var(--color-text-primary) !important; color: var(--color-background-primary) !important; border: none !important; font-weight: 500 !important; font-size: 15px !important; border-radius: 10px !important; }
-        button[kind="primary"]:hover { opacity: 0.82 !important; }
+        /* ── 버튼 공통 기반 ───────────────────────────────────── */
+        /* 스트림릿 버튼 실제 DOM: div[data-testid="stButton"] > button */
+        div[data-testid="stButton"] > button {
+            border: 1.5px solid var(--color-border-primary) !important;
+            border-radius: 10px !important;
+            font-size: 15px !important;
+            font-weight: 500 !important;
+            background: transparent !important;
+            color: var(--color-text-primary) !important;
+        }
+        div[data-testid="stButton"] > button:hover {
+            background: var(--color-background-secondary) !important;
+        }
 
-        /* 일반(secondary) 버튼 — 아웃라인 명시 */
-        button[kind="secondary"] { background-color: transparent !important; color: var(--color-text-primary) !important; border: 1px solid var(--color-border-primary) !important; font-size: 15px !important; border-radius: 10px !important; }
-        button[kind="secondary"]:hover { background-color: var(--color-background-secondary) !important; }
+        /* ── 프라이머리 버튼만 덮어쓰기 (검정 채움) ──────────── */
+        div[data-testid="stButton"] > button[kind="primary"],
+        div[data-testid="stBaseButton-primary"] > button,
+        div[data-testid="stButton"] > button.st-emotion-cache-primary {
+            background: var(--color-text-primary) !important;
+            color: var(--color-background-primary) !important;
+            border: none !important;
+        }
+        div[data-testid="stButton"] > button[kind="primary"]:hover {
+            opacity: 0.82 !important;
+        }
 
-        /* link_button 아웃라인 */
-        a[data-testid="stLinkButton"] > button { border: 1px solid var(--color-border-primary) !important; font-size: 15px !important; border-radius: 10px !important; }
+        /* ── link_button ─────────────────────────────────────── */
+        div[data-testid="stLinkButton"] > a > button,
+        div[data-testid="stLinkButton"] > button {
+            border: 1.5px solid var(--color-border-primary) !important;
+            border-radius: 10px !important;
+            font-size: 15px !important;
+            background: transparent !important;
+            color: var(--color-text-primary) !important;
+        }
 
-        /* 프로그레스바 */
+        /* ── 프로그레스바 ────────────────────────────────────── */
         .stProgress > div > div > div > div { background-color: var(--color-text-primary) !important; }
 
-        /* 스텝 인디케이터 */
-        .step-wrap { display: flex; margin-bottom: 2rem; border-bottom: 0.5px solid var(--color-border-tertiary); }
-        .step-item { flex: 1; text-align: center; font-size: 15px; padding: 11px 0; color: var(--color-text-tertiary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
-        .step-item.active { color: var(--color-text-primary); border-bottom: 2px solid var(--color-text-primary); font-weight: 500; }
-        .step-item.done { color: var(--color-text-secondary); border-bottom: 2px solid var(--color-border-secondary); }
+        /* ── 스텝 인디케이터 ─────────────────────────────────── */
+        .step-wrap { display: flex; margin-bottom: 2rem; }
+        .step-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 0 8px 16px;
+            position: relative;
+        }
+        .step-item::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--color-border-tertiary);
+            border-radius: 2px;
+        }
+        .step-item.done::after { background: var(--color-border-secondary); }
+        .step-item.active::after { background: var(--color-text-primary); }
+        .step-circle {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 500;
+            border: 2px solid var(--color-border-tertiary);
+            color: var(--color-text-tertiary);
+            background: transparent;
+        }
+        .step-item.done .step-circle { border-color: var(--color-border-secondary); color: var(--color-text-secondary); background: var(--color-background-secondary); }
+        .step-item.active .step-circle { border-color: var(--color-text-primary); color: var(--color-background-primary); background: var(--color-text-primary); }
+        .step-label { font-size: 14px; color: var(--color-text-tertiary); text-align: center; }
+        .step-item.done .step-label { color: var(--color-text-secondary); }
+        .step-item.active .step-label { color: var(--color-text-primary); font-weight: 500; }
 
-        /* 탭 상단 고정 */
-        div[data-testid="stTabs"] > div:first-child { position: -webkit-sticky !important; position: sticky !important; top: 0 !important; z-index: 999 !important; background-color: var(--background-color) !important; padding-top: 8px !important; padding-bottom: 0 !important; border-bottom: 0.5px solid var(--color-border-tertiary) !important; }
+        /* ── 탭 상단 고정
+               스트림릿 헤더 높이(약 3.5rem) 아래에 붙도록 top 설정
+               헤더가 없는 환경(클라우드 embedded)도 고려해 0으로도 시도 ── */
+        div[data-testid="stTabs"] > div:first-child {
+            position: -webkit-sticky !important;
+            position: sticky !important;
+            top: 0px !important;
+            z-index: 100 !important;
+            background-color: var(--background-color) !important;
+            padding-top: 8px !important;
+            margin-bottom: 0 !important;
+            border-bottom: 1.5px solid var(--color-border-tertiary) !important;
+        }
 
-        /* AI 대기 중 슬라이딩 애니메이션 바 */
-        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(500%); } }
-        .anim-bar-wrap { height: 4px; border-radius: 2px; background: var(--color-border-tertiary); overflow: hidden; margin: 10px 0 6px; }
-        .anim-bar-inner { height: 100%; width: 20%; border-radius: 2px; background: var(--color-text-primary); animation: shimmer 1.5s ease-in-out infinite; }
+        /* ── AI 대기 중 슬라이딩 애니메이션 바 ──────────────── */
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(600%); } }
+        .anim-bar-wrap { height: 4px; border-radius: 2px; background: var(--color-border-tertiary); overflow: hidden; margin: 12px 0 8px; }
+        .anim-bar-inner { height: 100%; width: 16%; border-radius: 2px; background: var(--color-text-primary); animation: shimmer 1.6s ease-in-out infinite; }
 
-        /* 발행 완료 카드 */
-        .finish-card { border: 0.5px solid var(--color-border-tertiary); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
+        /* ── 발행 완료 카드 ──────────────────────────────────── */
+        .finish-card { border: 1px solid var(--color-border-tertiary); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -65,9 +132,25 @@ def extract_id(s):
 
 def render_step_indicator(current_step):
     steps = [ui.TEXTS["step_1"], ui.TEXTS["step_2"], ui.TEXTS["step_3"]]
-    classes = ["active" if i == current_step else ("done" if i < current_step else "") for i in range(3)]
-    html = '<div class="step-wrap">' + "".join([f'<div class="step-item {c}">{s}</div>' for s, c in zip(steps, classes)]) + '</div>'
-    st.markdown(html, unsafe_allow_html=True)
+    numbers = ["1", "2", "3"]
+    done_icon = "✓"
+    items = []
+    for i, (label, num) in enumerate(zip(steps, numbers)):
+        if i < current_step:
+            cls = "done"
+            circle_content = done_icon
+        elif i == current_step:
+            cls = "active"
+            circle_content = num
+        else:
+            cls = ""
+            circle_content = num
+        items.append(f'''
+        <div class="step-item {cls}">
+            <div class="step-circle">{circle_content}</div>
+            <div class="step-label">{label}</div>
+        </div>''')
+    st.markdown('<div class="step-wrap">' + "".join(items) + '</div>', unsafe_allow_html=True)
 
 def main():
     if "history" not in st.session_state: st.session_state.history = []
@@ -102,7 +185,7 @@ def main():
     st.write("")
     render_step_indicator(st.session_state.step)
 
-    # ── Step 0 ───────────────────────────────────────────────────────────
+    # ── Step 0: 입력 ─────────────────────────────────────────────────────
     if st.session_state.step == 0:
         with st.container(border=True):
             st.subheader(ui.TEXTS["step1_title"])
@@ -133,8 +216,8 @@ def main():
                         p_bar = st.progress(0)
                         info_txt = st.empty()
 
-                        # 1단계: 게임 정보
-                        info_txt.markdown('<p style="font-size:15px;color:var(--color-text-secondary);">🔍 게임 기본 정보 확인 중...</p>', unsafe_allow_html=True)
+                        # 1단계
+                        info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">🔍 게임 기본 정보 확인 중...</p>', unsafe_allow_html=True)
                         if not game_candidate_name:
                             rid, name, rdate, img_url = get_steam_game_info(app_id)
                         else:
@@ -142,16 +225,16 @@ def main():
                         if not rid: raise Exception(ui.TEXTS["loading_error_info"])
                         p_bar.progress(20)
 
-                        # 2단계: 리뷰 수집
-                        info_txt.markdown('<p style="font-size:15px;color:var(--color-text-secondary);">📥 스팀 리뷰 데이터 수집 중… (가장 오래 걸리는 단계예요)</p>', unsafe_allow_html=True)
+                        # 2단계
+                        info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">📥 스팀 리뷰 데이터 수집 중… <span style="font-size:14px;color:var(--color-text-tertiary);">(가장 오래 걸리는 단계예요)</span></p>', unsafe_allow_html=True)
                         rday, rlabel, rreason, rperiod = get_smart_period(rdate)
                         news = fetch_latest_news(rid)
                         all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)
                         if stats['all_total'] == 0: raise Exception(ui.TEXTS["loading_error_data"])
                         p_bar.progress(55)
 
-                        # 3단계: AI 분석 — 슬라이딩 바 + 메시지 + 55→95 천천히 증가
-                        info_txt.markdown('<p style="font-size:15px;color:var(--color-text-secondary);">🧠 AI 다차원 분석 중… 잠시만 기다려 주세요</p>', unsafe_allow_html=True)
+                        # 3단계: AI 분석 — 슬라이딩 바 + 메시지
+                        info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">🧠 AI 다차원 분석 중… <span style="font-size:14px;color:var(--color-text-tertiary);">리뷰를 읽고 인사이트를 추출하고 있어요</span></p>', unsafe_allow_html=True)
                         anim_slot = st.empty()
                         ticker = st.empty()
                         anim_html = '<div class="anim-bar-wrap"><div class="anim-bar-inner"></div></div>'
@@ -173,7 +256,7 @@ def main():
                         anim_slot.empty(); ticker.empty()
                         if res_box[1]: raise Exception(res_box[1])
 
-                        info_txt.markdown('<p style="font-size:15px;color:var(--color-text-secondary);">✅ 분석 완료!</p>', unsafe_allow_html=True)
+                        info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">✅ 분석 완료!</p>', unsafe_allow_html=True)
                         p_bar.progress(100)
 
                         st.session_state.update({
@@ -194,7 +277,7 @@ def main():
                         status.update(label=ui.TEXTS["status_error"], state="error")
                         st.error(str(e))
 
-    # ── Step 1 ───────────────────────────────────────────────────────────
+    # ── Step 1: 리포트 검수 ──────────────────────────────────────────────
     elif st.session_state.step == 1:
         st.markdown(f'<p style="font-size:14px;color:var(--color-text-tertiary);margin-bottom:1rem;">Step 2 · {st.session_state.game_name}</p>', unsafe_allow_html=True)
         ui_render.render_report_tabs()
@@ -221,14 +304,14 @@ def main():
                             st.session_state.page_id = pid
                             st.session_state.step = 2; st.rerun()
 
-    # ── Step 2 ───────────────────────────────────────────────────────────
+    # ── Step 2: 발행 완료 ────────────────────────────────────────────────
     elif st.session_state.step == 2:
         st.balloons()
         st.success(ui.TEXTS["publish_success"])
         pid_clean = st.session_state.page_id.replace("-", "")
         st.markdown(f'''
         <div class="finish-card">
-            <p style="font-size:14px;color:var(--color-text-tertiary);margin-bottom:12px;">노션 리포트가 발행되었습니다</p>
+            <p style="font-size:14px;color:var(--color-text-tertiary);margin-bottom:14px;">노션 리포트가 발행되었습니다</p>
             <a href="https://notion.so/{pid_clean}" target="_blank"
                style="font-size:18px;font-weight:500;color:var(--color-text-primary);text-decoration:none;">
                🔗 {ui.TEXTS["publish_link"]}
