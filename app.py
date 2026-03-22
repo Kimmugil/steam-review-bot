@@ -91,7 +91,7 @@ def main():
             st.caption(ui.TEXTS["step1_caption"])
             
             app_id = extract_id(raw_input)
-            game_candidate_name, game_candidate_img, game_candidate_date = None, None, None
+            game_candidate_name, game_candidate_date, game_candidate_img = None, None, None
             
             if app_id: rid, game_candidate_name, game_candidate_date, game_candidate_img = get_steam_game_info(app_id)
             
