@@ -57,8 +57,8 @@ TEXTS = {
     "game_hero_one_liner_label": "AI 한줄평",
 
     "hero_image_path": "image/tractor.png",
-    "hero_section_title": "🌾 탈곡기에 오신 것을 환영합니다",
-    "hero_section_desc": "스팀 상점 주소나 App ID를 넣으면, 전 세계 유저 리뷰를 탈탈 털어 글로벌 민심을 분석해드려요.",
+    "hero_section_title": "🌾 탈곡기 대기중!",
+    "hero_section_desc": "(ง •̀_•́)ง",
 
     "publish_notion_released": "노션 리포트가 발행되었습니다",
     "publish_title_label": "📝 최종 발행 및 다음 스텝",
@@ -118,7 +118,7 @@ TEXTS = {
 
     "playtime_title": "### ⏱️ 플레이타임별 민심 교차 분석",
     # 💡 [업데이트] 회색 박스에 넣기 위해 마크다운 기호 제외
-    "insight_core_title": "⚖️ 핵심 교차 인사이트",
+    "insight_core_title": "핵심 교차 인사이트",
     "newbie_title_default": "🌱 뉴비 여론 (하위 25%)",
     "normal_title_default": "🚶 일반 여론 (중위 50%)",
     "core_title_default": "💀 코어 여론 (상위 25%)",
@@ -126,7 +126,7 @@ TEXTS = {
 
     "region_title": "### 🗺️ 권역별 세부 평가 분석",
     # 💡 [업데이트] 회색 박스용
-    "divergence_insight_title": "💡 권역별 주요 체크포인트",
+    "divergence_insight_title": "권역별 주요 체크포인트",
     "region_expander": "📍 {} (동향: {})",
     "keyword_label": "🔑 주요 키워드: {}",
     
