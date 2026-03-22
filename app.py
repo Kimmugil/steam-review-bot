@@ -18,44 +18,34 @@ st.markdown("""
         .main .block-container { padding-top: 2rem; padding-bottom: 3rem; }
         .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #E24B4A; color: white; text-align: center; padding: 7px; font-size: 14px; font-weight: 500; z-index: 9999; }
         .small-history { font-size: 0.85rem; line-height: 1.5; }
-
-        /* 프로그레스바 */
         .stProgress > div > div > div > div { background-color: #222 !important; }
 
-        /* 탭 상단 고정 + 탭 하단 얇은 선 제거 */
+        /* 탭 상단 고정, 탭 하단 선 제거 */
         div[data-testid="stTabs"] > div:first-child {
             position: -webkit-sticky !important; position: sticky !important;
             top: 0 !important; z-index: 100 !important;
             background-color: var(--background-color) !important;
             padding-top: 8px !important;
-            border-bottom: none !important;
-            box-shadow: none !important;
+            border-bottom: none !important; box-shadow: none !important;
         }
 
-        /* AI 대기 슬라이딩 바 */
         @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(600%)} }
         .anim-bar-wrap { height: 4px; border-radius: 2px; background: rgba(128,128,128,0.2); overflow: hidden; margin: 12px 0 8px; }
         .anim-bar-inner { height: 100%; width: 16%; border-radius: 2px; background: #333; animation: shimmer 1.6s ease-in-out infinite; }
 
-        /* HTML 버튼 */
         .hbtn { display: block; width: 100%; padding: 11px 20px; border-radius: 10px; font-size: 15px; font-weight: 500; text-align: center; text-decoration: none; box-sizing: border-box; }
         .hbtn-outline { background: transparent; border: 1.5px solid rgba(120,120,120,0.6); color: inherit !important; }
         .hbtn-outline:hover { background: rgba(128,128,128,0.08); }
         .hbtn-filled { background: #1a1a1a; border: none; color: #fff !important; }
         .hbtn-filled:hover { background: #444; }
 
-        /* st.button 스타일 */
         div[data-testid="stButton"] button {
             border: 1.5px solid rgba(120,120,120,0.55) !important;
-            border-radius: 10px !important;
-            font-size: 15px !important;
-            font-weight: 500 !important;
+            border-radius: 10px !important; font-size: 15px !important; font-weight: 500 !important;
         }
         div[data-testid="stButton"] button[kind="primary"],
         div[data-testid="stButton"] button[data-testid="baseButton-primary"] {
-            background: #1a1a1a !important;
-            color: #fff !important;
-            border: none !important;
+            background: #1a1a1a !important; color: #fff !important; border: none !important;
         }
 
         /* 스텝 인디케이터 */
@@ -71,19 +61,35 @@ st.markdown("""
         .step-item.s-done  .step-label { color: rgba(128,128,128,0.85); }
         .step-item.s-active .step-label { color: #222; font-weight: 500; }
 
-        /* 게임 히어로 섹션 */
-        .game-hero { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 1.5rem; }
-        .game-hero-img { width: 180px; min-width: 180px; border-radius: 10px; overflow: hidden; }
-        .game-hero-img img { width: 100%; border-radius: 10px; display: block; }
-        .game-hero-info { flex: 1; min-width: 0; }
-        .game-hero-name { font-size: 26px; font-weight: 500; margin-bottom: 4px; line-height: 1.3; }
-        .game-hero-meta { font-size: 14px; color: rgba(128,128,128,0.8); margin-bottom: 14px; }
-        .game-hero-oneliner { font-size: 17px; line-height: 1.65; font-style: italic; color: var(--color-text-primary); padding: 14px 18px; background: rgba(128,128,128,0.07); border-radius: 10px; }
+        /* ① 게임 히어로 — 이미지 더 크게, 우측 박스와 높이 맞춤 */
+        .game-hero {
+            display: flex; gap: 24px;
+            align-items: stretch;   /* 좌우 높이 동일하게 맞춤 */
+            margin-bottom: 1.5rem;
+        }
+        .game-hero-img {
+            width: 260px; min-width: 260px;   /* 기존 180px → 260px */
+            border-radius: 12px; overflow: hidden;
+            flex-shrink: 0;
+        }
+        .game-hero-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; display: block; }
+        .game-hero-info {
+            flex: 1; min-width: 0;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+        .game-hero-name { font-size: 28px; font-weight: 500; margin-bottom: 4px; line-height: 1.3; }
+        .game-hero-meta { font-size: 14px; color: rgba(128,128,128,0.8); margin-bottom: 16px; }
+        .game-hero-oneliner {
+            flex: 1;   /* 남은 높이 채우기 */
+            font-size: 17px; line-height: 1.7; font-style: italic;
+            color: var(--color-text-primary);
+            padding: 16px 20px;
+            background: rgba(128,128,128,0.07);
+            border-radius: 10px;
+            display: flex; align-items: center;
+        }
 
-        /* 발행 완료 카드 */
         .finish-card { border: 1.5px solid rgba(128,128,128,0.25); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
-
-        /* 탈곡기 소개 히어로 */
         .tractor-hero { border: 0.5px solid rgba(128,128,128,0.2); border-radius: 14px; padding: 2rem 1.75rem; margin-bottom: 1rem; display: flex; gap: 2rem; align-items: center; }
         .tractor-hero-text h3 { font-size: 20px; font-weight: 500; margin-bottom: 8px; }
         .tractor-hero-text p { font-size: 15px; line-height: 1.7; color: rgba(128,128,128,0.85); margin: 0; }
@@ -111,15 +117,19 @@ def render_step_indicator(current_step):
     st.markdown('<div class="step-wrap">' + "".join(items) + '</div>', unsafe_allow_html=True)
 
 def render_game_hero(game_name, rel_date_str, header_image, one_liner=""):
-    """Step 2 상단 게임 히어로 섹션 — 썸네일 + 게임명 + 출시일 + 한줄평"""
-    img_html = f'<img src="{header_image}" alt="{game_name}">' if header_image else ""
+    """① 게임 히어로 — 이미지 260px, 우측 박스와 높이 동일 맞춤"""
+    img_html = f'<img src="{header_image}" alt="{game_name}">' if header_image else \
+               f'<div style="width:100%;height:100%;background:rgba(128,128,128,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:40px;">🎮</div>'
     one_liner_html = f'<div class="game-hero-oneliner">❝ {one_liner} ❞</div>' if one_liner else ""
+    released_label = ui.TEXTS.get("game_hero_released", "출시일")
     st.markdown(f'''
     <div class="game-hero">
         <div class="game-hero-img">{img_html}</div>
         <div class="game-hero-info">
-            <div class="game-hero-name">{game_name}</div>
-            <div class="game-hero-meta">{ui.TEXTS["game_hero_released"]}: {rel_date_str}</div>
+            <div>
+                <div class="game-hero-name">{game_name}</div>
+                <div class="game-hero-meta">{released_label}: {rel_date_str}</div>
+            </div>
             {one_liner_html}
         </div>
     </div>''', unsafe_allow_html=True)
@@ -157,10 +167,7 @@ def main():
     st.write("")
     render_step_indicator(st.session_state.step)
 
-    # ── Step 0 ───────────────────────────────────────────────────────────
     if st.session_state.step == 0:
-
-        # ⑦ 탈곡기 소개 히어로 영역 — images/tractor.png 파일 추가 시 이미지 표시
         hero_image_path = ui.TEXTS.get("hero_image_path", "")
         if hero_image_path:
             img_col, txt_col = st.columns([1, 2])
@@ -170,7 +177,6 @@ def main():
                 st.markdown(f'<h3 style="font-size:20px;font-weight:500;margin-bottom:8px;">{ui.TEXTS["hero_section_title"]}</h3>', unsafe_allow_html=True)
                 st.markdown(f'<p style="font-size:15px;line-height:1.7;color:rgba(128,128,128,0.85);">{ui.TEXTS["hero_section_desc"]}</p>', unsafe_allow_html=True)
         else:
-            # 이미지 없으면 텍스트만
             st.markdown(f'''
             <div class="tractor-hero">
                 <div style="font-size:48px;line-height:1;">🚜</div>
@@ -206,7 +212,6 @@ def main():
                 with st.status(ui.TEXTS["status_analyzing"].format(target_name), expanded=True) as status:
                     try:
                         p_bar = st.progress(0); info_txt = st.empty()
-
                         info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step1"]}</p>', unsafe_allow_html=True)
                         if not game_candidate_name:
                             rid, name, rdate, img_url = get_steam_game_info(app_id)
@@ -253,19 +258,11 @@ def main():
                     except Exception as e:
                         status.update(label=ui.TEXTS["status_error"], state="error"); st.error(str(e))
 
-    # ── Step 1 ───────────────────────────────────────────────────────────
     elif st.session_state.step == 1:
-        # ① 게임 히어로 섹션 (썸네일 + 게임명 + 출시일 + 한줄평)
         one_liner = ""
         if st.session_state.insights:
-            import re as _re
-            one_liner = _re.sub(r'\*\*', '', str(st.session_state.insights.get("critic_one_liner", "")))
-        render_game_hero(
-            st.session_state.game_name,
-            st.session_state.rel_date_str,
-            st.session_state.header_image,
-            one_liner
-        )
+            one_liner = re.sub(r'\*\*', '', str(st.session_state.insights.get("critic_one_liner", "")))
+        render_game_hero(st.session_state.game_name, st.session_state.rel_date_str, st.session_state.header_image, one_liner)
 
         ui_render.render_report_tabs()
 
@@ -286,7 +283,6 @@ def main():
                             st.session_state.page_id = pid
                             st.session_state.step = 2; st.rerun()
 
-    # ── Step 2 ───────────────────────────────────────────────────────────
     elif st.session_state.step == 2:
         st.balloons()
         st.success(ui.TEXTS["publish_success"])
