@@ -27,6 +27,13 @@ def eval_color(val):
     if "부정" in str(val): return "#A32D2D"
     return "rgba(128,128,128,0.8)"
 
+# ⑤ 평점 텍스트 색상 — 플레이타임 카드에 사용
+def desc_color(val):
+    v = str(val)
+    if "긍정" in v: return "#185FA5"
+    if "부정" in v: return "#A32D2D"
+    return "rgba(128,128,128,0.85)"
+
 def clean_cat(name):
     return strip_md(name.replace("[긍정]","").replace("[부정]","").strip())
 
@@ -37,7 +44,6 @@ def cat_chip(name):
         return '<span style="background:#FCEBEB;color:#791F1F;font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;margin-right:8px;">부정</span>'
     return ''
 
-# 긍/부정 뱃지 + 본문
 def s_html(line):
     line = strip_md(line)
     if "[긍정]" in line:
@@ -48,11 +54,11 @@ def s_html(line):
         return f'<div style="display:flex;gap:10px;align-items:baseline;margin-bottom:10px;"><span style="background:#FCEBEB;color:#791F1F;font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0;">부정</span><span style="font-size:16px;line-height:1.65;color:var(--color-text-primary);">{body}</span></div>'
     return f'<div style="font-size:16px;line-height:1.65;margin-bottom:10px;color:var(--color-text-primary);">{line}</div>'
 
-# ⑤ 섹션 제목 — 크고 명확한 검은 텍스트
-def sec(text, size="17px"):
-    st.markdown(f'<p style="font-size:{size};font-weight:500;color:var(--color-text-primary);margin:2rem 0 0.75rem;">{text}</p>', unsafe_allow_html=True)
+# ② 섹션 제목 — 더 크게 (20px)
+def sec(key):
+    text = ui.TEXTS.get(key, key)
+    st.markdown(f'<p style="font-size:20px;font-weight:500;color:var(--color-text-primary);margin:2rem 0 0.75rem;">{text}</p>', unsafe_allow_html=True)
 
-# 회색 박스
 def gray_box(title, body_text=None, items=None):
     html = '<div style="background:rgba(128,128,128,0.07);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
     if title:
@@ -67,7 +73,6 @@ def gray_box(title, body_text=None, items=None):
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
-# 이슈 픽 카드 박스
 def issue_card(text):
     clean = strip_md(text)
     if '：' in clean or ': ' in clean:
@@ -80,7 +85,6 @@ def issue_card(text):
         content = f'<div style="font-size:15px;line-height:1.65;color:var(--color-text-primary);">{clean}</div>'
     return f'<div style="border:0.5px solid rgba(128,128,128,0.25);border-radius:10px;padding:1rem 1.2rem;margin-bottom:10px;">{content}</div>'
 
-# 리뷰 원문 인용
 def quote_box(original, korean=None):
     orig = str(original).replace("<","&lt;").replace(">","&gt;")
     html = '<div style="border-left:2px solid rgba(128,128,128,0.3);padding:10px 14px;margin:10px 0 16px;">'
@@ -91,13 +95,26 @@ def quote_box(original, korean=None):
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
+# ⑤ 플레이타임 그룹 카드 — 표본/평균/평점 배경 + 평점 색상
+def playtime_header_card(title, total, avg, desc):
+    color = desc_color(desc)
+    return f'''
+    <div style="background:rgba(128,128,128,0.07);border-radius:10px;padding:1.1rem 1.2rem;margin-bottom:0.75rem;">
+        <div style="font-size:15px;font-weight:500;margin-bottom:10px;">{strip_md(title)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:rgba(128,128,128,0.12);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--color-text-secondary);">표본 {total:,}개</span>
+            <span style="background:rgba(128,128,128,0.12);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--color-text-secondary);">평균 {avg}h</span>
+            <span style="background:rgba(128,128,128,0.12);border-radius:999px;padding:4px 12px;font-size:13px;font-weight:500;color:{color};">{desc}</span>
+        </div>
+    </div>'''
+
 
 # ── 메인 렌더 ─────────────────────────────────────────────────────────────
 
 def render_report_tabs():
     ins, stats = st.session_state.insights, st.session_state.stats
 
-    # ② 안내 텍스트 폰트 크기 통일 (15px)
+    # ② 안내 텍스트 폰트 통일
     with st.expander(ui.TEXTS['bot_info_title']):
         st.markdown(f'<p style="font-size:15px;line-height:1.8;color:var(--color-text-secondary);">{ui.TEXTS["bot_info_desc"]}</p>', unsafe_allow_html=True)
 
@@ -110,17 +127,10 @@ def render_report_tabs():
     ])
 
     # ════════════════════════════════════════════════════
-    # Tab 1: 주요 요약
+    # Tab 1: 주요 요약 (한줄평은 app.py 히어로 섹션으로 이동)
     # ════════════════════════════════════════════════════
     with tab1:
-        # 한줄평
-        st.markdown(f'''
-        <div style="border:0.5px solid rgba(128,128,128,0.25);border-radius:14px;padding:2rem 1.75rem;text-align:center;margin-bottom:1.5rem;">
-            <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:10px;">{st.session_state.rel_date_str} 출시 · {st.session_state.game_name}</div>
-            <div style="font-size:21px;font-weight:500;line-height:1.6;">❝ {strip_md(ins.get("critic_one_liner",""))} ❞</div>
-        </div>''', unsafe_allow_html=True)
-
-        # ③④ 민심 3지표 — 툴팁 복원 + 최근 기간 수집기간/토글 복원
+        # 민심 3지표
         c1, c2, c3 = st.columns(3)
         with c1:
             st.markdown(f'''
@@ -139,7 +149,7 @@ def render_report_tabs():
             </div>''', unsafe_allow_html=True)
             st.caption(f"ℹ️ {ui.TEXTS['tooltip_all']}")
         with c3:
-            period = stats.get('collection_period', '')
+            period = stats.get('collection_period','')
             st.markdown(f'''
             <div style="background:rgba(128,128,128,0.07);border-radius:10px;padding:1.1rem 1.2rem;">
                 <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:7px;">{st.session_state.recent_label} 평점</div>
@@ -147,30 +157,29 @@ def render_report_tabs():
                 <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-top:5px;">표본 {stats["recent_total"]:,}개</div>
             </div>''', unsafe_allow_html=True)
             if period:
-                st.caption(f"📅 수집 기간: {period}")
-            # ③ 추출 기준 안내 토글 복원
-            with st.expander("ℹ️ 왜 이 기간으로 분석했나요?"):
+                st.caption(ui.TEXTS["period_collect"].format(period))
+            # ④ 기간 토글 — 작고 회색
+            with st.expander(ui.TEXTS["period_toggle_label"]):
                 st.markdown(f'<p style="font-size:14px;line-height:1.7;color:var(--color-text-secondary);">{st.session_state.smart_reason}</p>', unsafe_allow_html=True)
 
         st.write("")
-        gray_box("🎯 종합 여론 브리핑", ins.get('sentiment_analysis',''))
+        gray_box(ui.TEXTS["summary_briefing"], ins.get('sentiment_analysis',''))
 
-        # ⑤ 섹션 제목 크기/색상 개선
-        sec("📈 전체 여론 동향")
+        sec("sec_trend")
         col_a, col_b = st.columns(2)
         with col_a:
-            st.markdown('<p style="font-size:15px;font-weight:500;margin-bottom:10px;color:var(--color-text-primary);">누적 여론 동향</p>', unsafe_allow_html=True)
+            st.markdown('<p style="font-size:16px;font-weight:500;margin-bottom:10px;">누적 여론 동향</p>', unsafe_allow_html=True)
             for line in sort_sentiments(ins.get('final_summary_all',[])):
                 st.markdown(s_html(line), unsafe_allow_html=True)
         with col_b:
-            st.markdown(f'<p style="font-size:15px;font-weight:500;margin-bottom:6px;color:var(--color-text-primary);">{st.session_state.recent_label} 동향</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-size:16px;font-weight:500;margin-bottom:6px;">{st.session_state.recent_label} 동향</p>', unsafe_allow_html=True)
             if period:
                 st.markdown(f'<p style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:8px;">📅 {period}</p>', unsafe_allow_html=True)
             for line in sort_sentiments(ins.get('final_summary_recent',[])):
                 st.markdown(s_html(line), unsafe_allow_html=True)
 
         st.divider()
-        sec("📁 카테고리별 상세 평가")
+        sec("sec_category")
         for cat in sorted(ins.get('global_category_summary',[]), key=lambda x: get_cat_sort_key(x.get('category',''))):
             name = cat.get('category','')
             icon = "✅" if "[긍정" in name else ("⚠️" if "[부정" in name else "📌")
@@ -184,7 +193,7 @@ def render_report_tabs():
     with tab2:
         c_news, c_issue = st.columns(2)
         with c_news:
-            sec("📢 최신 소식")
+            sec("sec_news")
             news = st.session_state.news_data
             if news and news[0]:
                 if len(news) > 4 and news[4]:
@@ -200,29 +209,27 @@ def render_report_tabs():
                 st.markdown(f'<p style="font-size:16px;color:rgba(128,128,128,0.7);">{ui.TEXTS["no_news"]}</p>', unsafe_allow_html=True)
 
         with c_issue:
-            sec("🚨 주요 이슈 픽")
-            # ⑥ 추출 기간 명시
+            sec("sec_issue")
             period = stats.get('collection_period','')
             if period:
                 st.markdown(f'<p style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:4px;">📅 추출 기간: {period}</p>', unsafe_allow_html=True)
             st.markdown(f'<p style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:12px;">{ui.TEXTS["issue_pick_desc"]}</p>', unsafe_allow_html=True)
-            issues = ins.get('ai_issue_pick',[])
-            if issues:
-                for line in issues:
-                    st.markdown(issue_card(line), unsafe_allow_html=True)
-            else:
+            for line in ins.get('ai_issue_pick',[]):
+                st.markdown(issue_card(line), unsafe_allow_html=True)
+            if not ins.get('ai_issue_pick'):
                 st.markdown(f'<p style="font-size:15px;color:rgba(128,128,128,0.7);">{ui.TEXTS["no_issue_pick"]}</p>', unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════
     # Tab 3: 플레이타임
     # ════════════════════════════════════════════════════
     with tab3:
-        sec("⏱ 플레이타임별 민심 교차 분석")
+        sec("sec_playtime")
         st.markdown(f'<p style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:1rem;">{ui.TEXTS["tooltip_playtime"]}</p>', unsafe_allow_html=True)
         pt = ins.get('playtime_analysis',{})
         if pt:
             if pt.get('comparison_insights'):
-                gray_box("⚖️ 핵심 교차 인사이트", items=pt.get('comparison_insights',[]))
+                gray_box(ui.TEXTS["insight_core_title"], items=pt.get('comparison_insights',[]))
+
             p1, p2, p3 = st.columns(3)
             for col, tk, tot_k, avg_k, desc_k, sum_k, def_t in [
                 (p1,'newbie_title','newbie_total','newbie_avg','newbie_desc','newbie_summary',ui.TEXTS['newbie_title_default']),
@@ -230,11 +237,13 @@ def render_report_tabs():
                 (p3,'core_title',  'core_total',  'core_avg',  'core_desc',  'core_summary',  ui.TEXTS['core_title_default']),
             ]:
                 with col:
-                    st.markdown(f'''
-                    <div style="background:rgba(128,128,128,0.07);border-radius:10px;padding:1.1rem 1.2rem;margin-bottom:0.75rem;">
-                        <div style="font-size:15px;font-weight:500;margin-bottom:5px;">{strip_md(pt.get(tk,def_t))}</div>
-                        <div style="font-size:13px;color:rgba(128,128,128,0.7);">표본 {stats.get(tot_k,0):,}개 · 평균 {stats.get(avg_k,0)}h · {stats.get(desc_k,ui.TEXTS["steam_eval_none"])}</div>
-                    </div>''', unsafe_allow_html=True)
+                    # ⑤ 표본/평균/평점 배경 카드 + 평점 색상
+                    st.markdown(playtime_header_card(
+                        pt.get(tk, def_t),
+                        stats.get(tot_k, 0),
+                        stats.get(avg_k, 0),
+                        stats.get(desc_k, ui.TEXTS["steam_eval_none"])
+                    ), unsafe_allow_html=True)
                     for line in sort_sentiments(pt.get(sum_k,[])):
                         st.markdown(s_html(line), unsafe_allow_html=True)
 
@@ -242,10 +251,10 @@ def render_report_tabs():
     # Tab 4: 글로벌 분석
     # ════════════════════════════════════════════════════
     with tab4:
-        sec("🗺️ 권역별 세부 평가")
+        sec("sec_region")
         reg_data = ins.get('region_analysis',{})
         if reg_data.get('divergence_insight'):
-            gray_box("💡 권역별 주요 체크포인트", reg_data['divergence_insight'])
+            gray_box(ui.TEXTS["divergence_insight_title"], reg_data['divergence_insight'])
 
         for reg in reg_data.get('regions',[]):
             with st.expander(f"📍 {strip_md(reg.get('region',''))}  —  {strip_md(reg.get('trend',''))}"):
@@ -260,7 +269,7 @@ def render_report_tabs():
                         st.markdown(s_html(line), unsafe_allow_html=True)
 
         st.divider()
-        sec("🌍 리뷰 작성 언어(국가)별 분석")
+        sec("sec_country")
         st.markdown(f'<p style="font-size:14px;color:rgba(128,128,128,0.7);margin-bottom:1rem;">{ui.TEXTS["country_analysis_desc"]}</p>', unsafe_allow_html=True)
 
         for country in ins.get('country_analysis',[]):
@@ -276,7 +285,7 @@ def render_report_tabs():
                     quote_box(quote.get('original'), quote.get('korean') or None)
 
         st.divider()
-        with st.expander("🌐 글로벌 언어 및 권역 통계표 펼치기"):
+        with st.expander(ui.TEXTS["sec_stats"] + " 펼치기"):
             st.caption(ui.TEXTS["disclaimer_language"])
             df_reg = pd.DataFrame([[r['rank'],r['region'],f"{r['count']:,}개",r['ratio'],r['pos_ratio'],r['neg_ratio'],r['eval']] for r in stats['table_data_region']], columns=[ui.TEXTS["col_rank"],ui.TEXTS["col_region"],ui.TEXTS["col_count"],ui.TEXTS["col_ratio"],ui.TEXTS["col_pos"],ui.TEXTS["col_neg"],ui.TEXTS["col_eval"]])
             df_all = pd.DataFrame([[r['rank'],r['lang'],f"{r['count']:,}개",r['ratio'],r['pos_ratio'],r['neg_ratio'],r['eval']] for r in stats['table_data_all']], columns=[ui.TEXTS["col_rank"],ui.TEXTS["col_lang"],ui.TEXTS["col_count"],ui.TEXTS["col_ratio"],ui.TEXTS["col_pos"],ui.TEXTS["col_neg"],ui.TEXTS["col_eval"]])
@@ -309,7 +318,7 @@ def render_report_tabs():
     # Tab 5: AI 질문
     # ════════════════════════════════════════════════════
     with tab5:
-        sec("🙋 AI에게 추가 질문하기")
+        sec("sec_qa")
         st.markdown(f'<p style="font-size:15px;color:rgba(128,128,128,0.8);margin-bottom:1.5rem;">{ui.TEXTS["qa_desc"]}</p>', unsafe_allow_html=True)
 
         if st.session_state.get('qa_history'):
