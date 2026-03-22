@@ -149,8 +149,8 @@ def render_report_tabs():
                 cat_name = cat.get('name', '')
                 if cat_name: st.markdown(f"**{render_colored_text(cat_name)}**")
                 
-                for line in sort_sentiments(cat.get('summary', [])): 
-                    st.write(f"- {render_colored_text(line)}")
+                for line in sort_sentiments(cat.get('summary', [])):
+                    st.markdown(f"- {render_colored_text(line)}")
                 
                 quote = cat.get('quote', {})
                 if quote and quote.get('original'):
