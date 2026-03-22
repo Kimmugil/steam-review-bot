@@ -22,13 +22,14 @@ st.markdown("""
         /* 프로그레스바 */
         .stProgress > div > div > div > div { background-color: #222 !important; }
 
-        /* 탭 상단 고정 */
+        /* 탭 상단 고정 + 탭 하단 얇은 선 제거 */
         div[data-testid="stTabs"] > div:first-child {
             position: -webkit-sticky !important; position: sticky !important;
             top: 0 !important; z-index: 100 !important;
             background-color: var(--background-color) !important;
             padding-top: 8px !important;
-            border-bottom: 1.5px solid rgba(128,128,128,0.2) !important;
+            border-bottom: none !important;
+            box-shadow: none !important;
         }
 
         /* AI 대기 슬라이딩 바 */
@@ -43,7 +44,7 @@ st.markdown("""
         .hbtn-filled { background: #1a1a1a; border: none; color: #fff !important; }
         .hbtn-filled:hover { background: #444; }
 
-        /* st.button 스타일 덮어쓰기 — CSS는 항상 페이지 최상단에서 한 번만 선언 */
+        /* st.button 스타일 */
         div[data-testid="stButton"] button {
             border: 1.5px solid rgba(120,120,120,0.55) !important;
             border-radius: 10px !important;
@@ -70,8 +71,22 @@ st.markdown("""
         .step-item.s-done  .step-label { color: rgba(128,128,128,0.85); }
         .step-item.s-active .step-label { color: #222; font-weight: 500; }
 
+        /* 게임 히어로 섹션 */
+        .game-hero { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 1.5rem; }
+        .game-hero-img { width: 180px; min-width: 180px; border-radius: 10px; overflow: hidden; }
+        .game-hero-img img { width: 100%; border-radius: 10px; display: block; }
+        .game-hero-info { flex: 1; min-width: 0; }
+        .game-hero-name { font-size: 26px; font-weight: 500; margin-bottom: 4px; line-height: 1.3; }
+        .game-hero-meta { font-size: 14px; color: rgba(128,128,128,0.8); margin-bottom: 14px; }
+        .game-hero-oneliner { font-size: 17px; line-height: 1.65; font-style: italic; color: var(--color-text-primary); padding: 14px 18px; background: rgba(128,128,128,0.07); border-radius: 10px; }
+
         /* 발행 완료 카드 */
         .finish-card { border: 1.5px solid rgba(128,128,128,0.25); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
+
+        /* 탈곡기 소개 히어로 */
+        .tractor-hero { border: 0.5px solid rgba(128,128,128,0.2); border-radius: 14px; padding: 2rem 1.75rem; margin-bottom: 1rem; display: flex; gap: 2rem; align-items: center; }
+        .tractor-hero-text h3 { font-size: 20px; font-weight: 500; margin-bottom: 8px; }
+        .tractor-hero-text p { font-size: 15px; line-height: 1.7; color: rgba(128,128,128,0.85); margin: 0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -94,6 +109,20 @@ def render_step_indicator(current_step):
         else:                   cls, circle = "",          str(i+1)
         items.append(f'<div class="step-item {cls}"><div class="step-circle">{circle}</div><div class="step-label">{label}</div></div>')
     st.markdown('<div class="step-wrap">' + "".join(items) + '</div>', unsafe_allow_html=True)
+
+def render_game_hero(game_name, rel_date_str, header_image, one_liner=""):
+    """Step 2 상단 게임 히어로 섹션 — 썸네일 + 게임명 + 출시일 + 한줄평"""
+    img_html = f'<img src="{header_image}" alt="{game_name}">' if header_image else ""
+    one_liner_html = f'<div class="game-hero-oneliner">❝ {one_liner} ❞</div>' if one_liner else ""
+    st.markdown(f'''
+    <div class="game-hero">
+        <div class="game-hero-img">{img_html}</div>
+        <div class="game-hero-info">
+            <div class="game-hero-name">{game_name}</div>
+            <div class="game-hero-meta">{ui.TEXTS["game_hero_released"]}: {rel_date_str}</div>
+            {one_liner_html}
+        </div>
+    </div>''', unsafe_allow_html=True)
 
 def main():
     if "history" not in st.session_state: st.session_state.history = []
@@ -130,6 +159,27 @@ def main():
 
     # ── Step 0 ───────────────────────────────────────────────────────────
     if st.session_state.step == 0:
+
+        # ⑦ 탈곡기 소개 히어로 영역 — images/tractor.png 파일 추가 시 이미지 표시
+        hero_image_path = ui.TEXTS.get("hero_image_path", "")
+        if hero_image_path:
+            img_col, txt_col = st.columns([1, 2])
+            with img_col:
+                st.image(hero_image_path, use_container_width=True)
+            with txt_col:
+                st.markdown(f'<h3 style="font-size:20px;font-weight:500;margin-bottom:8px;">{ui.TEXTS["hero_section_title"]}</h3>', unsafe_allow_html=True)
+                st.markdown(f'<p style="font-size:15px;line-height:1.7;color:rgba(128,128,128,0.85);">{ui.TEXTS["hero_section_desc"]}</p>', unsafe_allow_html=True)
+        else:
+            # 이미지 없으면 텍스트만
+            st.markdown(f'''
+            <div class="tractor-hero">
+                <div style="font-size:48px;line-height:1;">🚜</div>
+                <div class="tractor-hero-text">
+                    <h3>{ui.TEXTS["hero_section_title"]}</h3>
+                    <p>{ui.TEXTS["hero_section_desc"]}</p>
+                </div>
+            </div>''', unsafe_allow_html=True)
+
         with st.container(border=True):
             st.subheader(ui.TEXTS["step1_title"])
             raw_input = st.text_input("Input", placeholder=ui.TEXTS["input_placeholder"], label_visibility="collapsed")
@@ -152,11 +202,12 @@ def main():
 
             if st.button(ui.TEXTS["btn_analyze"], use_container_width=True, key="btn_analyze_main"):
                 if not app_id: st.warning(ui.TEXTS["warn_invalid_id"]); return
-                target_name = game_candidate_name or "게임"
+                target_name = game_candidate_name or ui.TEXTS["main_title"]
                 with st.status(ui.TEXTS["status_analyzing"].format(target_name), expanded=True) as status:
                     try:
                         p_bar = st.progress(0); info_txt = st.empty()
-                        info_txt.markdown('<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">🔍 게임 기본 정보 확인 중...</p>', unsafe_allow_html=True)
+
+                        info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step1"]}</p>', unsafe_allow_html=True)
                         if not game_candidate_name:
                             rid, name, rdate, img_url = get_steam_game_info(app_id)
                         else:
@@ -164,14 +215,14 @@ def main():
                         if not rid: raise Exception(ui.TEXTS["loading_error_info"])
                         p_bar.progress(20)
 
-                        info_txt.markdown('<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">📥 스팀 리뷰 수집 중… <span style="font-size:14px;color:rgba(128,128,128,0.7);">(가장 오래 걸려요)</span></p>', unsafe_allow_html=True)
+                        info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step2"]} <span style="font-size:14px;color:rgba(128,128,128,0.7);">{ui.TEXTS["loading_step2_sub"]}</span></p>', unsafe_allow_html=True)
                         rday, rlabel, rreason, rperiod = get_smart_period(rdate)
                         news = fetch_latest_news(rid)
                         all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)
                         if stats['all_total'] == 0: raise Exception(ui.TEXTS["loading_error_data"])
                         p_bar.progress(55)
 
-                        info_txt.markdown('<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">🧠 AI 다차원 분석 중… <span style="font-size:14px;color:rgba(128,128,128,0.7);">리뷰를 읽고 인사이트를 뽑고 있어요</span></p>', unsafe_allow_html=True)
+                        info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step3"]} <span style="font-size:14px;color:rgba(128,128,128,0.7);">{ui.TEXTS["loading_step3_sub"]}</span></p>', unsafe_allow_html=True)
                         anim_slot = st.empty(); ticker = st.empty()
                         anim_html = '<div class="anim-bar-wrap"><div class="anim-bar-inner"></div></div>'
 
@@ -191,7 +242,7 @@ def main():
 
                         anim_slot.empty(); ticker.empty()
                         if res_box[1]: raise Exception(res_box[1])
-                        info_txt.markdown('<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">✅ 분석 완료!</p>', unsafe_allow_html=True)
+                        info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_complete"]}</p>', unsafe_allow_html=True)
                         p_bar.progress(100)
 
                         st.session_state.update({"app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), "insights": res_box[0], "stats": stats, "recent_label": rlabel, "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r, "qa_history": [], "header_image": img_url})
@@ -204,22 +255,30 @@ def main():
 
     # ── Step 1 ───────────────────────────────────────────────────────────
     elif st.session_state.step == 1:
-        # ① 게임명만 표시 (Step 2 · 게임명 → 게임명만)
-        st.markdown(f'<p style="font-size:20px;font-weight:500;margin-bottom:1rem;">{st.session_state.game_name}</p>', unsafe_allow_html=True)
+        # ① 게임 히어로 섹션 (썸네일 + 게임명 + 출시일 + 한줄평)
+        one_liner = ""
+        if st.session_state.insights:
+            import re as _re
+            one_liner = _re.sub(r'\*\*', '', str(st.session_state.insights.get("critic_one_liner", "")))
+        render_game_hero(
+            st.session_state.game_name,
+            st.session_state.rel_date_str,
+            st.session_state.header_image,
+            one_liner
+        )
+
         ui_render.render_report_tabs()
 
         st.divider()
         with st.container(border=True):
-            st.markdown('<p style="font-size:16px;font-weight:500;margin-bottom:1rem;">📝 최종 발행 및 다음 스텝</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-size:16px;font-weight:500;margin-bottom:1rem;">{ui.TEXTS["publish_title_label"]}</p>', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
-                # CSS는 이미 페이지 상단에서 선언됨 — col 안에 <style> 절대 넣지 않음
                 if st.button(ui.TEXTS["btn_reset"], use_container_width=True, key="btn_reset_main"):
                     for k in ["app_id","game_name","rel_date_str","insights","stats","recent_label","news_data","smart_reason","reviews_all","reviews_recent","qa_history","header_image"]:
                         st.session_state[k] = None
                     st.session_state.step = 0; st.rerun()
             with col2:
-                # primary 타입 그대로 — 상단 CSS가 #1a1a1a 배경으로 덮어씀
                 if st.button(ui.TEXTS["btn_notion"], use_container_width=True, type="primary", key="btn_notion_main"):
                     with st.status(ui.TEXTS["publish_loading"]):
                         pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, st.session_state.stats, st.session_state.insights, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data, st.session_state.qa_history)
@@ -234,7 +293,7 @@ def main():
         pid_clean = st.session_state.page_id.replace("-", "")
         st.markdown(f'''
         <div class="finish-card">
-            <p style="font-size:14px;color:rgba(128,128,128,0.7);margin-bottom:16px;">노션 리포트가 발행되었습니다</p>
+            <p style="font-size:14px;color:rgba(128,128,128,0.7);margin-bottom:16px;">{ui.TEXTS["publish_notion_released"]}</p>
             <a href="https://notion.so/{pid_clean}" target="_blank" class="hbtn hbtn-filled" style="max-width:360px;margin:0 auto 16px;">
                 🔗 {ui.TEXTS["publish_link"]}
             </a>
