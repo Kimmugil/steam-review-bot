@@ -84,7 +84,7 @@ def render_report_tabs():
         if news and news[0]:
             if len(news) > 4 and news[4]:
                 st.image(news[4], width=400)
-            st.caption(f"🔗 [{news[3]}] {news[0]}")
+            st.markdown(f"🔗 [{news[3]}] [{news[0]}]({news[2]})")
             for line in ins.get('news_summary', []): st.write(f"• {line}")
         else: st.write(ui.TEXTS["no_news"])
         
