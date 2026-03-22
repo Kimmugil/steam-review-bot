@@ -13,28 +13,32 @@ from report_notion import upload_to_notion
 
 st.set_page_config(page_title=ui.TEXTS["main_title"], page_icon="🚜", layout="wide")
 
-# 💡 [업데이트] 상단 고정(Sticky Tab) 강제 오버라이드 및 회색 박스 CSS
 st.markdown("""
     <style>
-        .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #F04452; color: white; text-align: center; padding: 8px; font-weight: bold; z-index: 9999; }
-        .main .block-container { padding-top: 50px; font-family: 'Pretendard', sans-serif; }
-        .toss-card { background-color: var(--secondary-background-color); padding: 24px; border-radius: 16px; margin-bottom: 16px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
-        .stProgress > div > div > div > div { background-color: #FFC000 !important; }
-        button[kind="primary"] { background-color: #FFC000 !important; color: #111111 !important; border: none !important; font-weight: 700 !important; border-radius: 12px !important; padding: 10px 24px !important; }
-        button[kind="primary"]:hover { background-color: #E5AC00 !important; }
-        .small-history { font-size: 0.85rem; line-height: 1.5; }
-        
-        /* 🔥 스트림릿 탭 메뉴 챡! 상단 고정 매직 CSS */
-        div[data-testid="stTabs"] > div:first-child {
-            position: -webkit-sticky !important;
-            position: sticky !important;
-            top: 2.8rem !important; 
-            z-index: 999 !important;
-            background-color: var(--background-color) !important;
-            padding-top: 10px !important;
-            padding-bottom: 5px !important;
-            border-bottom: 1px solid rgba(128,128,128,0.2) !important;
-        }
+        .main .block-container { padding-top: 2rem; padding-bottom: 3rem; }
+        .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #E24B4A; color: white; text-align: center; padding: 7px; font-size: 13px; font-weight: 500; z-index: 9999; }
+
+        /* 프라이머리 버튼 */
+        button[kind="primary"] { background-color: var(--color-text-primary) !important; color: var(--color-background-primary) !important; border: none !important; font-weight: 500 !important; border-radius: 10px !important; }
+        button[kind="primary"]:hover { opacity: 0.82 !important; }
+
+        /* 프로그레스바 */
+        .stProgress > div > div > div > div { background-color: var(--color-text-primary) !important; }
+
+        /* 스텝 인디케이터 */
+        .step-indicator { display: flex; margin-bottom: 2rem; border-bottom: 0.5px solid var(--color-border-tertiary); }
+        .step-item { flex: 1; text-align: center; font-size: 12px; padding: 10px 0; color: var(--color-text-tertiary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .step-item.active { color: var(--color-text-primary); border-bottom: 2px solid var(--color-text-primary); font-weight: 500; }
+        .step-item.done { color: var(--color-text-secondary); border-bottom: 2px solid var(--color-border-secondary); }
+
+        /* 탭 상단 고정 */
+        div[data-testid="stTabs"] > div:first-child { position: -webkit-sticky !important; position: sticky !important; top: 0 !important; z-index: 999 !important; background-color: var(--background-color) !important; padding-top: 8px !important; padding-bottom: 0 !important; border-bottom: 0.5px solid var(--color-border-tertiary) !important; }
+
+        /* 발행 완료 카드 */
+        .finish-card { border: 0.5px solid var(--color-border-tertiary); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
+
+        /* 사이드바 */
+        .small-history { font-size: 0.82rem; line-height: 1.6; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -48,14 +52,10 @@ def extract_id(s):
     return match.group(1) if match else (clean_s if clean_s.isdigit() else None)
 
 def render_step_indicator(current_step):
-    st.progress(int((current_step + 1) * 33.3))
-    cols = st.columns(3)
     steps = [ui.TEXTS["step_1"], ui.TEXTS["step_2"], ui.TEXTS["step_3"]]
-    for i, col in enumerate(cols):
-        color = "#FFC000" if i == current_step else ("#888" if i < current_step else "#444")
-        weight = "bold" if i == current_step else "normal"
-        col.markdown(f"<div style='text-align: center; color: {color}; font-weight: {weight};'> {steps[i]} </div>", unsafe_allow_html=True)
-    st.write("")
+    classes = ["active" if i == current_step else ("done" if i < current_step else "") for i in range(3)]
+    html = '<div class="step-indicator">' + "".join([f'<div class="step-item {c}">{s}</div>' for s, c in zip(steps, classes)]) + '</div>'
+    st.markdown(html, unsafe_allow_html=True)
 
 def main():
     if "history" not in st.session_state: st.session_state.history = []
@@ -79,22 +79,25 @@ def main():
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
         st.title(ui.TEXTS["main_title"])
-        st.markdown(ui.TEXTS["main_desc"])
-    with col_h2: st.write(""); st.link_button(ui.TEXTS["report_link"], NOTION_PUBLIC_URL, use_container_width=True)
-    
-    st.write(""); render_step_indicator(st.session_state.step)
+        st.markdown(f'<p style="color: var(--color-text-secondary); font-size: 15px; margin-top: -0.5rem;">{ui.TEXTS["main_desc"]}</p>', unsafe_allow_html=True)
+    with col_h2:
+        st.write("")
+        st.link_button(ui.TEXTS["report_link"], NOTION_PUBLIC_URL, use_container_width=True)
+
+    st.write("")
+    render_step_indicator(st.session_state.step)
 
     if st.session_state.step == 0:
         with st.container(border=True):
             st.subheader(ui.TEXTS["step1_title"])
             raw_input = st.text_input("Input", placeholder=ui.TEXTS["input_placeholder"], label_visibility="collapsed")
             st.caption(ui.TEXTS["step1_caption"])
-            
+
             app_id = extract_id(raw_input)
             game_candidate_name, game_candidate_date, game_candidate_img = None, None, None
-            
+
             if app_id: rid, game_candidate_name, game_candidate_date, game_candidate_img = get_steam_game_info(app_id)
-            
+
             if game_candidate_name:
                 st.markdown("---")
                 img_col, txt_col = st.columns([1, 4])
@@ -103,10 +106,10 @@ def main():
                 with txt_col:
                     st.markdown(ui.TEXTS["prompt_analyze_game"].format(game_candidate_name))
                     if game_candidate_date: st.caption(ui.TEXTS["prompt_release_date"].format(game_candidate_date.strftime('%Y년 %m월 %d일')))
-                        
+
             if st.button(ui.TEXTS["btn_analyze"], use_container_width=True, type="primary"):
                 if not app_id: st.warning(ui.TEXTS["warn_invalid_id"]); return
-                
+
                 target_name = game_candidate_name if game_candidate_name else "게임"
                 with st.status(ui.TEXTS["status_analyzing"].format(target_name), expanded=True) as status:
                     try:
@@ -116,14 +119,14 @@ def main():
                         else: name, rdate, img_url = game_candidate_name, game_candidate_date, game_candidate_img
                         if not rid: raise Exception(ui.TEXTS["loading_error_info"])
                         p_bar.progress(20)
-                        
+
                         info_txt.write(ui.TEXTS["loading_2"])
                         rday, rlabel, rreason, rperiod = get_smart_period(rdate)
                         news = fetch_latest_news(rid)
                         all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)
                         if stats['all_total'] == 0: raise Exception(ui.TEXTS["loading_error_data"])
                         p_bar.progress(50)
-                        
+
                         info_txt.write(ui.TEXTS["loading_3"])
                         ticker = st.empty(); res_box, event = [None, None], threading.Event()
                         def run_ai():
@@ -133,19 +136,17 @@ def main():
                         threading.Thread(target=run_ai).start()
                         while not event.is_set(): ticker.info(f"💡 {random.choice(ui.TEXTS['WAITING_MESSAGES'])}"); time.sleep(TICKER_INTERVAL)
                         if res_box[1]: raise Exception(res_box[1])
-                        
+
                         st.session_state.update({"app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), "insights": res_box[0], "stats": stats, "recent_label": rlabel, "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r, "qa_history": [], "header_image": img_url})
                         history_item = {k: st.session_state[k] for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]}
                         st.session_state.history = [h for h in st.session_state.history if h['app_id'] != rid] + [history_item]
-                        
+
                         ticker.empty(); info_txt.write(ui.TEXTS["loading_4"]); p_bar.progress(100)
                         st.session_state.step = 1; status.update(label=ui.TEXTS["status_complete"], state="complete"); st.rerun()
                     except Exception as e: status.update(label=ui.TEXTS["status_error"], state="error"); st.error(str(e))
 
     elif st.session_state.step == 1:
-        st.subheader(f"Step 2. [{st.session_state.game_name}] {ui.TEXTS['step2_title']}")
-        # 💡 [업데이트] 여기서 출력하던 st.info(step2_desc) 제거됨
-        
+        st.markdown(f'<p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 1rem;">Step 2 · {st.session_state.game_name}</p>', unsafe_allow_html=True)
         ui_render.render_report_tabs()
 
         st.divider()
@@ -164,8 +165,8 @@ def main():
 
     elif st.session_state.step == 2:
         st.balloons(); st.success(ui.TEXTS["publish_success"])
-        st.markdown(f'<div class="toss-card" style="text-align:center;"><a href="https://notion.so/{st.session_state.page_id.replace("-", "")}" target="_blank" style="font-size:1.5em; color:#3182F6; font-weight:700; text-decoration:none;">🔗 {ui.TEXTS["publish_link"]}</a></div>', unsafe_allow_html=True)
-        
+        pid_clean = st.session_state.page_id.replace("-", "")
+        st.markdown(f'<div class="finish-card"><p style="font-size:13px; color: var(--color-text-tertiary); margin-bottom: 12px;">노션 리포트가 발행되었습니다</p><a href="https://notion.so/{pid_clean}" target="_blank" style="font-size:17px; color: var(--color-text-primary); font-weight:500; text-decoration:none;">🔗 {ui.TEXTS["publish_link"]}</a></div>', unsafe_allow_html=True)
         if st.button(ui.TEXTS["btn_reset_after_publish"], use_container_width=True, type="primary"):
             for k in [k for k in st.session_state.keys() if k != 'history']: del st.session_state[k]
             st.rerun()
