@@ -36,40 +36,34 @@ st.markdown("""
         .anim-bar-wrap { height: 4px; border-radius: 2px; background: rgba(128,128,128,0.2); overflow: hidden; margin: 12px 0 8px; }
         .anim-bar-inner { height: 100%; width: 16%; border-radius: 2px; background: #333; animation: shimmer 1.6s ease-in-out infinite; }
 
-        /* ── HTML 버튼 시스템 ── */
-        .hbtn {
-            display: block; width: 100%; padding: 11px 20px;
-            border-radius: 10px; font-size: 15px; font-weight: 500;
-            cursor: pointer; text-align: center; text-decoration: none;
-            box-sizing: border-box; line-height: 1.4;
-        }
-        .hbtn-outline {
-            background: transparent;
-            border: 1.5px solid rgba(120,120,120,0.6);
-            color: inherit !important;
-        }
+        /* HTML 버튼 */
+        .hbtn { display: block; width: 100%; padding: 11px 20px; border-radius: 10px; font-size: 15px; font-weight: 500; text-align: center; text-decoration: none; box-sizing: border-box; }
+        .hbtn-outline { background: transparent; border: 1.5px solid rgba(120,120,120,0.6); color: inherit !important; }
         .hbtn-outline:hover { background: rgba(128,128,128,0.08); }
-        .hbtn-filled {
-            background: #222;
-            border: none;
-            color: #fff !important;
-        }
+        .hbtn-filled { background: #1a1a1a; border: none; color: #fff !important; }
         .hbtn-filled:hover { background: #444; }
 
-        /* ── 스텝 인디케이터 ── */
-        .step-wrap { display: flex; margin-bottom: 2.5rem; gap: 0; }
+        /* st.button 스타일 덮어쓰기 — CSS는 항상 페이지 최상단에서 한 번만 선언 */
+        div[data-testid="stButton"] button {
+            border: 1.5px solid rgba(120,120,120,0.55) !important;
+            border-radius: 10px !important;
+            font-size: 15px !important;
+            font-weight: 500 !important;
+        }
+        div[data-testid="stButton"] button[kind="primary"],
+        div[data-testid="stButton"] button[data-testid="baseButton-primary"] {
+            background: #1a1a1a !important;
+            color: #fff !important;
+            border: none !important;
+        }
+
+        /* 스텝 인디케이터 */
+        .step-wrap { display: flex; margin-bottom: 2.5rem; }
         .step-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-bottom: 18px; position: relative; }
         .step-item::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; border-radius:2px; background:rgba(128,128,128,0.2); }
         .step-item.s-done::after  { background: rgba(128,128,128,0.5); }
         .step-item.s-active::after { background: #222; }
-        .step-circle {
-            width: 38px; height: 38px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 15px; font-weight: 500;
-            border: 2px solid rgba(128,128,128,0.35);
-            color: rgba(128,128,128,0.7);
-            background: transparent;
-        }
+        .step-circle { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 500; border: 2px solid rgba(128,128,128,0.35); color: rgba(128,128,128,0.7); background: transparent; }
         .step-item.s-done  .step-circle { border-color: rgba(128,128,128,0.5); color: rgba(128,128,128,0.8); background: rgba(128,128,128,0.1); }
         .step-item.s-active .step-circle { border-color: #222; color: #fff; background: #222; }
         .step-label { font-size: 16px; text-align: center; line-height: 1.4; color: rgba(128,128,128,0.7); }
@@ -100,12 +94,6 @@ def render_step_indicator(current_step):
         else:                   cls, circle = "",          str(i+1)
         items.append(f'<div class="step-item {cls}"><div class="step-circle">{circle}</div><div class="step-label">{label}</div></div>')
     st.markdown('<div class="step-wrap">' + "".join(items) + '</div>', unsafe_allow_html=True)
-
-# ── HTML 버튼 클릭 감지 패턴 ────────────────────────────────────────────
-# 스트림릿에서 HTML 버튼 클릭 감지가 불가하므로:
-# - session_state 변경이 필요한 버튼 → st.button (보이지 않게 숨기고 HTML 버튼과 연동 불가)
-#   → 대신 st.button에 직접 inline CSS로 최대한 스타일링
-# - 단순 링크 버튼 → HTML <a> 태그
 
 def main():
     if "history" not in st.session_state: st.session_state.history = []
@@ -162,19 +150,12 @@ def main():
                     if game_candidate_date:
                         st.caption(ui.TEXTS["prompt_release_date"].format(game_candidate_date.strftime('%Y년 %m월 %d일')))
 
-            # 분석 시작 — HTML filled 버튼으로 표시, 실제 클릭은 숨겨진 st.button
-            st.markdown('<div style="margin-top:8px;">', unsafe_allow_html=True)
-            analyze_clicked = st.button(ui.TEXTS["btn_analyze"], use_container_width=True, key="btn_analyze_main")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            if analyze_clicked:
+            if st.button(ui.TEXTS["btn_analyze"], use_container_width=True, key="btn_analyze_main"):
                 if not app_id: st.warning(ui.TEXTS["warn_invalid_id"]); return
                 target_name = game_candidate_name or "게임"
                 with st.status(ui.TEXTS["status_analyzing"].format(target_name), expanded=True) as status:
                     try:
-                        p_bar = st.progress(0)
-                        info_txt = st.empty()
-
+                        p_bar = st.progress(0); info_txt = st.empty()
                         info_txt.markdown('<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">🔍 게임 기본 정보 확인 중...</p>', unsafe_allow_html=True)
                         if not game_candidate_name:
                             rid, name, rdate, img_url = get_steam_game_info(app_id)
@@ -191,8 +172,7 @@ def main():
                         p_bar.progress(55)
 
                         info_txt.markdown('<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">🧠 AI 다차원 분석 중… <span style="font-size:14px;color:rgba(128,128,128,0.7);">리뷰를 읽고 인사이트를 뽑고 있어요</span></p>', unsafe_allow_html=True)
-                        anim_slot = st.empty()
-                        ticker = st.empty()
+                        anim_slot = st.empty(); ticker = st.empty()
                         anim_html = '<div class="anim-bar-wrap"><div class="anim-bar-inner"></div></div>'
 
                         res_box, event = [None, None], threading.Event()
@@ -211,7 +191,6 @@ def main():
 
                         anim_slot.empty(); ticker.empty()
                         if res_box[1]: raise Exception(res_box[1])
-
                         info_txt.markdown('<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">✅ 분석 완료!</p>', unsafe_allow_html=True)
                         p_bar.progress(100)
 
@@ -219,14 +198,14 @@ def main():
                         history_item = {k: st.session_state[k] for k in ["app_id","game_name","rel_date_str","insights","stats","recent_label","news_data","smart_reason","reviews_all","reviews_recent","qa_history","header_image"]}
                         st.session_state.history = [h for h in st.session_state.history if h['app_id'] != rid] + [history_item]
                         st.session_state.step = 1
-                        status.update(label=ui.TEXTS["status_complete"], state="complete")
-                        st.rerun()
+                        status.update(label=ui.TEXTS["status_complete"], state="complete"); st.rerun()
                     except Exception as e:
                         status.update(label=ui.TEXTS["status_error"], state="error"); st.error(str(e))
 
     # ── Step 1 ───────────────────────────────────────────────────────────
     elif st.session_state.step == 1:
-        st.markdown(f'<p style="font-size:14px;color:rgba(128,128,128,0.7);margin-bottom:1rem;">Step 2 · {st.session_state.game_name}</p>', unsafe_allow_html=True)
+        # ① 게임명만 표시 (Step 2 · 게임명 → 게임명만)
+        st.markdown(f'<p style="font-size:20px;font-weight:500;margin-bottom:1rem;">{st.session_state.game_name}</p>', unsafe_allow_html=True)
         ui_render.render_report_tabs()
 
         st.divider()
@@ -234,29 +213,13 @@ def main():
             st.markdown('<p style="font-size:16px;font-weight:500;margin-bottom:1rem;">📝 최종 발행 및 다음 스텝</p>', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
+                # CSS는 이미 페이지 상단에서 선언됨 — col 안에 <style> 절대 넣지 않음
                 if st.button(ui.TEXTS["btn_reset"], use_container_width=True, key="btn_reset_main"):
                     for k in ["app_id","game_name","rel_date_str","insights","stats","recent_label","news_data","smart_reason","reviews_all","reviews_recent","qa_history","header_image"]:
                         st.session_state[k] = None
                     st.session_state.step = 0; st.rerun()
             with col2:
-                # 노션 발행 — HTML filled 버튼 + 바로 아래 숨겨진 form
-                st.markdown("""
-                <style>
-                /* 스트림릿 기본 버튼 스타일 최대한 덮어쓰기 (다크/라이트 공통) */
-                div[data-testid="stButton"] button {
-                    border: 1.5px solid rgba(120,120,120,0.55) !important;
-                    border-radius: 10px !important;
-                    font-size: 15px !important;
-                    font-weight: 500 !important;
-                }
-                div[data-testid="stButton"] button[kind="primary"],
-                div[data-testid="stButton"] button[data-testid="baseButton-primary"] {
-                    background: #1a1a1a !important;
-                    color: #ffffff !important;
-                    border: none !important;
-                }
-                </style>
-                """, unsafe_allow_html=True)
+                # primary 타입 그대로 — 상단 CSS가 #1a1a1a 배경으로 덮어씀
                 if st.button(ui.TEXTS["btn_notion"], use_container_width=True, type="primary", key="btn_notion_main"):
                     with st.status(ui.TEXTS["publish_loading"]):
                         pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, st.session_state.stats, st.session_state.insights, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data, st.session_state.qa_history)
@@ -272,7 +235,7 @@ def main():
         st.markdown(f'''
         <div class="finish-card">
             <p style="font-size:14px;color:rgba(128,128,128,0.7);margin-bottom:16px;">노션 리포트가 발행되었습니다</p>
-            <a href="https://notion.so/{pid_clean}" target="_blank" class="hbtn hbtn-filled" style="max-width:360px;margin:0 auto 0;display:block;">
+            <a href="https://notion.so/{pid_clean}" target="_blank" class="hbtn hbtn-filled" style="max-width:360px;margin:0 auto 16px;">
                 🔗 {ui.TEXTS["publish_link"]}
             </a>
         </div>''', unsafe_allow_html=True)
