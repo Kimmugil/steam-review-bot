@@ -193,13 +193,14 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
     for lang in target_langs:
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
         all_reviews_for_pt.extend([{'pt': r['playtime'], 'pos': r['is_positive']} for r in all_revs])
-        reg_name = REGION_MAP.get(lang, ui.TEXTS["steam_etc"])
+        lang_label = get_lang_name(lang)
         # [v2.2.5] AI 분석 대표성 향상을 위해 언어별 전달 리뷰 수를 20개 → 40개로 상향
-        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {reg_name} | ⏱️ {r['playtime']}h] {r['review']}" for r in all_revs][:40]
+        # [v2.2.6] 리뷰 태그를 권역명 → 언어/국가명으로 변경 (원문 인용 시 국가명 노출)
+        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}" for r in all_revs][:40]
         if recent_days_val:
             rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val)
             # [v2.2.5] AI 분석 대표성 향상을 위해 언어별 전달 리뷰 수를 20개 → 40개로 상향
-            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {reg_name} | ⏱️ {r['playtime']}h] {r['review']}" for r in rec_revs][:40]
+            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}" for r in rec_revs][:40]
         else: filtered_recent[lang] = filtered_all[lang]
 
     all_reviews_for_pt.sort(key=lambda x: x['pt'])
