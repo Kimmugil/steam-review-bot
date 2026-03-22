@@ -27,7 +27,6 @@ def eval_color(val):
     if "부정" in str(val): return "#A32D2D"
     return "rgba(128,128,128,0.8)"
 
-# ⑤ 평점 텍스트 색상 — 플레이타임 카드에 사용
 def desc_color(val):
     v = str(val)
     if "긍정" in v: return "#185FA5"
@@ -54,7 +53,6 @@ def s_html(line):
         return f'<div style="display:flex;gap:10px;align-items:baseline;margin-bottom:10px;"><span style="background:#FCEBEB;color:#791F1F;font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0;">부정</span><span style="font-size:16px;line-height:1.65;color:var(--color-text-primary);">{body}</span></div>'
     return f'<div style="font-size:16px;line-height:1.65;margin-bottom:10px;color:var(--color-text-primary);">{line}</div>'
 
-# ② 섹션 제목 — 더 크게 (20px)
 def sec(key):
     text = ui.TEXTS.get(key, key)
     st.markdown(f'<p style="font-size:20px;font-weight:500;color:var(--color-text-primary);margin:2rem 0 0.75rem;">{text}</p>', unsafe_allow_html=True)
@@ -95,7 +93,6 @@ def quote_box(original, korean=None):
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
-# ⑤ 플레이타임 그룹 카드 — 표본/평균/평점 배경 + 평점 색상
 def playtime_header_card(title, total, avg, desc):
     color = desc_color(desc)
     return f'''
@@ -114,7 +111,6 @@ def playtime_header_card(title, total, avg, desc):
 def render_report_tabs():
     ins, stats = st.session_state.insights, st.session_state.stats
 
-    # ② 안내 텍스트 폰트 통일
     with st.expander(ui.TEXTS['bot_info_title']):
         st.markdown(f'<p style="font-size:15px;line-height:1.8;color:var(--color-text-secondary);">{ui.TEXTS["bot_info_desc"]}</p>', unsafe_allow_html=True)
 
@@ -127,10 +123,10 @@ def render_report_tabs():
     ])
 
     # ════════════════════════════════════════════════════
-    # Tab 1: 주요 요약 (한줄평은 app.py 히어로 섹션으로 이동)
+    # Tab 1: 주요 요약
     # ════════════════════════════════════════════════════
     with tab1:
-        # 민심 3지표
+        # 민심 3지표 — 툴팁 + 기간 정보
         c1, c2, c3 = st.columns(3)
         with c1:
             st.markdown(f'''
@@ -157,10 +153,17 @@ def render_report_tabs():
                 <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-top:5px;">표본 {stats["recent_total"]:,}개</div>
             </div>''', unsafe_allow_html=True)
             if period:
-                st.caption(ui.TEXTS["period_collect"].format(period))
-            # ④ 기간 토글 — 작고 회색
-            with st.expander(ui.TEXTS["period_toggle_label"]):
-                st.markdown(f'<p style="font-size:14px;line-height:1.7;color:var(--color-text-secondary);">{st.session_state.smart_reason}</p>', unsafe_allow_html=True)
+                st.caption(f"📅 {period}")
+            # ② 기간 토글 → expander 제거, 작은 회색 접힘 캡션으로 교체
+            st.markdown(f'''
+            <details style="margin-top:4px;">
+                <summary style="font-size:12px;color:rgba(128,128,128,0.6);cursor:pointer;list-style:none;user-select:none;">
+                    ▸ 왜 이 기간으로 분석했나요?
+                </summary>
+                <div style="font-size:13px;line-height:1.7;color:rgba(128,128,128,0.7);margin-top:6px;padding:8px 10px;background:rgba(128,128,128,0.05);border-radius:6px;">
+                    {st.session_state.smart_reason}
+                </div>
+            </details>''', unsafe_allow_html=True)
 
         st.write("")
         gray_box(ui.TEXTS["summary_briefing"], ins.get('sentiment_analysis',''))
@@ -229,7 +232,6 @@ def render_report_tabs():
         if pt:
             if pt.get('comparison_insights'):
                 gray_box(ui.TEXTS["insight_core_title"], items=pt.get('comparison_insights',[]))
-
             p1, p2, p3 = st.columns(3)
             for col, tk, tot_k, avg_k, desc_k, sum_k, def_t in [
                 (p1,'newbie_title','newbie_total','newbie_avg','newbie_desc','newbie_summary',ui.TEXTS['newbie_title_default']),
@@ -237,7 +239,6 @@ def render_report_tabs():
                 (p3,'core_title',  'core_total',  'core_avg',  'core_desc',  'core_summary',  ui.TEXTS['core_title_default']),
             ]:
                 with col:
-                    # ⑤ 표본/평균/평점 배경 카드 + 평점 색상
                     st.markdown(playtime_header_card(
                         pt.get(tk, def_t),
                         stats.get(tot_k, 0),
@@ -285,7 +286,7 @@ def render_report_tabs():
                     quote_box(quote.get('original'), quote.get('korean') or None)
 
         st.divider()
-        with st.expander(ui.TEXTS["sec_stats"] + " 펼치기"):
+        with st.expander(ui.TEXTS.get("sec_stats","🌐 글로벌 통계표") + " 펼치기"):
             st.caption(ui.TEXTS["disclaimer_language"])
             df_reg = pd.DataFrame([[r['rank'],r['region'],f"{r['count']:,}개",r['ratio'],r['pos_ratio'],r['neg_ratio'],r['eval']] for r in stats['table_data_region']], columns=[ui.TEXTS["col_rank"],ui.TEXTS["col_region"],ui.TEXTS["col_count"],ui.TEXTS["col_ratio"],ui.TEXTS["col_pos"],ui.TEXTS["col_neg"],ui.TEXTS["col_eval"]])
             df_all = pd.DataFrame([[r['rank'],r['lang'],f"{r['count']:,}개",r['ratio'],r['pos_ratio'],r['neg_ratio'],r['eval']] for r in stats['table_data_all']], columns=[ui.TEXTS["col_rank"],ui.TEXTS["col_lang"],ui.TEXTS["col_count"],ui.TEXTS["col_ratio"],ui.TEXTS["col_pos"],ui.TEXTS["col_neg"],ui.TEXTS["col_eval"]])
