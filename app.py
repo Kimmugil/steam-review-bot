@@ -170,12 +170,18 @@ def main():
     if st.session_state.step == 0:
         hero_image_path = ui.TEXTS.get("hero_image_path", "")
         if hero_image_path:
-            img_col, txt_col = st.columns([1, 2])
-            with img_col:
-                st.image(hero_image_path, use_container_width=True)
-            with txt_col:
-                st.markdown(f'<h3 style="font-size:20px;font-weight:500;margin-bottom:8px;">{ui.TEXTS["hero_section_title"]}</h3>', unsafe_allow_html=True)
-                st.markdown(f'<p style="font-size:15px;line-height:1.7;color:rgba(128,128,128,0.85);">{ui.TEXTS["hero_section_desc"]}</p>', unsafe_allow_html=True)
+            # HTML로 직접 렌더링 — 세로 최대 300px 고정, 가로는 비율 유지
+            st.markdown(f'''
+            <div style="display:flex;gap:24px;align-items:center;margin-bottom:1rem;">
+                <div style="flex-shrink:0;">
+                    <img src="{hero_image_path}"
+                         style="height:300px;width:auto;max-width:100%;border-radius:12px;display:block;object-fit:cover;">
+                </div>
+                <div>
+                    <h3 style="font-size:20px;font-weight:500;margin-bottom:8px;">{ui.TEXTS["hero_section_title"]}</h3>
+                    <p style="font-size:15px;line-height:1.7;color:rgba(128,128,128,0.85);margin:0;">{ui.TEXTS["hero_section_desc"]}</p>
+                </div>
+            </div>''', unsafe_allow_html=True)
         else:
             st.markdown(f'''
             <div class="tractor-hero">
