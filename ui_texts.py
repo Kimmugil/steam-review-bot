@@ -14,9 +14,9 @@ TEXTS = {
     "update_history_title": "🛠️ 업데이트 이력",
     "report_link": "👉 통합 리포트 열람",
 
-    "step_1": "1️⃣ 분석 대상 입력",
-    "step_2": "2️⃣ 리포트 검수",
-    "step_3": "3️⃣ 발행 완료",
+    "step_1": "분석 대상 입력",
+    "step_2": "리포트 검수",
+    "step_3": "발행 완료",
     "btn_analyze": "🚜 리뷰 탈곡기 가동하기",
     "btn_reset": "🔄 노션 발행 없이 다른 게임 분석하기",
     "btn_reset_after_publish": "🔄 다른 게임 분석하기",
