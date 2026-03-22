@@ -15,107 +15,65 @@ st.set_page_config(page_title=ui.TEXTS["main_title"], page_icon="🚜", layout="
 
 st.markdown("""
     <style>
-        /* ── 레이아웃 ─────────────────────────────────────────── */
         .main .block-container { padding-top: 2rem; padding-bottom: 3rem; }
         .fixed-banner { position: fixed; top: 0; left: 0; width: 100%; background-color: #E24B4A; color: white; text-align: center; padding: 7px; font-size: 14px; font-weight: 500; z-index: 9999; }
         .small-history { font-size: 0.85rem; line-height: 1.5; }
 
-        /* ── 버튼 공통 기반 ───────────────────────────────────── */
-        /* 스트림릿 버튼 실제 DOM: div[data-testid="stButton"] > button */
-        div[data-testid="stButton"] > button {
-            border: 1.5px solid var(--color-border-primary) !important;
-            border-radius: 10px !important;
-            font-size: 15px !important;
-            font-weight: 500 !important;
-            background: transparent !important;
-            color: var(--color-text-primary) !important;
-        }
-        div[data-testid="stButton"] > button:hover {
-            background: var(--color-background-secondary) !important;
-        }
-
-        /* ── 프라이머리 버튼만 덮어쓰기 (검정 채움) ──────────── */
-        div[data-testid="stButton"] > button[kind="primary"],
-        div[data-testid="stBaseButton-primary"] > button,
-        div[data-testid="stButton"] > button.st-emotion-cache-primary {
-            background: var(--color-text-primary) !important;
-            color: var(--color-background-primary) !important;
-            border: none !important;
-        }
-        div[data-testid="stButton"] > button[kind="primary"]:hover {
-            opacity: 0.82 !important;
-        }
-
-        /* ── link_button ─────────────────────────────────────── */
-        div[data-testid="stLinkButton"] > a > button,
-        div[data-testid="stLinkButton"] > button {
-            border: 1.5px solid var(--color-border-primary) !important;
-            border-radius: 10px !important;
-            font-size: 15px !important;
-            background: transparent !important;
-            color: var(--color-text-primary) !important;
-        }
-
-        /* ── 프로그레스바 ────────────────────────────────────── */
+        /* 프로그레스바 */
         .stProgress > div > div > div > div { background-color: var(--color-text-primary) !important; }
 
-        /* ── 스텝 인디케이터 ─────────────────────────────────── */
-        .step-wrap { display: flex; margin-bottom: 2rem; }
-        .step-item {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            padding: 0 8px 16px;
-            position: relative;
-        }
-        .step-item::after {
-            content: '';
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            height: 3px;
-            background: var(--color-border-tertiary);
-            border-radius: 2px;
-        }
-        .step-item.done::after { background: var(--color-border-secondary); }
+        /* 스텝 인디케이터 */
+        .step-wrap { display: flex; margin-bottom: 2.5rem; }
+        .step-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0 8px 18px; position: relative; }
+        .step-item::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: var(--color-border-tertiary); border-radius: 2px; }
+        .step-item.done::after  { background: var(--color-border-secondary); }
         .step-item.active::after { background: var(--color-text-primary); }
-        .step-circle {
-            width: 32px; height: 32px;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 14px; font-weight: 500;
-            border: 2px solid var(--color-border-tertiary);
-            color: var(--color-text-tertiary);
-            background: transparent;
-        }
-        .step-item.done .step-circle { border-color: var(--color-border-secondary); color: var(--color-text-secondary); background: var(--color-background-secondary); }
+        .step-circle { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 500; border: 2px solid var(--color-border-tertiary); color: var(--color-text-tertiary); }
+        .step-item.done  .step-circle { border-color: var(--color-border-secondary); color: var(--color-text-secondary); background: var(--color-background-secondary); }
         .step-item.active .step-circle { border-color: var(--color-text-primary); color: var(--color-background-primary); background: var(--color-text-primary); }
-        .step-label { font-size: 14px; color: var(--color-text-tertiary); text-align: center; }
-        .step-item.done .step-label { color: var(--color-text-secondary); }
+        .step-label { font-size: 16px; color: var(--color-text-tertiary); text-align: center; line-height: 1.4; }
+        .step-item.done  .step-label { color: var(--color-text-secondary); }
         .step-item.active .step-label { color: var(--color-text-primary); font-weight: 500; }
 
-        /* ── 탭 상단 고정
-               스트림릿 헤더 높이(약 3.5rem) 아래에 붙도록 top 설정
-               헤더가 없는 환경(클라우드 embedded)도 고려해 0으로도 시도 ── */
+        /* HTML 커스텀 버튼 공통 */
+        .btn-base {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 100%; padding: 11px 20px; border-radius: 10px;
+            font-size: 15px; font-weight: 500; cursor: pointer;
+            text-decoration: none; text-align: center;
+            box-sizing: border-box; transition: opacity 0.15s;
+        }
+        /* 아웃라인 버튼 */
+        .btn-outline {
+            background: transparent;
+            border: 1.5px solid var(--color-border-primary);
+            color: var(--color-text-primary) !important;
+        }
+        .btn-outline:hover { background: var(--color-background-secondary); }
+        /* 채움 버튼 (프라이머리) */
+        .btn-filled {
+            background: var(--color-text-primary);
+            border: none;
+            color: var(--color-background-primary) !important;
+        }
+        .btn-filled:hover { opacity: 0.82; }
+
+        /* 탭 상단 고정 */
         div[data-testid="stTabs"] > div:first-child {
-            position: -webkit-sticky !important;
-            position: sticky !important;
-            top: 0px !important;
-            z-index: 100 !important;
+            position: -webkit-sticky !important; position: sticky !important;
+            top: 0 !important; z-index: 100 !important;
             background-color: var(--background-color) !important;
             padding-top: 8px !important;
-            margin-bottom: 0 !important;
             border-bottom: 1.5px solid var(--color-border-tertiary) !important;
         }
 
-        /* ── AI 대기 중 슬라이딩 애니메이션 바 ──────────────── */
-        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(600%); } }
+        /* AI 대기 중 슬라이딩 애니메이션 바 */
+        @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(600%)} }
         .anim-bar-wrap { height: 4px; border-radius: 2px; background: var(--color-border-tertiary); overflow: hidden; margin: 12px 0 8px; }
         .anim-bar-inner { height: 100%; width: 16%; border-radius: 2px; background: var(--color-text-primary); animation: shimmer 1.6s ease-in-out infinite; }
 
-        /* ── 발행 완료 카드 ──────────────────────────────────── */
-        .finish-card { border: 1px solid var(--color-border-tertiary); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
+        /* 발행 완료 카드 */
+        .finish-card { border: 1.5px solid var(--color-border-tertiary); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -126,31 +84,53 @@ if not GEMINI_API_KEY or not NOTION_TOKEN:
 
 def extract_id(s):
     if not s: return None
-    clean_s = s.strip()
-    match = re.search(r'app/(\d+)', clean_s)
-    return match.group(1) if match else (clean_s if clean_s.isdigit() else None)
+    m = re.search(r'app/(\d+)', s.strip())
+    return m.group(1) if m else (s.strip() if s.strip().isdigit() else None)
 
 def render_step_indicator(current_step):
     steps = [ui.TEXTS["step_1"], ui.TEXTS["step_2"], ui.TEXTS["step_3"]]
-    numbers = ["1", "2", "3"]
-    done_icon = "✓"
     items = []
-    for i, (label, num) in enumerate(zip(steps, numbers)):
-        if i < current_step:
-            cls = "done"
-            circle_content = done_icon
-        elif i == current_step:
-            cls = "active"
-            circle_content = num
-        else:
-            cls = ""
-            circle_content = num
-        items.append(f'''
-        <div class="step-item {cls}">
-            <div class="step-circle">{circle_content}</div>
-            <div class="step-label">{label}</div>
-        </div>''')
+    for i, label in enumerate(steps):
+        if i < current_step:   cls, circle = "done",   "✓"
+        elif i == current_step: cls, circle = "active", str(i+1)
+        else:                   cls, circle = "",        str(i+1)
+        items.append(f'<div class="step-item {cls}"><div class="step-circle">{circle}</div><div class="step-label">{label}</div></div>')
     st.markdown('<div class="step-wrap">' + "".join(items) + '</div>', unsafe_allow_html=True)
+
+# ── HTML 버튼 헬퍼 ─────────────────────────────────────────────────────────
+# 스트림릿 CSS 샌드박스 때문에 button 스타일링이 불가능하므로
+# 클릭 이벤트가 필요한 버튼은 st.button(), 단순 이동 링크는 HTML로 처리
+def html_btn_outline(label, key):
+    """아웃라인 버튼처럼 보이는 st.button 래퍼 — 스트림릿 기본 버튼 위에 CSS 강제 주입"""
+    # st.markdown으로 해당 버튼 바로 위에 인라인 스타일 주입
+    st.markdown(f"""
+    <style>
+    div[data-testid="stButton"]:has(button[title="{key}"]) > button {{
+        background: transparent !important;
+        border: 1.5px solid rgba(128,128,128,0.6) !important;
+        color: var(--color-text-primary) !important;
+        font-size: 15px !important;
+        border-radius: 10px !important;
+        font-weight: 500 !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+    return st.button(label, key=key, use_container_width=True)
+
+def html_btn_filled(label, key):
+    st.markdown(f"""
+    <style>
+    div[data-testid="stButton"]:has(button[title="{key}"]) > button {{
+        background: var(--color-text-primary) !important;
+        color: var(--color-background-primary) !important;
+        border: none !important;
+        font-size: 15px !important;
+        border-radius: 10px !important;
+        font-weight: 500 !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+    return st.button(label, key=key, use_container_width=True, type="primary")
 
 def main():
     if "history" not in st.session_state: st.session_state.history = []
@@ -167,7 +147,7 @@ def main():
             st.caption(ui.TEXTS["click_history"])
             for idx, h in enumerate(reversed(st.session_state.history[-5:])):
                 if st.button(ui.TEXTS["btn_history_item"].format(h['game_name']), key=f"hist_{idx}_{h['app_id']}", use_container_width=True):
-                    st.session_state.update({k: h.get(k) for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]})
+                    st.session_state.update({k: h.get(k) for k in ["app_id","game_name","rel_date_str","insights","stats","recent_label","news_data","smart_reason","reviews_all","reviews_recent","qa_history","header_image"]})
                     st.session_state.step = 1; st.rerun()
         st.divider()
         st.caption(ui.TEXTS["version_label"].format(APP_VERSION))
@@ -180,12 +160,13 @@ def main():
         st.markdown(f'<p style="color:var(--color-text-secondary);font-size:16px;margin-top:-0.5rem;">{ui.TEXTS["main_desc"]}</p>', unsafe_allow_html=True)
     with col_h2:
         st.write("")
-        st.link_button(ui.TEXTS["report_link"], NOTION_PUBLIC_URL, use_container_width=True)
+        # 통합 리포트 열람 — 링크라서 HTML 버튼 사용 가능
+        st.markdown(f'<a href="{NOTION_PUBLIC_URL}" target="_blank" class="btn-base btn-outline">{ui.TEXTS["report_link"]}</a>', unsafe_allow_html=True)
 
     st.write("")
     render_step_indicator(st.session_state.step)
 
-    # ── Step 0: 입력 ─────────────────────────────────────────────────────
+    # ── Step 0 ───────────────────────────────────────────────────────────
     if st.session_state.step == 0:
         with st.container(border=True):
             st.subheader(ui.TEXTS["step1_title"])
@@ -207,16 +188,16 @@ def main():
                     if game_candidate_date:
                         st.caption(ui.TEXTS["prompt_release_date"].format(game_candidate_date.strftime('%Y년 %m월 %d일')))
 
+            # 분석 시작 버튼 — st.button (primary) 사용
             if st.button(ui.TEXTS["btn_analyze"], use_container_width=True, type="primary"):
                 if not app_id: st.warning(ui.TEXTS["warn_invalid_id"]); return
 
-                target_name = game_candidate_name if game_candidate_name else "게임"
+                target_name = game_candidate_name or "게임"
                 with st.status(ui.TEXTS["status_analyzing"].format(target_name), expanded=True) as status:
                     try:
                         p_bar = st.progress(0)
                         info_txt = st.empty()
 
-                        # 1단계
                         info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">🔍 게임 기본 정보 확인 중...</p>', unsafe_allow_html=True)
                         if not game_candidate_name:
                             rid, name, rdate, img_url = get_steam_game_info(app_id)
@@ -225,16 +206,14 @@ def main():
                         if not rid: raise Exception(ui.TEXTS["loading_error_info"])
                         p_bar.progress(20)
 
-                        # 2단계
-                        info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">📥 스팀 리뷰 데이터 수집 중… <span style="font-size:14px;color:var(--color-text-tertiary);">(가장 오래 걸리는 단계예요)</span></p>', unsafe_allow_html=True)
+                        info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">📥 스팀 리뷰 수집 중… <span style="font-size:14px;color:var(--color-text-tertiary);">(가장 오래 걸려요)</span></p>', unsafe_allow_html=True)
                         rday, rlabel, rreason, rperiod = get_smart_period(rdate)
                         news = fetch_latest_news(rid)
                         all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)
                         if stats['all_total'] == 0: raise Exception(ui.TEXTS["loading_error_data"])
                         p_bar.progress(55)
 
-                        # 3단계: AI 분석 — 슬라이딩 바 + 메시지
-                        info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">🧠 AI 다차원 분석 중… <span style="font-size:14px;color:var(--color-text-tertiary);">리뷰를 읽고 인사이트를 추출하고 있어요</span></p>', unsafe_allow_html=True)
+                        info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">🧠 AI 다차원 분석 중… <span style="font-size:14px;color:var(--color-text-tertiary);">리뷰를 읽고 인사이트를 뽑고 있어요</span></p>', unsafe_allow_html=True)
                         anim_slot = st.empty()
                         ticker = st.empty()
                         anim_html = '<div class="anim-bar-wrap"><div class="anim-bar-inner"></div></div>'
@@ -259,64 +238,69 @@ def main():
                         info_txt.markdown('<p style="font-size:16px;color:var(--color-text-secondary);margin:4px 0;">✅ 분석 완료!</p>', unsafe_allow_html=True)
                         p_bar.progress(100)
 
-                        st.session_state.update({
-                            "app_id": rid, "game_name": name,
-                            "rel_date_str": rdate.strftime("%Y년 %m월 %d일"),
-                            "insights": res_box[0], "stats": stats, "recent_label": rlabel,
-                            "news_data": news, "smart_reason": rreason,
-                            "reviews_all": all_r, "reviews_recent": rec_r,
-                            "qa_history": [], "header_image": img_url
-                        })
-                        history_item = {k: st.session_state[k] for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]}
+                        st.session_state.update({"app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), "insights": res_box[0], "stats": stats, "recent_label": rlabel, "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r, "qa_history": [], "header_image": img_url})
+                        history_item = {k: st.session_state[k] for k in ["app_id","game_name","rel_date_str","insights","stats","recent_label","news_data","smart_reason","reviews_all","reviews_recent","qa_history","header_image"]}
                         st.session_state.history = [h for h in st.session_state.history if h['app_id'] != rid] + [history_item]
                         st.session_state.step = 1
                         status.update(label=ui.TEXTS["status_complete"], state="complete")
                         st.rerun()
-
                     except Exception as e:
-                        status.update(label=ui.TEXTS["status_error"], state="error")
-                        st.error(str(e))
+                        status.update(label=ui.TEXTS["status_error"], state="error"); st.error(str(e))
 
-    # ── Step 1: 리포트 검수 ──────────────────────────────────────────────
+    # ── Step 1 ───────────────────────────────────────────────────────────
     elif st.session_state.step == 1:
         st.markdown(f'<p style="font-size:14px;color:var(--color-text-tertiary);margin-bottom:1rem;">Step 2 · {st.session_state.game_name}</p>', unsafe_allow_html=True)
         ui_render.render_report_tabs()
 
         st.divider()
         with st.container(border=True):
-            st.markdown('<p style="font-size:16px;font-weight:500;margin-bottom:0.5rem;">📝 최종 발행 및 다음 스텝</p>', unsafe_allow_html=True)
+            st.markdown('<p style="font-size:16px;font-weight:500;margin-bottom:1rem;">📝 최종 발행 및 다음 스텝</p>', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
+                # 아웃라인 버튼 — HTML로 직접 구현 (onclick으로 session_state 변경 불가, st.button 병행)
+                st.markdown("""
+                <style>
+                div[data-testid="stButton"] > button {
+                    border: 1.5px solid rgba(150,150,150,0.7) !important;
+                    border-radius: 10px !important;
+                    font-size: 15px !important;
+                    font-weight: 500 !important;
+                    background: transparent !important;
+                }
+                div[data-testid="stButton"] > button[kind="primary"] {
+                    background: var(--color-text-primary) !important;
+                    color: var(--color-background-primary) !important;
+                    border: none !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
                 if st.button(ui.TEXTS["btn_reset"], use_container_width=True):
-                    for k in ["app_id", "game_name", "rel_date_str", "insights", "stats", "recent_label", "news_data", "smart_reason", "reviews_all", "reviews_recent", "qa_history", "header_image"]:
+                    for k in ["app_id","game_name","rel_date_str","insights","stats","recent_label","news_data","smart_reason","reviews_all","reviews_recent","qa_history","header_image"]:
                         st.session_state[k] = None
                     st.session_state.step = 0; st.rerun()
             with col2:
                 if st.button(ui.TEXTS["btn_notion"], use_container_width=True, type="primary"):
                     with st.status(ui.TEXTS["publish_loading"]):
-                        pid = upload_to_notion(
-                            st.session_state.app_id, st.session_state.game_name,
-                            st.session_state.rel_date_str, st.session_state.stats,
-                            st.session_state.insights, st.session_state.recent_label,
-                            st.session_state.smart_reason, st.session_state.news_data,
-                            st.session_state.qa_history)
+                        pid = upload_to_notion(st.session_state.app_id, st.session_state.game_name, st.session_state.rel_date_str, st.session_state.stats, st.session_state.insights, st.session_state.recent_label, st.session_state.smart_reason, st.session_state.news_data, st.session_state.qa_history)
                         if pid:
                             st.session_state.page_id = pid
                             st.session_state.step = 2; st.rerun()
 
-    # ── Step 2: 발행 완료 ────────────────────────────────────────────────
+    # ── Step 2 ───────────────────────────────────────────────────────────
     elif st.session_state.step == 2:
         st.balloons()
         st.success(ui.TEXTS["publish_success"])
         pid_clean = st.session_state.page_id.replace("-", "")
+        # 노션 링크 — HTML 버튼으로 아웃라인 확실히 적용
         st.markdown(f'''
         <div class="finish-card">
-            <p style="font-size:14px;color:var(--color-text-tertiary);margin-bottom:14px;">노션 리포트가 발행되었습니다</p>
-            <a href="https://notion.so/{pid_clean}" target="_blank"
-               style="font-size:18px;font-weight:500;color:var(--color-text-primary);text-decoration:none;">
-               🔗 {ui.TEXTS["publish_link"]}
+            <p style="font-size:14px;color:var(--color-text-tertiary);margin-bottom:16px;">노션 리포트가 발행되었습니다</p>
+            <a href="https://notion.so/{pid_clean}" target="_blank" class="btn-base btn-filled" style="max-width:360px;margin:0 auto 16px;">
+                🔗 {ui.TEXTS["publish_link"]}
             </a>
         </div>''', unsafe_allow_html=True)
+        st.write("")
+        # 다른 게임 분석하기 — session_state 조작이 필요하므로 st.button 사용
         if st.button(ui.TEXTS["btn_reset_after_publish"], use_container_width=True, type="primary"):
             for k in [k for k in st.session_state.keys() if k != 'history']:
                 del st.session_state[k]
