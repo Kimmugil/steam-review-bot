@@ -45,14 +45,6 @@ st.markdown("""
         .hero-text h2 { font-size: 24px; font-weight: bold; margin-bottom: 0.5rem; }
         .hero-text p { font-size: 16px; line-height: 1.7; color: var(--color-text-primary); margin: 0; }
 
-        /* ② 작업 영역 (스텝+입력창 컨테이너) CSS */
-        .work-container {
-            border: 1px solid rgba(128,128,128,0.2);
-            border-radius: 16px;
-            padding: 2rem;
-            margin-bottom: 1.5rem;
-        }
-
         /* 스텝 인디케이터 스타일 정의 */
         .step-indicators { display: flex; gap: 1rem; margin-bottom: 1.5rem; justify-content: start; }
         .step-dot { display: flex; align-items: center; gap: 8px; font-size: 15px; color: #888; }
@@ -174,9 +166,8 @@ def main():
         else:
             st.info("💡 image/tractor.png 이미지를 찾을 수 없습니다.")
 
-        with st.container():
-            st.markdown('<div class="work-container">', unsafe_allow_html=True)
-            
+        # 💡 [버그 수정 완료] 유령 박스를 치우고 순정 st.container(border=True)를 사용해 깔끔하게 묶었습니다!
+        with st.container(border=True):
             st.subheader(ui.TEXTS["step1_title"])
             st.markdown(f'<p style="color:#666; margin-bottom:1rem;">{ui.TEXTS["step1_caption"]}</p>', unsafe_allow_html=True)
             raw_input = st.text_input("Input", placeholder=ui.TEXTS["input_placeholder"], label_visibility="collapsed")
@@ -186,7 +177,7 @@ def main():
             if app_id: rid, game_candidate_name, game_candidate_date, game_candidate_img = get_steam_game_info(app_id)
 
             if game_candidate_name:
-                st.markdown("---")
+                st.write("") # 💡 [버그 수정 완료] 연한 가로선(st.markdown("---"))을 공백으로 교체!
                 img_col, txt_col = st.columns([1, 4])
                 with img_col:
                     if game_candidate_img: st.image(game_candidate_img, use_container_width=True)
@@ -229,18 +220,14 @@ def main():
                         st.session_state.history = [h for h in st.session_state.history if h['app_id'] != rid] + [history_item]
                         st.session_state.step = 1; status.update(label=ui.TEXTS["status_complete"], state="complete"); st.rerun()
                     except Exception as e: status.update(label=ui.TEXTS["status_error"], state="error"); st.error(str(e))
-            
-            st.markdown('</div>', unsafe_allow_html=True)
 
     elif st.session_state.step == 1:
         one_liner = ""
         if st.session_state.insights:
             one_liner = re.sub(r'\*\*', '', str(st.session_state.insights.get("critic_one_liner", "")))
         
-        # 💡 [버그 수정 완료] 이 부분이 에러 났던 곳! 정상적인 내부 함수 호출로 복구됨.
         render_game_hero(st.session_state.game_name, st.session_state.rel_date_str, st.session_state.header_image, one_liner)
         
-        # UI 모듈을 통해 탭 렌더링 호출
         ui_render.render_report_tabs()
 
         st.divider()
