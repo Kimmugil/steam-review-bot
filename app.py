@@ -4,7 +4,7 @@ import time
 import threading
 import re
 import os
-import base64  # 💡 로컬 이미지 렌더링을 위한 base64 인코딩 모듈 추가
+import base64
 import ui_texts as ui  
 from config import APP_VERSION, NOTION_PUBLIC_URL, GEMINI_API_KEY, NOTION_TOKEN, TICKER_INTERVAL, ENV_NAME
 from updates import UPDATE_HISTORY
@@ -63,38 +63,43 @@ st.markdown("""
         .step-item.s-done  .step-label { color: rgba(128,128,128,0.85); }
         .step-item.s-active .step-label { color: #222; font-weight: 500; }
 
-        /* ① 게임 히어로 — 이미지 더 크게, 우측 박스와 높이 맞춤 */
-        .game-hero {
-            display: flex; gap: 24px;
-            align-items: stretch;   /* 좌우 높이 동일하게 맞춤 */
-            margin-bottom: 1.5rem;
-        }
-        .game-hero-img {
-            width: 260px; min-width: 260px;   /* 기존 180px → 260px */
-            border-radius: 12px; overflow: hidden;
-            flex-shrink: 0;
-        }
+        /* ① 게임 히어로 */
+        .game-hero { display: flex; gap: 24px; align-items: stretch; margin-bottom: 1.5rem; }
+        .game-hero-img { width: 260px; min-width: 260px; border-radius: 12px; overflow: hidden; flex-shrink: 0; }
         .game-hero-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; display: block; }
-        .game-hero-info {
-            flex: 1; min-width: 0;
-            display: flex; flex-direction: column; justify-content: space-between;
-        }
+        .game-hero-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
         .game-hero-name { font-size: 28px; font-weight: 500; margin-bottom: 4px; line-height: 1.3; }
         .game-hero-meta { font-size: 14px; color: rgba(128,128,128,0.8); margin-bottom: 16px; }
-        .game-hero-oneliner {
-            flex: 1;   /* 남은 높이 채우기 */
-            font-size: 17px; line-height: 1.7; font-style: italic;
-            color: var(--color-text-primary);
-            padding: 16px 20px;
-            background: rgba(128,128,128,0.07);
-            border-radius: 10px;
-            display: flex; align-items: center;
-        }
+        .game-hero-oneliner { flex: 1; font-size: 17px; line-height: 1.7; font-style: italic; color: var(--color-text-primary); padding: 16px 20px; background: rgba(128,128,128,0.07); border-radius: 10px; display: flex; align-items: center; }
 
         .finish-card { border: 1.5px solid rgba(128,128,128,0.25); border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; margin: 1.5rem 0; }
-        .tractor-hero { border: 0.5px solid rgba(128,128,128,0.2); border-radius: 14px; padding: 2rem 1.75rem; margin-bottom: 1rem; display: flex; gap: 2rem; align-items: center; }
-        .tractor-hero-text h3 { font-size: 20px; font-weight: 500; margin-bottom: 8px; }
-        .tractor-hero-text p { font-size: 15px; line-height: 1.7; color: rgba(128,128,128,0.85); margin: 0; }
+        
+        /* 💡 [업데이트] 점잖고 깔끔한 새로운 트랙터 박스 CSS */
+        .tractor-box {
+            background-color: rgba(128, 128, 128, 0.08); /* 점잖은 회색 배경 */
+            border-radius: 16px; /* 둥근 테두리 */
+            padding: 2rem; /* 여백 */
+            margin-bottom: 1.5rem; /* 아래 여백 */
+            display: flex; gap: 2rem; align-items: center; /* 이미지-입력창 나란히 배치 */
+        }
+        .tractor-box-img { flex-shrink: 0; }
+        .tractor-box-img img {
+            height: 250px; width: auto; /* 이미지 크기 조정 */
+            border-radius: 12px; display: block; object-fit: cover;
+        }
+        .tractor-box-input {
+            flex: 1; min-width: 0;
+            display: flex; flex-direction: column; gap: 1rem; /* 제목-입력창 세로 배치 */
+        }
+        .tractor-box-input h3 { font-size: 20px; font-weight: 500; margin: 0; }
+        .tractor-box-input p { font-size: 15px; line-height: 1.7; color: rgba(128,128,128,0.85); margin: 0; }
+
+        /* Streamlit 기본 입력창 스타일 조정 */
+        div[data-testid="stTextInput"] > div > div > input {
+            border: 1.5px solid rgba(128, 128, 128, 0.3) !important;
+            border-radius: 10px !important;
+            background-color: transparent !important; /* 배경 투명하게 */
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -119,7 +124,6 @@ def render_step_indicator(current_step):
     st.markdown('<div class="step-wrap">' + "".join(items) + '</div>', unsafe_allow_html=True)
 
 def render_game_hero(game_name, rel_date_str, header_image, one_liner=""):
-    """① 게임 히어로 — 이미지 260px, 우측 박스와 높이 동일 맞춤"""
     img_html = f'<img src="{header_image}" alt="{game_name}">' if header_image else \
                f'<div style="width:100%;height:100%;background:rgba(128,128,128,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:40px;">🎮</div>'
     one_liner_html = f'<div class="game-hero-oneliner">❝ {one_liner} ❞</div>' if one_liner else ""
@@ -172,23 +176,32 @@ def main():
     if st.session_state.step == 0:
         hero_image_path = ui.TEXTS.get("hero_image_path", "")
         
-        # 💡 [핵심 수정] 로컬 이미지를 Base64로 인코딩하여 HTML에 직접 삽입
         if hero_image_path and os.path.exists(hero_image_path):
             with open(hero_image_path, "rb") as image_file:
                 encoded_string = base64.b64encode(image_file.read()).decode()
             img_src = f"data:image/png;base64,{encoded_string}"
             
-            st.markdown(f'''
-            <div style="display:flex;gap:24px;align-items:center;margin-bottom:1rem;">
-                <div style="flex-shrink:0;">
-                    <img src="{img_src}"
-                         style="height:300px;width:auto;max-width:100%;border-radius:12px;display:block;object-fit:cover;">
-                </div>
-                <div>
-                    <h3 style="font-size:20px;font-weight:500;margin-bottom:8px;">{ui.TEXTS["hero_section_title"]}</h3>
-                    <p style="font-size:15px;line-height:1.7;color:rgba(128,128,128,0.85);margin:0;">{ui.TEXTS["hero_section_desc"]}</p>
-                </div>
-            </div>''', unsafe_allow_html=True)
+            # 💡 [업데이트] 이미지와 입력창을 나란히 배치하기 위해 st.columns 사용
+            col_img, col_input = st.columns([1, 2], gap="large") # 비율 및 여백 조정
+            
+            with col_img:
+                st.markdown(f'''
+                <div class="tractor-box-img">
+                    <img src="{img_src}" alt="Tractor Hero">
+                </div>''', unsafe_allow_html=True)
+            
+            with col_input:
+                st.markdown(f'''
+                <div class="tractor-box-input">
+                    <h3>{ui.TEXTS["hero_section_title"]}</h3>
+                    <p>{ui.TEXTS["hero_section_desc"]}</p>
+                </div>''', unsafe_allow_html=True)
+                
+                # 입력창 및 제목 배치
+                st.markdown(f'### {ui.TEXTS["step1_title"]}')
+                raw_input = st.text_input("Input", placeholder=ui.TEXTS["input_placeholder"], label_visibility="collapsed")
+                st.caption(ui.TEXTS["step1_caption"])
+        
         else:
             # 이미지가 없을 경우의 Fallback
             st.markdown(f'''
@@ -200,77 +213,79 @@ def main():
                 </div>
             </div>''', unsafe_allow_html=True)
 
-        with st.container(border=True):
-            st.subheader(ui.TEXTS["step1_title"])
-            raw_input = st.text_input("Input", placeholder=ui.TEXTS["input_placeholder"], label_visibility="collapsed")
-            st.caption(ui.TEXTS["step1_caption"])
+            with st.container(border=True):
+                st.subheader(ui.TEXTS["step1_title"])
+                raw_input = st.text_input("Input", placeholder=ui.TEXTS["input_placeholder"], label_visibility="collapsed")
+                st.caption(ui.TEXTS["step1_caption"])
 
-            app_id = extract_id(raw_input)
-            game_candidate_name, game_candidate_date, game_candidate_img = None, None, None
-            if app_id:
-                rid, game_candidate_name, game_candidate_date, game_candidate_img = get_steam_game_info(app_id)
+        # 입력값 처리 및 분석 버튼
+        app_id = extract_id(raw_input)
+        game_candidate_name, game_candidate_date, game_candidate_img = None, None, None
+        if app_id:
+            rid, game_candidate_name, game_candidate_date, game_candidate_img = get_steam_game_info(app_id)
 
-            if game_candidate_name:
-                st.markdown("---")
-                img_col, txt_col = st.columns([1, 4])
-                with img_col:
-                    if game_candidate_img: st.image(game_candidate_img, use_container_width=True)
-                with txt_col:
-                    st.markdown(ui.TEXTS["prompt_analyze_game"].format(game_candidate_name))
-                    if game_candidate_date:
-                        st.caption(ui.TEXTS["prompt_release_date"].format(game_candidate_date.strftime('%Y년 %m월 %d일')))
+        # 💡 [업데이트] 분석 대상 확인 영역도 컬럼 레이아웃 내부에 배치
+        if game_candidate_name:
+            st.markdown("---")
+            img_col, txt_col = st.columns([1, 4])
+            with img_col:
+                if game_candidate_img: st.image(game_candidate_img, use_container_width=True)
+            with txt_col:
+                st.markdown(ui.TEXTS["prompt_analyze_game"].format(game_candidate_name))
+                if game_candidate_date:
+                    st.caption(ui.TEXTS["prompt_release_date"].format(game_candidate_date.strftime('%Y년 %m월 %d일')))
 
-            if st.button(ui.TEXTS["btn_analyze"], use_container_width=True, key="btn_analyze_main"):
-                if not app_id: st.warning(ui.TEXTS["warn_invalid_id"]); return
-                target_name = game_candidate_name or ui.TEXTS["main_title"]
-                with st.status(ui.TEXTS["status_analyzing"].format(target_name), expanded=True) as status:
-                    try:
-                        p_bar = st.progress(0); info_txt = st.empty()
-                        info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step1"]}</p>', unsafe_allow_html=True)
-                        if not game_candidate_name:
-                            rid, name, rdate, img_url = get_steam_game_info(app_id)
-                        else:
-                            name, rdate, img_url = game_candidate_name, game_candidate_date, game_candidate_img
-                        if not rid: raise Exception(ui.TEXTS["loading_error_info"])
-                        p_bar.progress(20)
+        if st.button(ui.TEXTS["btn_analyze"], use_container_width=True, key="btn_analyze_main"):
+            if not app_id: st.warning(ui.TEXTS["warn_invalid_id"]); return
+            target_name = game_candidate_name or ui.TEXTS["main_title"]
+            with st.status(ui.TEXTS["status_analyzing"].format(target_name), expanded=True) as status:
+                try:
+                    p_bar = st.progress(0); info_txt = st.empty()
+                    info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step1"]}</p>', unsafe_allow_html=True)
+                    if not game_candidate_name:
+                        rid, name, rdate, img_url = get_steam_game_info(app_id)
+                    else:
+                        name, rdate, img_url = game_candidate_name, game_candidate_date, game_candidate_img
+                    if not rid: raise Exception(ui.TEXTS["loading_error_info"])
+                    p_bar.progress(20)
 
-                        info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step2"]} <span style="font-size:14px;color:rgba(128,128,128,0.7);">{ui.TEXTS["loading_step2_sub"]}</span></p>', unsafe_allow_html=True)
-                        rday, rlabel, rreason, rperiod = get_smart_period(rdate)
-                        news = fetch_latest_news(rid)
-                        all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)
-                        if stats['all_total'] == 0: raise Exception(ui.TEXTS["loading_error_data"])
-                        p_bar.progress(55)
+                    info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step2"]} <span style="font-size:14px;color:rgba(128,128,128,0.7);">{ui.TEXTS["loading_step2_sub"]}</span></p>', unsafe_allow_html=True)
+                    rday, rlabel, rreason, rperiod = get_smart_period(rdate)
+                    news = fetch_latest_news(rid)
+                    all_r, rec_r, stats = fetch_steam_reviews(rid, rday, rdate, rperiod)
+                    if stats['all_total'] == 0: raise Exception(ui.TEXTS["loading_error_data"])
+                    p_bar.progress(55)
 
-                        info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step3"]} <span style="font-size:14px;color:rgba(128,128,128,0.7);">{ui.TEXTS["loading_step3_sub"]}</span></p>', unsafe_allow_html=True)
-                        anim_slot = st.empty(); ticker = st.empty()
-                        anim_html = '<div class="anim-bar-wrap"><div class="anim-bar-inner"></div></div>'
+                    info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_step3"]} <span style="font-size:14px;color:rgba(128,128,128,0.7);">{ui.TEXTS["loading_step3_sub"]}</span></p>', unsafe_allow_html=True)
+                    anim_slot = st.empty(); ticker = st.empty()
+                    anim_html = '<div class="anim-bar-wrap"><div class="anim-bar-inner"></div></div>'
 
-                        res_box, event = [None, None], threading.Event()
-                        def run_ai():
-                            try: res_box[0], res_box[1] = analyze_with_gemini(name, all_r, rec_r, stats, rlabel, news)
-                            except Exception as ex: res_box[1] = str(ex)
-                            finally: event.set()
-                        threading.Thread(target=run_ai).start()
+                    res_box, event = [None, None], threading.Event()
+                    def run_ai():
+                        try: res_box[0], res_box[1] = analyze_with_gemini(name, all_r, rec_r, stats, rlabel, news)
+                        except Exception as ex: res_box[1] = str(ex)
+                        finally: event.set()
+                    threading.Thread(target=run_ai).start()
 
-                        prog = 55
-                        while not event.is_set():
-                            anim_slot.markdown(anim_html, unsafe_allow_html=True)
-                            ticker.info(f"💡 {random.choice(ui.TEXTS['WAITING_MESSAGES'])}")
-                            if prog < 93: prog += 1; p_bar.progress(prog)
-                            time.sleep(TICKER_INTERVAL)
+                    prog = 55
+                    while not event.is_set():
+                        anim_slot.markdown(anim_html, unsafe_allow_html=True)
+                        ticker.info(f"💡 {random.choice(ui.TEXTS['WAITING_MESSAGES'])}")
+                        if prog < 93: prog += 1; p_bar.progress(prog)
+                        time.sleep(TICKER_INTERVAL)
 
-                        anim_slot.empty(); ticker.empty()
-                        if res_box[1]: raise Exception(res_box[1])
-                        info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_complete"]}</p>', unsafe_allow_html=True)
-                        p_bar.progress(100)
+                    anim_slot.empty(); ticker.empty()
+                    if res_box[1]: raise Exception(res_box[1])
+                    info_txt.markdown(f'<p style="font-size:16px;color:rgba(100,100,100,0.9);margin:4px 0;">{ui.TEXTS["loading_complete"]}</p>', unsafe_allow_html=True)
+                    p_bar.progress(100)
 
-                        st.session_state.update({"app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), "insights": res_box[0], "stats": stats, "recent_label": rlabel, "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r, "qa_history": [], "header_image": img_url})
-                        history_item = {k: st.session_state[k] for k in ["app_id","game_name","rel_date_str","insights","stats","recent_label","news_data","smart_reason","reviews_all","reviews_recent","qa_history","header_image"]}
-                        st.session_state.history = [h for h in st.session_state.history if h['app_id'] != rid] + [history_item]
-                        st.session_state.step = 1
-                        status.update(label=ui.TEXTS["status_complete"], state="complete"); st.rerun()
-                    except Exception as e:
-                        status.update(label=ui.TEXTS["status_error"], state="error"); st.error(str(e))
+                    st.session_state.update({"app_id": rid, "game_name": name, "rel_date_str": rdate.strftime("%Y년 %m월 %d일"), "insights": res_box[0], "stats": stats, "recent_label": rlabel, "news_data": news, "smart_reason": rreason, "reviews_all": all_r, "reviews_recent": rec_r, "qa_history": [], "header_image": img_url})
+                    history_item = {k: st.session_state[k] for k in ["app_id","game_name","rel_date_str","insights","stats","recent_label","news_data","smart_reason","reviews_all","reviews_recent","qa_history","header_image"]}
+                    st.session_state.history = [h for h in st.session_state.history if h['app_id'] != rid] + [history_item]
+                    st.session_state.step = 1
+                    status.update(label=ui.TEXTS["status_complete"], state="complete"); st.rerun()
+                except Exception as e:
+                    status.update(label=ui.TEXTS["status_error"], state="error"); st.error(str(e))
 
     elif st.session_state.step == 1:
         one_liner = ""
