@@ -206,7 +206,7 @@ TEXTS = {
     [출력 JSON 형식]:
     {json_format}
     {{
-      "critic_one_liner": "한줄평 (이모지 포함)",
+      "critic_one_liner": "한줄평",
       "sentiment_analysis": "민심 코멘트 (공식 평점과 전체 평점 간의 차이가 있다면 이에 대한 분석 포함)",
       "final_summary_all": ["[긍정] 코멘트1", "[부정] 코멘트2"],
       "final_summary_recent": ["[긍정] 코멘트1", "[부정] 코멘트2"],
