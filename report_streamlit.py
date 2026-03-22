@@ -253,6 +253,20 @@ def render_report_tabs():
     # ════════════════════════════════════════════════════
     with tab4:
         sec("sec_region")
+        # 권역별 언어 구성 안내 툴팁
+        st.markdown(f'''
+        <details style="margin-bottom:1rem;">
+            <summary style="font-size:13px;color:rgba(128,128,128,0.6);cursor:pointer;list-style:none;user-select:none;">
+                ▸ 각 권역에 어떤 언어가 포함되나요?
+            </summary>
+            <div style="font-size:13px;line-height:1.9;color:rgba(128,128,128,0.75);margin-top:8px;padding:10px 14px;background:rgba(128,128,128,0.05);border-radius:8px;">
+                🌏 <b>아시아</b>: 한국어, 중국어(간체·번체), 일본어, 태국어, 베트남어, 인도네시아어<br>
+                🌍 <b>영미·유럽</b>: 영어, 프랑스어, 독일어, 스페인어, 이탈리아어, 폴란드어, 포르투갈어, 체코어 등<br>
+                🧊 <b>CIS(러시아권)</b>: 러시아어, 우크라이나어<br>
+                💃 <b>중남미</b>: 스페인어(중남미), 포르투갈어(브라질)<br>
+                🕌 <b>중동·기타</b>: 튀르키예어, 아랍어
+            </div>
+        </details>''', unsafe_allow_html=True)
         reg_data = ins.get('region_analysis',{})
         if reg_data.get('divergence_insight'):
             gray_box(ui.TEXTS["divergence_insight_title"], reg_data['divergence_insight'])
