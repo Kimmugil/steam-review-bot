@@ -2,7 +2,7 @@
 
 TEXTS = {
     "main_title": "스팀 리뷰 탈곡기",
-    "main_desc": "스팀 상점 주소나 App ID를 입력하면, 스팀 유저 리뷰를 탈탈 털어 글로벌 민심을 확인할 수 있습니다.",
+   # "main_desc": "스팀 상점 주소나 App ID를 입력하면, 스팀 유저 리뷰를 탈탈 털어 글로벌 민심을 확인할 수 있습니다.",
     "dev_banner": "🚧 개발 환경 (DEV MODE) - 테스트 데이터를 자유롭게 활용하세요.",
     "api_error": "🚨 API 키 설정이 누락되었습니다.",
     "env_label": "### 📍 환경: `{}`",
@@ -49,7 +49,7 @@ TEXTS = {
     "loading_step1": "🔍 게임 기본 정보 확인 중...",
     "loading_step2": "📥 스팀 리뷰 수집 중…",
     "loading_step2_sub": "(가장 오래 걸려요)",
-    "loading_step3": "🧠 AI 다차원 분석 중…",
+    "loading_step3": "🧠 탈곡기 두뇌 풀가동 중...",
     "loading_step3_sub": "리뷰를 읽고 인사이트를 뽑고 있어요",
     "loading_complete": "✅ 분석 완료!",
 
@@ -57,8 +57,8 @@ TEXTS = {
     "game_hero_one_liner_label": "AI 한줄평",
 
     "hero_image_path": "image/tractor.png",
-    "hero_section_title": "🌾 탈곡기 대기중!",
-    "hero_section_desc": "(ง •̀_•́)ง",
+    "hero_section_title": "🌾 스팀 리뷰 탈곡해 드립니다. ",
+    "hero_section_desc": "(ง •̀_•́)ง 스팀 상점 주소나 App ID를 입력하면, 스팀 유저 리뷰를 탈탈 털어 글로벌 민심을 확인할 수 있습니다.",
 
     "publish_notion_released": "노션 리포트가 발행되었습니다",
     "publish_title_label": "📝 최종 발행 및 다음 스텝",
