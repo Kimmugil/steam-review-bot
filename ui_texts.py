@@ -89,7 +89,7 @@ TEXTS = {
 
     "playtime_title": "### ⏱️ 플레이타임별 민심 교차 분석",
     # 💡 [업데이트] 회색 박스에 넣기 위해 마크다운 기호 제외
-    "insight_core_title": "⚖️ 핵심 교차 인사이트",
+    "insight_core_title": "핵심 교차 인사이트",
     "newbie_title_default": "🌱 뉴비 여론 (하위 25%)",
     "normal_title_default": "🚶 일반 여론 (중위 50%)",
     "core_title_default": "💀 코어 여론 (상위 25%)",
