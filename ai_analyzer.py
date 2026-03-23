@@ -2,21 +2,38 @@ from config import GEMINI_API_KEY
 import json
 import requests
 import ui_texts as ui
+from config import LANG_MAP
+
+def get_lang_name(lang_code):
+    return LANG_MAP.get(lang_code, f"🏳️ {lang_code}")
 
 def analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats, recent_label, news_data, feedback=None):
     backticks = "`" * 3
     json_format = f"{backticks}json"
-    
-    # 💡 [복구 완료] AI가 분석할 수 있도록 데이터 완벽하게 바인딩
+
     feedback_instruction = f"\n\n[사용자 추가 피드백!! 반드시 최우선으로 반영할 것!]:\n{feedback}\n" if feedback else ""
     official_rating_info = store_stats.get('official_desc', '평가 없음')
-    
+
     top_langs = [f"{r['lang']}({r['ratio']})" for r in store_stats.get('table_data_all', [])[:5]]
     top_langs_str = ", ".join(top_langs)
-    
+
     news_text = f"- 최근 공지/뉴스: {news_data[0]}" if news_data and news_data[0] else "- 최근 공지/뉴스: 없음"
     review_text = f"--- [누적 리뷰 표본] ---\n{json.dumps(reviews_all, ensure_ascii=False)}\n\n--- [최근 리뷰 표본] ---\n{json.dumps(reviews_recent, ensure_ascii=False)}"
-    
+
+    # country_analysis 순서 지시문 생성
+    # country_langs_ordered: ["english", "koreana", ...] → AI에게 정확한 순서로 작성하도록 명시
+    country_langs_ordered = store_stats.get('country_langs_ordered', [])
+    if country_langs_ordered:
+        ordered_names = [get_lang_name(l) for l in country_langs_ordered]
+        country_order_instruction = (
+            f"\n    15. [⚠️ 절대 규칙] country_analysis 배열은 반드시 아래 순서대로만 작성할 것. "
+            f"이 순서는 누적 리뷰 비중 순위 기반이며 절대 변경 금지:\n"
+            + "\n".join([f"        {i+1}위: {name}" for i, name in enumerate(ordered_names)])
+            + f"\n        총 {len(ordered_names)}개 국가만 작성. 이 목록에 없는 언어는 country_analysis에 포함하지 말 것."
+        )
+    else:
+        country_order_instruction = ""
+
     prompt = ui.TEXTS["ai_prompt_template"] \
         .replace("{game_name}", game_name) \
         .replace("{feedback_instruction}", feedback_instruction) \
@@ -33,57 +50,37 @@ def analyze_with_gemini(game_name, reviews_all, reviews_recent, store_stats, rec
         .replace("{news_text}", news_text) \
         .replace("{review_text}", review_text) \
         .replace("{json_format}", json_format) \
-        .replace("{backticks}", backticks)
-    
+        .replace("{backticks}", backticks) \
+        .replace("{country_order_instruction}", country_order_instruction)
+
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
-    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}}
-    
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}
+    }
+
     try:
         res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
         res.raise_for_status()
         return json.loads(res.json()['candidates'][0]['content']['parts'][0]['text']), None
-    except Exception as e: 
+    except Exception as e:
         return None, f"AI 분석 실패: {str(e)}"
 
-def ask_followup_question(game_name, store_stats, insights, question):
-    prompt = ui.TEXTS["qa_prompt_template"].replace("{question}", question).replace("{insights}", json.dumps(insights, ensure_ascii=False))
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
-    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}}
-    try:
-        res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
-        return res.json()['candidates'][0]['content']['parts'][0]['text'].strip(), None
-    except Exception as e: 
-        return None, str(e)
 
 def ask_followup_question(game_name, store_stats, insights, question):
-    from config import GEMINI_API_KEY
-    import json
-    import requests
-    
-    prompt = f"""
-    넌 글로벌 게임 사업 PM이야. '{game_name}'에 대해 이미 작성된 분석 리포트와 데이터를 바탕으로, 팀원의 추가 질문에 빠르고 객관적으로 답변해줘.
-    
-    [팀원 질문]: {question}
-    
-    [참고 데이터 - 초기 분석 결과]:
-    {json.dumps(insights, ensure_ascii=False)}
-    
-    답변 작성 규칙:
-    1. 팩트 기반으로 3~4문장 이내로 핵심만 대답할 것.
-    2. 제공된 데이터 내에서 유추할 수 없는 내용은 "제공된 데이터에서는 확인이 어렵습니다"라고 할 것.
-    3. 노션에 텍스트로 들어갈 예정이므로 마크다운 볼드체 등 특수기호는 가급적 사용하지 말 것.
-    """
-    
+    """중복 선언 제거 — ui_texts.qa_prompt_template 단일 사용"""
+    prompt = ui.TEXTS["qa_prompt_template"] \
+        .replace("{question}", question) \
+        .replace("{insights}", json.dumps(insights, ensure_ascii=False))
+
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}".strip()
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}], 
+        "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.2}
     }
-    
     try:
         res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
         res.raise_for_status()
-        raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-        return raw_text, None
+        return res.json()['candidates'][0]['content']['parts'][0]['text'].strip(), None
     except Exception as e:
         return None, str(e)
