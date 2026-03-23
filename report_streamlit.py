@@ -184,10 +184,32 @@ def render_report_tabs():
 
         st.divider()
         sec("sec_category")
-        for cat in sorted(ins.get('global_category_summary',[]), key=lambda x: get_cat_sort_key(x.get('category',''))):
+        cats_all = sorted(ins.get('global_category_summary',[]), key=lambda x: get_cat_sort_key(x.get('category','')))
+        cats_pos = [c for c in cats_all if "[긍정" in c.get('category','')]
+        cats_neg = [c for c in cats_all if "[부정" in c.get('category','')]
+        cats_etc = [c for c in cats_all if "[긍정" not in c.get('category','') and "[부정" not in c.get('category','')]
+
+        col_pos, col_neg = st.columns(2)
+        with col_pos:
+            if cats_pos:
+                st.markdown('<p style="font-size:15px;font-weight:500;color:#0C447C;margin-bottom:8px;">✅ 긍정 평가</p>', unsafe_allow_html=True)
+                for cat in cats_pos:
+                    name = cat.get('category','')
+                    with st.expander(f"✅ {clean_cat(name)}"):
+                        for line in sort_sentiments(cat.get('summary',[])):
+                            st.markdown(s_html(line), unsafe_allow_html=True)
+        with col_neg:
+            if cats_neg:
+                st.markdown('<p style="font-size:15px;font-weight:500;color:#791F1F;margin-bottom:8px;">⚠️ 부정 평가</p>', unsafe_allow_html=True)
+                for cat in cats_neg:
+                    name = cat.get('category','')
+                    with st.expander(f"⚠️ {clean_cat(name)}"):
+                        for line in sort_sentiments(cat.get('summary',[])):
+                            st.markdown(s_html(line), unsafe_allow_html=True)
+        # 중립 카테고리는 2열 아래에 전체 폭으로 표시
+        for cat in cats_etc:
             name = cat.get('category','')
-            icon = "✅" if "[긍정" in name else ("⚠️" if "[부정" in name else "📌")
-            with st.expander(f"{icon} {clean_cat(name)}"):
+            with st.expander(f"📌 {clean_cat(name)}"):
                 for line in sort_sentiments(cat.get('summary',[])):
                     st.markdown(s_html(line), unsafe_allow_html=True)
 
@@ -357,14 +379,7 @@ def render_report_tabs():
         if st.button(ui.TEXTS["qa_btn"], type="primary", key="btn_qa_ask"):
             if q_input:
                 with st.spinner(ui.TEXTS["qa_loading"]):
-                    ans, err = ask_followup_question(
-                        st.session_state.game_name,
-                        st.session_state.stats,
-                        st.session_state.insights,
-                        q_input,
-                        reviews_all=st.session_state.get('reviews_all'),
-                        reviews_recent=st.session_state.get('reviews_recent'),
-                    )
+                    ans, err = ask_followup_question(st.session_state.game_name, st.session_state.stats, st.session_state.insights, q_input)
                     if not err:
                         st.session_state.current_q = q_input
                         st.session_state.current_a = ans
