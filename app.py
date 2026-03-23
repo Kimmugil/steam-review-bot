@@ -31,6 +31,12 @@ st.markdown("""
             border-bottom: 1px solid rgba(128,128,128,0.2) !important;
         }
 
+        /* [2번 수정] 각 탭 패널 하단 스트림릿 자동 생성 구분선 제거 */
+        div[data-testid="stTabs"] div[data-testid="stVerticalBlock"] > div:last-child hr,
+        div[data-testid="stTabPanel"] > div > div:last-child hr { display: none !important; }
+        /* st.divider()가 탭 마지막에 있을 때 숨김 */
+        div[data-testid="stTabPanel"] hr:last-of-type { display: none !important; }
+
         /* Hero 섹션 (이미지+소개) */
         .hero-container { display: flex; gap: 2rem; align-items: center; background-color: rgba(128, 128, 128, 0.05); border-radius: 16px; padding: 2rem; margin-bottom: 2rem; }
         .hero-img { flex-shrink: 0; width: 320px; }
