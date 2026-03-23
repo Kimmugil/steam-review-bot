@@ -1,439 +1,399 @@
-import requests
-import json
-import time
-from datetime import datetime, timedelta, timezone
-from config import NOTION_TOKEN, NOTION_DATABASE_ID, APP_VERSION
+import streamlit as st
+import pandas as pd
+import re
 import ui_texts as ui
+from ai_analyzer import ask_followup_question
 
-def get_cat_sort_key(cat_name):
-    if "[긍정" in cat_name: return 0
-    elif "[부정" in cat_name: return 1
+# ── 유틸 ─────────────────────────────────────────────────────────────────
+
+def strip_md(text):
+    return re.sub(r'\*\*', '', str(text))
+
+def get_cat_sort_key(n):
+    if "[긍정" in n: return 0
+    if "[부정" in n: return 1
     return 2
 
 def sort_sentiments(lines):
     if not isinstance(lines, list): return []
     return sorted(lines, key=lambda l: 0 if "[긍정]" in l else (1 if "[부정]" in l else 2))
 
-# 긍/부정 머리말을 색상 강조로 렌더링
-def format_sentiment_line(line):
-    if line.startswith("[긍정]"):
-        return [{"text": {"content": "긍정  "}, "annotations": {"color": "blue", "bold": True}}, {"text": {"content": line[4:].strip()}}]
-    elif line.startswith("[부정]"):
-        return [{"text": {"content": "부정  "}, "annotations": {"color": "red", "bold": True}}, {"text": {"content": line[4:].strip()}}]
-    return [{"text": {"content": line}}]
+def apply_eval_color(val):
+    v = str(val)
+    return "color: #185FA5" if "긍정" in v else ("color: #A32D2D" if "부정" in v else "color: #888")
 
-# 카테고리명에서 [긍정]/[부정] 제거 후 색상 반환
-def cat_color(cat_name):
-    if "[긍정" in cat_name: return "blue"
-    if "[부정" in cat_name: return "red"
-    return "default"
+def eval_color(val):
+    if "긍정" in str(val): return "#185FA5"
+    if "부정" in str(val): return "#A32D2D"
+    return "rgba(128,128,128,0.8)"
 
-def clean_cat_name(cat_name):
-    return cat_name.replace("[긍정]", "").replace("[부정]", "").strip()
+def desc_color(val):
+    v = str(val)
+    if "긍정" in v: return "#185FA5"
+    if "부정" in v: return "#A32D2D"
+    return "rgba(128,128,128,0.85)"
 
-def divider():
-    return {"object": "block", "type": "divider", "divider": {}}
+def clean_cat(name):
+    return strip_md(name.replace("[긍정]","").replace("[부정]","").strip())
 
-def heading2(text):
-    return {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": text}}]}}
+def cat_chip(name):
+    if "[긍정" in name:
+        return '<span style="background:#E6F1FB;color:#0C447C;font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;margin-right:8px;">긍정</span>'
+    if "[부정" in name:
+        return '<span style="background:#FCEBEB;color:#791F1F;font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;margin-right:8px;">부정</span>'
+    return ''
 
-def heading3(text, color="default"):
-    return {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": text}, "annotations": {"color": color}}]}}
+def s_html(line):
+    line = strip_md(line)
+    if "[긍정]" in line:
+        body = line.replace("[긍정]","").strip()
+        return f'<div style="display:flex;gap:10px;align-items:baseline;margin-bottom:10px;"><span style="background:#E6F1FB;color:#0C447C;font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0;">긍정</span><span style="font-size:16px;line-height:1.65;color:var(--color-text-primary);">{body}</span></div>'
+    if "[부정]" in line:
+        body = line.replace("[부정]","").strip()
+        return f'<div style="display:flex;gap:10px;align-items:baseline;margin-bottom:10px;"><span style="background:#FCEBEB;color:#791F1F;font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0;">부정</span><span style="font-size:16px;line-height:1.65;color:var(--color-text-primary);">{body}</span></div>'
+    return f'<div style="font-size:16px;line-height:1.65;margin-bottom:10px;color:var(--color-text-primary);">{line}</div>'
 
-def paragraph(rich_text_list):
-    return {"object": "block", "type": "paragraph", "paragraph": {"rich_text": rich_text_list}}
+def sec(key):
+    text = ui.TEXTS.get(key, key)
+    st.markdown(f'<p style="font-size:20px;font-weight:500;color:var(--color-text-primary);margin:2rem 0 0.75rem;">{text}</p>', unsafe_allow_html=True)
 
-def callout(emoji, text, color="gray_background", bold=False, link=None):
-    anno = {"bold": bold} if bold else {}
-    return {"object": "block", "type": "callout", "callout": {"icon": {"emoji": emoji}, "color": color, "rich_text": [{"text": {"content": text, "link": link}, "annotations": anno}]}}
+def gray_box(title, body_text=None, items=None):
+    html = '<div style="background:rgba(128,128,128,0.07);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
+    if title:
+        html += f'<div style="font-size:14px;font-weight:500;margin-bottom:9px;">{title}</div>'
+    if body_text:
+        html += f'<div style="font-size:16px;line-height:1.7;color:var(--color-text-secondary);">{strip_md(body_text).replace(chr(10),"<br>")}</div>'
+    if items:
+        html += '<ul style="margin:0;padding-left:20px;">'
+        for item in items:
+            html += f'<li style="font-size:16px;line-height:1.65;margin-bottom:7px;color:var(--color-text-secondary);">{strip_md(str(item))}</li>'
+        html += '</ul>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
 
-def bullet(rich_text_list):
-    return {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": rich_text_list}}
-
-def toggle(label_text, children, color="gray"):
-    return {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": label_text}, "annotations": {"color": color}}], "children": children}}
-
-# ── 봇 안내 ───────────────────────────────────────────────────────────────
-def get_bot_info_block():
-    return [toggle(ui.TEXTS['bot_info_title'], [paragraph([{"text": {"content": ui.TEXTS['bot_info_desc']}}])])]
-
-# ── AI 한줄평 ─────────────────────────────────────────────────────────────
-def get_ai_one_liner_block(ai_data, game_name, release_date):
-    return [
-        heading2(ui.TEXTS['ai_one_liner_title']),
-        {"object": "block", "type": "callout", "callout": {
-            "icon": {"emoji": "💬"}, "color": "gray_background",
-            "rich_text": [{"text": {"content": f"❝ {ai_data.get('critic_one_liner', '')} ❞"}, "annotations": {"bold": True}}]
-        }},
-        paragraph([{"text": {"content": ui.TEXTS['ai_one_liner_desc'].format(release_date, game_name)}, "annotations": {"color": "gray"}}]),
-        divider()
-    ]
-
-# ── 민심 온도계 ───────────────────────────────────────────────────────────
-def get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data):
-    official = store_stats.get('official_desc', ui.TEXTS['steam_eval_none'])
-    all_desc = store_stats['all_desc']
-    all_total = store_stats['all_total']
-    rec_desc = store_stats['recent_desc']
-    rec_total = store_stats['recent_total']
-
-    # 평점 색상
-    def score_color(val):
-        if "긍정" in str(val): return "blue"
-        if "부정" in str(val): return "red"
-        return "gray"
-
-    blocks = [
-        heading2(ui.TEXTS['notion_metric_title']),
-        toggle(ui.TEXTS['notion_toggle_guide'], [
-            bullet([{"text": {"content": f"스팀 공식 평점: {ui.TEXTS['tooltip_official']}"}}]),
-            bullet([{"text": {"content": f"전체 누적 평점: {ui.TEXTS['tooltip_all']}"}}]),
-            bullet([{"text": {"content": f"최근 동향: {smart_reason}"}}])
-        ]),
-        # 3개 지표를 한 단락에 줄바꿈으로 나열
-        paragraph([
-            {"text": {"content": f"🛑 스팀 공식 평점: "}, "annotations": {"color": "gray"}},
-            {"text": {"content": official}, "annotations": {"color": score_color(official), "bold": True}},
-            {"text": {"content": "\n📈 전체 누적 평가: "}, "annotations": {"color": "gray"}},
-            {"text": {"content": f"{all_desc}"}, "annotations": {"color": score_color(all_desc), "bold": True}},
-            {"text": {"content": f"  (총 {all_total:,}개)", "link": None}, "annotations": {"color": "gray"}},
-            {"text": {"content": f"\n🔥 {recent_label}: "}, "annotations": {"color": "gray"}},
-            {"text": {"content": f"{rec_desc}"}, "annotations": {"color": score_color(rec_desc), "bold": True}},
-            {"text": {"content": f"  (표본 {rec_total:,}개)"}, "annotations": {"color": "gray"}}
-        ]),
-        # 종합 브리핑
-        {"object": "block", "type": "callout", "callout": {
-            "icon": {"emoji": "🎯"}, "color": "gray_background",
-            "rich_text": [
-                {"text": {"content": "종합 여론 브리핑\n"}, "annotations": {"bold": True}},
-                {"text": {"content": ai_data.get('sentiment_analysis', '')}}
-            ]
-        }},
-        divider()
-    ]
-    return blocks
-
-# ── 전체 요약 ─────────────────────────────────────────────────────────────
-def get_global_summary_block(ai_data, recent_label, smart_reason, collection_period):
-    blocks = [
-        heading2(ui.TEXTS['notion_summary_title']),
-        heading3(ui.TEXTS['notion_summary_all'])
-    ]
-    for line in sort_sentiments(ai_data.get('final_summary_all', [])):
-        blocks.append(bullet(format_sentiment_line(line)))
-
-    blocks.append(heading3(ui.TEXTS['notion_summary_recent'].format(recent_label)))
-    period_text = ui.TEXTS['date_period_info'].format(collection_period, smart_reason).replace("  \n", " ")
-    blocks.append(paragraph([{"text": {"content": period_text}, "annotations": {"color": "gray"}}]))
-    for line in sort_sentiments(ai_data.get('final_summary_recent', [])):
-        blocks.append(bullet(format_sentiment_line(line)))
-
-    blocks.append(divider())
-    return blocks
-
-# ── 카테고리별 평가 ───────────────────────────────────────────────────────
-def get_category_summary_block(ai_data):
-    if not ai_data.get('global_category_summary'): return []
-    blocks = [heading2(ui.TEXTS['notion_category_summary_title'].replace("### ", ""))]
-    cats = sorted(ai_data.get('global_category_summary', []), key=lambda x: get_cat_sort_key(x.get('category', '')))
-
-    pos_cats = [c for c in cats if "[긍정" in c.get('category', '')]
-    neg_cats = [c for c in cats if "[부정" in c.get('category', '')]
-    etc_cats = [c for c in cats if "[긍정" not in c.get('category', '') and "[부정" not in c.get('category', '')]
-
-    def cat_toggle_children(cat_list):
-        children = []
-        for cat in cat_list:
-            cat_name = cat.get('category', '')
-            clean = clean_cat_name(cat_name)
-            prefix = "긍정  " if "[긍정" in cat_name else ("부정  " if "[부정" in cat_name else "")
-            prefix_color = cat_color(cat_name) if cat_color(cat_name) != "default" else "gray"
-            children.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [
-                {"text": {"content": prefix}, "annotations": {"color": prefix_color, "bold": True}},
-                {"text": {"content": clean}}
-            ]}})
-            for line in sort_sentiments(cat.get('summary', [])):
-                children.append(bullet(format_sentiment_line(line)))
-        return children
-
-    # 긍정 카테고리 toggle
-    if pos_cats:
-        blocks.append(toggle("✅ 긍정 평가 항목", cat_toggle_children(pos_cats), color="blue"))
-    # 부정 카테고리 toggle
-    if neg_cats:
-        blocks.append(toggle("⚠️ 부정 평가 항목", cat_toggle_children(neg_cats), color="red"))
-    # 중립
-    if etc_cats:
-        blocks.append(toggle("📌 기타 평가 항목", cat_toggle_children(etc_cats), color="gray"))
-
-    blocks.append(divider())
-    return blocks
-
-# ── 최신 소식 ─────────────────────────────────────────────────────────────
-def get_news_summary_block(news_data, ai_data):
-    if not news_data or not news_data[0]: return []
-    news_title, _, news_url, news_date = news_data[:4]
-    blocks = [heading2(ui.TEXTS['notion_news_title'].replace("### ", ""))]
-    if len(news_data) > 4 and news_data[4]:
-        blocks.append({"object": "block", "type": "image", "image": {"type": "external", "external": {"url": news_data[4]}}})
-    blocks.append({"object": "block", "type": "callout", "callout": {
-        "icon": {"emoji": "🔗"}, "color": "gray_background",
-        "rich_text": [
-            {"text": {"content": f"{news_date}  "}, "annotations": {"color": "gray"}},
-            {"text": {"content": news_title, "link": {"url": news_url}}, "annotations": {"bold": True, "underline": True}}
-        ]
-    }})
-    for line in ai_data.get('news_summary', []):
-        blocks.append(bullet([{"text": {"content": line}}]))
-    blocks.append(divider())
-    return blocks
-
-# ── 주요 이슈 픽 ──────────────────────────────────────────────────────────
-def get_ai_issue_pick_block(ai_data, smart_reason):
-    blocks = [
-        heading2(ui.TEXTS['notion_issue_pick_title'].replace("### ", "")),
-        paragraph([{"text": {"content": ui.TEXTS["issue_pick_desc"].format(smart_reason)}, "annotations": {"color": "gray"}}])
-    ]
-    issues = ai_data.get('ai_issue_pick', [])
-    if issues:
-        for issue in issues:
-            blocks.append(bullet([{"text": {"content": issue}}]))
+def issue_card(text):
+    clean = strip_md(text)
+    if '：' in clean or ': ' in clean:
+        sep = '：' if '：' in clean else ': '
+        parts = clean.split(sep, 1)
+        title_part = parts[0].strip()
+        body_part = parts[1].strip() if len(parts) > 1 else ''
+        content = f'<div style="font-size:15px;font-weight:500;color:var(--color-text-primary);margin-bottom:5px;">{title_part}</div><div style="font-size:15px;line-height:1.65;color:var(--color-text-secondary);">{body_part}</div>'
     else:
-        blocks.append(callout("ℹ️", ui.TEXTS["no_issue_pick"]))
-    blocks.append(divider())
-    return blocks
+        content = f'<div style="font-size:15px;line-height:1.65;color:var(--color-text-primary);">{clean}</div>'
+    return f'<div style="border:0.5px solid rgba(128,128,128,0.25);border-radius:10px;padding:1rem 1.2rem;margin-bottom:10px;">{content}</div>'
 
-# ── 플레이타임 분석 ───────────────────────────────────────────────────────
-def get_playtime_analysis_block(ai_data, stats):
-    pt = ai_data.get('playtime_analysis', {})
-    if not pt: return []
-    blocks = [
-        heading2(ui.TEXTS['notion_playtime_title']),
-        toggle(ui.TEXTS['notion_toggle_playtime'], [paragraph([{"text": {"content": ui.TEXTS['tooltip_playtime']}}])])
-    ]
-    if pt.get('comparison_insights'):
-        items = [bullet([{"text": {"content": l}}]) for l in pt['comparison_insights'] if isinstance(l, str) and l.strip()]
-        blocks.append({"object": "block", "type": "callout", "callout": {
-            "icon": {"emoji": "⚖️"}, "color": "gray_background",
-            "rich_text": [{"text": {"content": ui.TEXTS['insight_core_title']}, "annotations": {"bold": True}}],
-            "children": items
-        }})
+def quote_box(original, korean=None):
+    orig = str(original).replace("<","&lt;").replace(">","&gt;")
+    html = '<div style="border-left:2px solid rgba(128,128,128,0.3);padding:10px 14px;margin:10px 0 16px;">'
+    # [버그 수정] 하드코딩 "원문: ", "번역: " → ui_texts 키로 교체
+    html += f'<div style="font-size:15px;line-height:1.65;color:var(--color-text-secondary);word-break:break-word;white-space:normal;">{ui.TEXTS["notion_quote_orig"].format(orig)}</div>'
+    if korean:
+        ko = str(korean).replace("<","&lt;").replace(">","&gt;")
+        html += f'<div style="font-size:15px;line-height:1.65;color:var(--color-text-secondary);margin-top:7px;word-break:break-word;white-space:normal;">{ui.TEXTS["notion_quote_ko"].format(ko)}</div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
 
-    for title_key, total_key, avg_key, desc_key, summary_key, default_title, color in [
-        ('newbie_title', 'newbie_total', 'newbie_avg', 'newbie_desc', 'newbie_summary', ui.TEXTS['newbie_title_default'], "green"),
-        ('normal_title', 'norm_total',  'norm_avg',   'norm_desc',   'normal_summary', ui.TEXTS['normal_title_default'], "blue"),
-        ('core_title',   'core_total',  'core_avg',   'core_desc',   'core_summary',   ui.TEXTS['core_title_default'],   "purple"),
-    ]:
-        blocks.append(heading3(pt.get(title_key, default_title), color))
-        blocks.append(paragraph([{"text": {"content": ui.TEXTS['sample_opinion'].format(stats.get(total_key, 0), stats.get(avg_key, 0), stats.get(desc_key, ui.TEXTS['steam_eval_none']))}, "annotations": {"color": "gray"}}]))
-        for line in sort_sentiments(pt.get(summary_key, [])):
-            blocks.append(bullet(format_sentiment_line(line)))
+def playtime_header_card(title, total, avg, desc):
+    color = desc_color(desc)
+    return f'''
+    <div style="background:rgba(128,128,128,0.07);border-radius:10px;padding:1.1rem 1.2rem;margin-bottom:0.75rem;">
+        <div style="font-size:15px;font-weight:500;margin-bottom:10px;">{strip_md(title)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:rgba(128,128,128,0.12);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--color-text-secondary);">표본 {total:,}개</span>
+            <span style="background:rgba(128,128,128,0.12);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--color-text-secondary);">평균 {avg}h</span>
+            <span style="background:rgba(128,128,128,0.12);border-radius:999px;padding:4px 12px;font-size:13px;font-weight:500;color:{color};">{desc}</span>
+        </div>
+    </div>'''
 
-    blocks.append(divider())
-    return blocks
 
-# ── 권역별 분석 ───────────────────────────────────────────────────────────
-def get_region_analysis_block(ai_data):
-    reg_data = ai_data.get('region_analysis', {})
-    if not reg_data: return []
-    blocks = [
-        heading2(ui.TEXTS['notion_region_title']),
-        # 권역 분류 기준 상세 설명 (9대 권역 포함 언어 + 이유)
-        toggle(ui.TEXTS['notion_toggle_region'],
-               [paragraph([{"text": {"content": ui.TEXTS['notion_region_tooltip_text']}}])])
-    ]
-    if reg_data.get('divergence_insight'):
-        blocks.append({"object": "block", "type": "callout", "callout": {
-            "icon": {"emoji": "💡"}, "color": "gray_background",
-            "rich_text": [
-                {"text": {"content": f"{ui.TEXTS['divergence_insight_title']}\n"}, "annotations": {"bold": True}},
-                {"text": {"content": reg_data['divergence_insight']}}
-            ]
-        }})
+# ── 메인 렌더 ─────────────────────────────────────────────────────────────
 
-    for reg in reg_data.get('regions', []):
-        region_name = reg.get('region', '')
-        trend = reg.get('trend', '')
-        # 각 권역을 toggle 블록으로 감싸기
-        toggle_label = f"📍 {region_name}  —  {trend}"
-        toggle_children = []
+def render_report_tabs():
+    ins, stats = st.session_state.insights, st.session_state.stats
 
-        kws = reg.get('keywords', [])
-        if kws:
-            toggle_children.append(paragraph([
-                {"text": {"content": ui.TEXTS['keyword_label'].format(', '.join(kws))},
-                 "annotations": {"color": "gray"}}
-            ]))
+    with st.expander(ui.TEXTS['bot_info_title']):
+        st.markdown(f'<p style="font-size:15px;line-height:1.8;color:var(--color-text-secondary);">{ui.TEXTS["bot_info_desc"]}</p>', unsafe_allow_html=True)
 
-        for cat in sorted(reg.get('categories', []), key=lambda x: get_cat_sort_key(x.get('name', ''))):
-            cat_name = cat.get('name', '')
-            if cat_name:
-                clean = clean_cat_name(cat_name)
-                prefix = "긍정  " if "[긍정" in cat_name else ("부정  " if "[부정" in cat_name else "")
-                prefix_color = cat_color(cat_name)
-                toggle_children.append(paragraph([
-                    {"text": {"content": prefix},
-                     "annotations": {"color": prefix_color if prefix_color != "default" else "gray", "bold": True}},
-                    {"text": {"content": clean}, "annotations": {"bold": True}}
-                ]))
-            for line in sort_sentiments(cat.get('summary', [])):
-                toggle_children.append(bullet(format_sentiment_line(line)))
+    # [버그 수정] 탭 레이블 하드코딩 → ui_texts 키로 교체
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        ui.TEXTS["tab_1"],
+        ui.TEXTS["tab_2"],
+        ui.TEXTS["tab_3"],
+        ui.TEXTS["tab_4"],
+        ui.TEXTS["tab_5"],
+    ])
 
-        blocks.append(toggle(toggle_label, toggle_children))
+    # ════════════════════════════════════════════════════
+    # Tab 1: 주요 요약
+    # ════════════════════════════════════════════════════
+    with tab1:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f'''
+            <div style="background:rgba(128,128,128,0.07);border-radius:10px;padding:1.1rem 1.2rem;">
+                <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:7px;">스팀 공식 평점</div>
+                <div style="font-size:19px;font-weight:500;color:{eval_color(stats.get("official_desc",""))};">{stats.get("official_desc", ui.TEXTS["steam_eval_none"])}</div>
+                <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-top:5px;">상점 직구매 유저 기준</div>
+            </div>''', unsafe_allow_html=True)
+            st.caption(f"ℹ️ {ui.TEXTS['tooltip_official']}")
+        with c2:
+            st.markdown(f'''
+            <div style="background:rgba(128,128,128,0.07);border-radius:10px;padding:1.1rem 1.2rem;">
+                <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:7px;">전체 누적 평점</div>
+                <div style="font-size:19px;font-weight:500;color:{eval_color(stats["all_desc"])};">{stats["all_desc"]}</div>
+                <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-top:5px;">총 {stats["all_total"]:,}개</div>
+            </div>''', unsafe_allow_html=True)
+            st.caption(f"ℹ️ {ui.TEXTS['tooltip_all']}")
+        with c3:
+            period = stats.get('collection_period','')
+            st.markdown(f'''
+            <div style="background:rgba(128,128,128,0.07);border-radius:10px;padding:1.1rem 1.2rem;">
+                <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:7px;">{st.session_state.recent_label} 평점</div>
+                <div style="font-size:19px;font-weight:500;color:{eval_color(stats["recent_desc"])};">{stats["recent_desc"]}</div>
+                <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-top:5px;">표본 {stats["recent_total"]:,}개</div>
+            </div>''', unsafe_allow_html=True)
+            if period:
+                st.caption(ui.TEXTS["period_collect"].format(period))
+            # [버그 수정] period_toggle_label 키 사용 + <details> 방식으로 expander 크기 문제 우회
+            st.markdown(f'''
+            <details style="margin-top:4px;">
+                <summary style="font-size:12px;color:rgba(128,128,128,0.6);cursor:pointer;list-style:none;user-select:none;">
+                    ▸ {ui.TEXTS["period_toggle_why"]}
+                </summary>
+                <div style="font-size:13px;line-height:1.7;color:rgba(128,128,128,0.7);margin-top:6px;padding:8px 10px;background:rgba(128,128,128,0.05);border-radius:6px;">
+                    {st.session_state.smart_reason}
+                </div>
+            </details>''', unsafe_allow_html=True)
 
-    blocks.append(divider())
-    return blocks
+        st.write("")
+        gray_box(ui.TEXTS["summary_briefing"], ins.get('sentiment_analysis',''))
 
-# ── 국가별 원문 분석 ──────────────────────────────────────────────────────
-def get_country_analysis_block(ai_data):
-    blocks = [
-        heading2(ui.TEXTS['notion_country_title']),
-        paragraph([{"text": {"content": ui.TEXTS['country_analysis_desc']}, "annotations": {"color": "gray"}}])
-    ]
-    for country in ai_data.get('country_analysis', []):
-        blocks.append(heading3(f"🚩 {country.get('country', '')}"))
-        for cat in sorted(country.get('categories', []), key=lambda x: get_cat_sort_key(x.get('name', ''))):
-            cat_name = cat.get('name', '')
-            if cat_name:
-                clean = clean_cat_name(cat_name)
-                prefix = "긍정  " if "[긍정" in cat_name else ("부정  " if "[부정" in cat_name else "")
-                prefix_color = cat_color(cat_name)
-                blocks.append(paragraph([
-                    {"text": {"content": prefix}, "annotations": {"color": prefix_color if prefix_color != "default" else "gray", "bold": True}},
-                    {"text": {"content": clean}, "annotations": {"bold": True}}
-                ]))
-            for line in sort_sentiments(cat.get('summary', [])):
-                blocks.append(bullet(format_sentiment_line(line)))
-            # 리뷰 원문 — 토글로 감싸기
-            quote = cat.get('quote', {})
-            if quote and quote.get('original'):
-                quote_children = [paragraph([{"text": {"content": ui.TEXTS['notion_quote_orig'].format(quote.get('original'))}}])]
-                if quote.get('korean'):
-                    quote_children.append(paragraph([{"text": {"content": ui.TEXTS['notion_quote_ko'].format(quote.get('korean'))}}]))
-                blocks.append(toggle(ui.TEXTS['notion_toggle_quote'], quote_children))
-    blocks.append(divider())
-    return blocks
+        sec("sec_trend")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown('<p style="font-size:16px;font-weight:500;margin-bottom:10px;">누적 여론 동향</p>', unsafe_allow_html=True)
+            for line in sort_sentiments(ins.get('final_summary_all',[])):
+                st.markdown(s_html(line), unsafe_allow_html=True)
+        with col_b:
+            st.markdown(f'<p style="font-size:16px;font-weight:500;margin-bottom:6px;">{st.session_state.recent_label} 동향</p>', unsafe_allow_html=True)
+            if period:
+                st.markdown(f'<p style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:8px;">📅 {period}</p>', unsafe_allow_html=True)
+            for line in sort_sentiments(ins.get('final_summary_recent',[])):
+                st.markdown(s_html(line), unsafe_allow_html=True)
 
-# ── 언어/권역 통계 ────────────────────────────────────────────────────────
-def _create_notion_table(table_data_list, limit=None, is_region=False):
-    col2 = ui.TEXTS['col_region'] if is_region else ui.TEXTS['col_lang']
-    header_row = {"type": "table_row", "table_row": {"cells": [
-        [{"text": {"content": ui.TEXTS['col_rank']}, "annotations": {"bold": True, "color": "gray"}}],
-        [{"text": {"content": col2}, "annotations": {"bold": True, "color": "gray"}}],
-        [{"text": {"content": ui.TEXTS['col_count']}, "annotations": {"bold": True, "color": "gray"}}],
-        [{"text": {"content": ui.TEXTS['col_ratio']}, "annotations": {"bold": True, "color": "gray"}}],
-        [{"text": {"content": ui.TEXTS['col_pos']}, "annotations": {"bold": True, "color": "blue"}}],
-        [{"text": {"content": ui.TEXTS['col_neg']}, "annotations": {"bold": True, "color": "red"}}],
-        [{"text": {"content": ui.TEXTS['col_eval']}, "annotations": {"bold": True, "color": "gray"}}],
-    ]}}
-    rows = [header_row]
-    target = table_data_list[:limit] if limit else table_data_list
-    for r in target:
-        eval_val = str(r['eval'])
-        eval_color = "blue" if "긍정적" in eval_val else ("red" if "부정적" in eval_val else "gray")
-        name_val = str(r['region']) if is_region else str(r['lang_with_flag'])
-        rows.append({"type": "table_row", "table_row": {"cells": [
-            [{"text": {"content": str(r['rank'])}}],
-            [{"text": {"content": name_val}}],
-            [{"text": {"content": f"{r['count']:,}개"}}],
-            [{"text": {"content": str(r['ratio'])}}],
-            [{"text": {"content": str(r['pos_ratio'])}, "annotations": {"color": "blue"}}],
-            [{"text": {"content": str(r['neg_ratio'])}, "annotations": {"color": "red"}}],
-            [{"text": {"content": eval_val}, "annotations": {"color": eval_color, "bold": True}}],
-        ]}})
-    return {"object": "block", "type": "table", "table": {"table_width": 7, "has_column_header": True, "children": rows}}
+        st.divider()
+        sec("sec_category")
+        cats_all = sorted(ins.get('global_category_summary',[]), key=lambda x: get_cat_sort_key(x.get('category','')))
+        cats_pos = [c for c in cats_all if "[긍정" in c.get('category','')]
+        cats_neg = [c for c in cats_all if "[부정" in c.get('category','')]
+        cats_etc = [c for c in cats_all if "[긍정" not in c.get('category','') and "[부정" not in c.get('category','')]
 
-def get_language_ratio_block(store_stats, smart_reason):
-    blocks = [
-        heading2(ui.TEXTS['notion_table_global_title'].replace("### ", "")),
-        callout("⚠️", ui.TEXTS['disclaimer_language'].replace("💡 ", "").replace("**", ""))
-    ]
-    blocks.append(heading3(ui.TEXTS['table_region_title'].replace("##### ", "")))
-    blocks.append(_create_notion_table(store_stats['table_data_region'], is_region=True))
+        col_pos, col_neg = st.columns(2)
+        with col_pos:
+            if cats_pos:
+                st.markdown('<p style="font-size:15px;font-weight:500;color:#0C447C;margin-bottom:8px;">✅ 긍정 평가</p>', unsafe_allow_html=True)
+                for cat in cats_pos:
+                    name = cat.get('category','')
+                    with st.expander(f"✅ {clean_cat(name)}"):
+                        for line in sort_sentiments(cat.get('summary',[])):
+                            st.markdown(s_html(line), unsafe_allow_html=True)
+        with col_neg:
+            if cats_neg:
+                st.markdown('<p style="font-size:15px;font-weight:500;color:#791F1F;margin-bottom:8px;">⚠️ 부정 평가</p>', unsafe_allow_html=True)
+                for cat in cats_neg:
+                    name = cat.get('category','')
+                    with st.expander(f"⚠️ {clean_cat(name)}"):
+                        for line in sort_sentiments(cat.get('summary',[])):
+                            st.markdown(s_html(line), unsafe_allow_html=True)
+        # 중립 카테고리는 2열 아래에 전체 폭으로 표시
+        for cat in cats_etc:
+            name = cat.get('category','')
+            with st.expander(f"📌 {clean_cat(name)}"):
+                for line in sort_sentiments(cat.get('summary',[])):
+                    st.markdown(s_html(line), unsafe_allow_html=True)
 
-    blocks.append(heading3(ui.TEXTS['table_all_title'].replace("##### ", "")))
-    blocks.append(_create_notion_table(store_stats['table_data_all'], limit=10))
-    blocks.append(toggle(ui.TEXTS['toggle_all_table'].replace("👀 ", ""), [_create_notion_table(store_stats['table_data_all'])]))
+    # ════════════════════════════════════════════════════
+    # Tab 2: 소식 & 이슈
+    # ════════════════════════════════════════════════════
+    with tab2:
+        c_news, c_issue = st.columns(2)
+        with c_news:
+            sec("sec_news")
+            news = st.session_state.news_data
+            if news and news[0]:
+                if len(news) > 4 and news[4]:
+                    st.image(news[4], width=320)
+                st.markdown(f'''
+                <div style="border:0.5px solid rgba(128,128,128,0.25);border-radius:10px;padding:1.1rem 1.2rem;margin-bottom:1rem;">
+                    <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:7px;">{news[3]}</div>
+                    <a href="{news[2]}" target="_blank" style="font-size:16px;font-weight:500;color:var(--color-text-primary);text-decoration:none;line-height:1.5;">{strip_md(news[0])}</a>
+                </div>''', unsafe_allow_html=True)
+                for line in ins.get('news_summary',[]):
+                    st.markdown(f'<div style="font-size:16px;line-height:1.65;margin-bottom:8px;">• {strip_md(line)}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<p style="font-size:16px;color:rgba(128,128,128,0.7);">{ui.TEXTS["no_news"]}</p>', unsafe_allow_html=True)
 
-    blocks.append(heading3(ui.TEXTS['table_30_title'].replace("##### ", "")))
-    if store_stats['days_since_release'] < 30:
-        blocks.append(paragraph([{"text": {"content": ui.TEXTS['info_30_days']}, "annotations": {"color": "gray"}}]))
-    else:
-        period_text = ui.TEXTS['date_period_info'].format(store_stats.get('collection_period', ''), smart_reason).replace("  \n", " ")
-        blocks.append(paragraph([{"text": {"content": period_text}, "annotations": {"color": "gray"}}]))
-        blocks.append(_create_notion_table(store_stats['table_data_30'], limit=10))
-        blocks.append(toggle(ui.TEXTS['toggle_30_table'].replace("👀 ", ""), [_create_notion_table(store_stats['table_data_30'])]))
+        with c_issue:
+            sec("sec_issue")
+            period = stats.get('collection_period','')
+            if period:
+                st.markdown(f'<p style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:4px;">📅 추출 기간: {period}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:12px;">{ui.TEXTS["issue_pick_desc"]}</p>', unsafe_allow_html=True)
+            for line in ins.get('ai_issue_pick',[]):
+                st.markdown(issue_card(line), unsafe_allow_html=True)
+            if not ins.get('ai_issue_pick'):
+                st.markdown(f'<p style="font-size:15px;color:rgba(128,128,128,0.7);">{ui.TEXTS["no_issue_pick"]}</p>', unsafe_allow_html=True)
 
-    blocks.append(divider())
-    return blocks
+    # ════════════════════════════════════════════════════
+    # Tab 3: 플레이타임
+    # ════════════════════════════════════════════════════
+    with tab3:
+        sec("sec_playtime")
+        st.markdown(f'<p style="font-size:13px;color:rgba(128,128,128,0.7);margin-bottom:1rem;">{ui.TEXTS["tooltip_playtime"]}</p>', unsafe_allow_html=True)
+        pt = ins.get('playtime_analysis',{})
+        if pt:
+            if pt.get('comparison_insights'):
+                gray_box(ui.TEXTS["insight_core_title"], items=pt.get('comparison_insights',[]))
+            p1, p2, p3 = st.columns(3)
+            for col, tk, tot_k, avg_k, desc_k, sum_k, def_t in [
+                (p1,'newbie_title','newbie_total','newbie_avg','newbie_desc','newbie_summary',ui.TEXTS['newbie_title_default']),
+                (p2,'normal_title','norm_total',  'norm_avg',  'norm_desc',  'normal_summary',ui.TEXTS['normal_title_default']),
+                (p3,'core_title',  'core_total',  'core_avg',  'core_desc',  'core_summary',  ui.TEXTS['core_title_default']),
+            ]:
+                with col:
+                    st.markdown(playtime_header_card(
+                        pt.get(tk, def_t),
+                        stats.get(tot_k, 0),
+                        stats.get(avg_k, 0),
+                        stats.get(desc_k, ui.TEXTS["steam_eval_none"])
+                    ), unsafe_allow_html=True)
+                    for line in sort_sentiments(pt.get(sum_k,[])):
+                        st.markdown(s_html(line), unsafe_allow_html=True)
 
-# ── Q&A ────────────────────────────────────────────────────────────────────
-def get_qa_block(qa_history):
-    if not qa_history: return []
-    blocks = [heading2(ui.TEXTS['notion_qa_title'])]
-    for qa in qa_history:
-        blocks.append(paragraph([{"text": {"content": f"Q. {qa['q']}"}, "annotations": {"bold": True, "color": "blue"}}]))
-        blocks.append(callout("🤖", qa['a']))
-    return blocks
+    # ════════════════════════════════════════════════════
+    # Tab 4: 글로벌 분석
+    # ════════════════════════════════════════════════════
+    with tab4:
+        sec("sec_region")
+        # [버그 수정] 권역 언어 안내 하드코딩 → ui_texts "region_lang_tooltip_html" 키로 교체
+        st.markdown(f'''
+        <details style="margin-bottom:1rem;">
+            <summary style="font-size:13px;color:rgba(128,128,128,0.6);cursor:pointer;list-style:none;user-select:none;">
+                ▸ 각 권역에 어떤 언어가 포함되나요?
+            </summary>
+            <div style="font-size:13px;line-height:1.9;color:rgba(128,128,128,0.75);margin-top:8px;padding:10px 14px;background:rgba(128,128,128,0.05);border-radius:8px;">
+                {ui.TEXTS["region_lang_tooltip_html"]}
+            </div>
+        </details>''', unsafe_allow_html=True)
 
-# ── 발행 메인 ─────────────────────────────────────────────────────────────
-def upload_to_notion(app_id, game_name, release_date, store_stats, ai_data, recent_label, smart_reason, news_data, qa_history):
-    headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Content-Type": "application/json", "Notion-Version": "2022-06-28"}
-    kst = timezone(timedelta(hours=9))
-    now_kst = datetime.now(kst)
-    iso_timestamp = now_kst.strftime('%Y-%m-%dT%H:%M:%S+09:00')
+        reg_data = ins.get('region_analysis',{})
+        if reg_data.get('divergence_insight'):
+            gray_box(ui.TEXTS["divergence_insight_title"], reg_data['divergence_insight'])
 
-    create_data = {
-        "parent": {"database_id": NOTION_DATABASE_ID},
-        "properties": {
-            "이름": {"title": [{"text": {"content": f"{game_name} 평가 요약"}}]},
-            "추출 시점": {"date": {"start": iso_timestamp}},
-            "탈곡기 버전": {"rich_text": [{"text": {"content": APP_VERSION}}]}
-        }
-    }
-    try:
-        res = requests.post("https://api.notion.com/v1/pages", headers=headers, data=json.dumps(create_data))
-        res.raise_for_status()
-    except Exception as e:
-        print(f"노션 페이지 생성 실패: {e}"); return None
+        for reg in reg_data.get('regions',[]):
+            with st.expander(f"📍 {strip_md(reg.get('region',''))}  —  {strip_md(reg.get('trend',''))}"):
+                kws = reg.get('keywords',[])
+                if kws:
+                    st.markdown(f'<p style="font-size:14px;color:rgba(128,128,128,0.7);margin-bottom:10px;">🔑 {", ".join([strip_md(k) for k in kws])}</p>', unsafe_allow_html=True)
+                for cat in sorted(reg.get('categories',[]), key=lambda x: get_cat_sort_key(x.get('name',''))):
+                    n = cat.get('name','')
+                    if n:
+                        st.markdown(f'<div style="font-size:15px;font-weight:500;margin:10px 0 6px;">{cat_chip(n)}{clean_cat(n)}</div>', unsafe_allow_html=True)
+                    for line in sort_sentiments(cat.get('summary',[])):
+                        st.markdown(s_html(line), unsafe_allow_html=True)
 
-    page_id = res.json()['id']
-    children_blocks = []
-    children_blocks.extend(get_bot_info_block())
-    children_blocks.extend(get_ai_one_liner_block(ai_data, game_name, release_date))
-    children_blocks.extend(get_steam_sentiment_block(store_stats, recent_label, smart_reason, ai_data))
-    children_blocks.extend(get_global_summary_block(ai_data, recent_label, smart_reason, store_stats.get('collection_period', '')))
-    children_blocks.extend(get_category_summary_block(ai_data))
-    children_blocks.extend(get_news_summary_block(news_data, ai_data))
-    children_blocks.extend(get_ai_issue_pick_block(ai_data, smart_reason))
-    children_blocks.extend(get_playtime_analysis_block(ai_data, store_stats))
-    children_blocks.extend(get_region_analysis_block(ai_data))
-    children_blocks.extend(get_country_analysis_block(ai_data))
-    children_blocks.extend(get_language_ratio_block(store_stats, smart_reason))
-    if qa_history: children_blocks.extend(get_qa_block(qa_history))
+        st.divider()
+        sec("sec_country")
+        st.markdown(f'<p style="font-size:14px;color:rgba(128,128,128,0.7);margin-bottom:1rem;">{ui.TEXTS["country_analysis_desc"]}</p>', unsafe_allow_html=True)
 
-    append_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
-    for i in range(0, len(children_blocks), 100):
-        chunk = children_blocks[i:i+100]
-        deferred_tables = []
-        for idx, block in enumerate(chunk):
-            if block.get("type") == "toggle" and "children" in block["toggle"]:
-                clean_children = []
-                for child in block["toggle"]["children"]:
-                    if child.get("type") == "table": deferred_tables.append((idx, child))
-                    else: clean_children.append(child)
-                if clean_children: block["toggle"]["children"] = clean_children
-                else: del block["toggle"]["children"]
-        try:
-            patch_res = requests.patch(append_url, headers=headers, data=json.dumps({"children": chunk}))
-            patch_res.raise_for_status()
-            created_blocks = patch_res.json().get('results', [])
-            for idx, table_block in deferred_tables:
-                if idx < len(created_blocks):
-                    toggle_id = created_blocks[idx]['id']
-                    requests.patch(f"https://api.notion.com/v1/blocks/{toggle_id}/children", headers=headers, data=json.dumps({"children": [table_block]}))
-        except requests.exceptions.HTTPError as e:
-            pass
-        time.sleep(0.5)
+        # [1번 수정] country_analysis는 AI가 country_langs_ordered 순서대로 생성하도록 프롬프트에서 보장됨
+        # 화면에는 순위 뱃지를 붙여서 TOP1~3 + 한국어 순서임을 명시
+        country_langs_ordered = stats.get('country_langs_ordered', [])
+        countries = ins.get('country_analysis', [])
+        for idx, country in enumerate(countries):
+            country_name = strip_md(country.get("country", ""))
+            # 순위 뱃지 표시
+            if idx < len(country_langs_ordered):
+                rank_label = f"TOP {idx+1}" if idx < 3 else "🇰🇷 한국어"
+                badge_bg = "#E6F1FB" if idx < 3 else "#F3F0FF"
+                badge_color = "#0C447C" if idx < 3 else "#5B3FB5"
+                rank_badge = f'<span style="background:{badge_bg};color:{badge_color};font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;margin-right:8px;">{rank_label}</span>'
+            else:
+                rank_badge = ''
+            st.markdown(f'<p style="font-size:17px;font-weight:500;margin-top:1.5rem;margin-bottom:0.75rem;">🚩 {rank_badge}{country_name}</p>', unsafe_allow_html=True)
+            for cat in sorted(country.get('categories',[]), key=lambda x: get_cat_sort_key(x.get('name',''))):
+                n = cat.get('name','')
+                if n:
+                    st.markdown(f'<div style="font-size:16px;font-weight:500;margin:10px 0 6px;">{cat_chip(n)}{clean_cat(n)}</div>', unsafe_allow_html=True)
+                for line in sort_sentiments(cat.get('summary',[])):
+                    st.markdown(s_html(line), unsafe_allow_html=True)
+                quote = cat.get('quote',{})
+                if quote and quote.get('original'):
+                    quote_box(quote.get('original'), quote.get('korean') or None)
 
-    return page_id
+        st.divider()
+        with st.expander(ui.TEXTS.get("sec_stats","🌐 글로벌 통계표") + " 펼치기"):
+            st.caption(ui.TEXTS["disclaimer_language"])
+            df_reg = pd.DataFrame([[r['rank'],r['region'],f"{r['count']:,}개",r['ratio'],r['pos_ratio'],r['neg_ratio'],r['eval']] for r in stats['table_data_region']], columns=[ui.TEXTS["col_rank"],ui.TEXTS["col_region"],ui.TEXTS["col_count"],ui.TEXTS["col_ratio"],ui.TEXTS["col_pos"],ui.TEXTS["col_neg"],ui.TEXTS["col_eval"]])
+            df_all = pd.DataFrame([[r['rank'],r['lang'],f"{r['count']:,}개",r['ratio'],r['pos_ratio'],r['neg_ratio'],r['eval']] for r in stats['table_data_all']], columns=[ui.TEXTS["col_rank"],ui.TEXTS["col_lang"],ui.TEXTS["col_count"],ui.TEXTS["col_ratio"],ui.TEXTS["col_pos"],ui.TEXTS["col_neg"],ui.TEXTS["col_eval"]])
+            df_30 = pd.DataFrame([[r['rank'],r['lang'],f"{r['count']:,}개",r['ratio'],r['pos_ratio'],r['neg_ratio'],r['eval']] for r in stats['table_data_30']], columns=[ui.TEXTS["col_rank"],ui.TEXTS["col_lang"],ui.TEXTS["col_count"],ui.TEXTS["col_ratio"],ui.TEXTS["col_pos"],ui.TEXTS["col_neg"],ui.TEXTS["col_eval"]])
+            try:
+                s_reg   = df_reg.style.map(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+                s_all_t = df_all.head(10).style.map(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+                s_all_f = df_all.style.map(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+                s_30_t  = df_30.head(10).style.map(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+                s_30_f  = df_30.style.map(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+            except:
+                s_reg   = df_reg.style.applymap(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+                s_all_t = df_all.head(10).style.applymap(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+                s_all_f = df_all.style.applymap(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+                s_30_t  = df_30.head(10).style.applymap(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+                s_30_f  = df_30.style.applymap(apply_eval_color, subset=[ui.TEXTS["col_eval"]])
+            st.markdown("##### 권역별 누적 비중"); st.dataframe(s_reg, hide_index=True, use_container_width=True)
+            st.markdown("##### 언어별 누적 비중 TOP 10"); st.dataframe(s_all_t, hide_index=True, use_container_width=True)
+            with st.expander("전체 보기"): st.dataframe(s_all_f, hide_index=True, use_container_width=True)
+            st.markdown("##### 최근 30일 언어별 비중 TOP 10")
+            if stats['days_since_release'] < 30:
+                st.info(ui.TEXTS["info_30_days"])
+            else:
+                period = stats.get('collection_period','')
+                if period: st.caption(f"📅 {period}  ({st.session_state.smart_reason})")
+                st.dataframe(s_30_t, hide_index=True, use_container_width=True)
+                with st.expander("전체 보기"): st.dataframe(s_30_f, hide_index=True, use_container_width=True)
+
+    # ════════════════════════════════════════════════════
+    # Tab 5: AI 질문
+    # ════════════════════════════════════════════════════
+    with tab5:
+        sec("sec_qa")
+        st.markdown(f'<p style="font-size:15px;color:rgba(128,128,128,0.8);margin-bottom:1.5rem;">{ui.TEXTS["qa_desc"]}</p>', unsafe_allow_html=True)
+
+        if st.session_state.get('qa_history'):
+            for qa in st.session_state.qa_history:
+                st.markdown(f'<p style="font-size:16px;font-weight:500;margin-bottom:5px;">Q. {strip_md(qa["q"])}</p>', unsafe_allow_html=True)
+                st.info(f"A. {strip_md(qa['a'])}")
+            st.divider()
+
+        q_input = st.text_input("QA Input", placeholder=ui.TEXTS["qa_input_ph"], label_visibility="collapsed")
+        if st.button(ui.TEXTS["qa_btn"], type="primary", key="btn_qa_ask"):
+            if q_input:
+                with st.spinner(ui.TEXTS["qa_loading"]):
+                    ans, err = ask_followup_question(st.session_state.game_name, st.session_state.stats, st.session_state.insights, q_input)
+                    if not err:
+                        st.session_state.current_q = q_input
+                        st.session_state.current_a = ans
+                        st.rerun()
+
+        if st.session_state.get('current_a'):
+            st.markdown("---")
+            st.markdown(f'<p style="font-size:16px;font-weight:500;margin-bottom:5px;">Q. {strip_md(st.session_state.current_q)}</p>', unsafe_allow_html=True)
+            st.success(f"A. {strip_md(st.session_state.current_a)}")
+            if st.button(ui.TEXTS["qa_add_btn"], key="btn_qa_add"):
+                st.session_state.qa_history.append({"q": st.session_state.current_q, "a": st.session_state.current_a})
+                for h in st.session_state.history:
+                    if h['app_id'] == st.session_state.app_id:
+                        h['qa_history'] = st.session_state.qa_history
+                st.session_state.current_q = ""
+                st.session_state.current_a = ""
+                st.rerun()
