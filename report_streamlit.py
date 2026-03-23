@@ -330,17 +330,16 @@ def render_report_tabs():
                     st.markdown(s_html(line), unsafe_allow_html=True)
                 quote = cat.get('quote',{})
                 if quote and quote.get('original'):
-                    orig = str(quote.get('original','')).replace('<','&lt;').replace('>','&gt;')
-                    ko = quote.get('korean') or ''
-                    ko_html = f'<div style="font-size:14px;line-height:1.65;color:rgba(128,128,128,0.7);margin-top:6px;word-break:break-word;">{ui.TEXTS["notion_quote_ko"].format(ko)}</div>' if ko else ''
-                    st.markdown(f'''
-                    <details style="margin:6px 0 12px;">
-                        <summary style="font-size:13px;color:rgba(128,128,128,0.6);cursor:pointer;list-style:none;user-select:none;">▸ 👀 유저 리뷰 원문 보기</summary>
-                        <div style="border-left:2px solid rgba(128,128,128,0.3);padding:10px 14px;margin-top:8px;">
-                            <div style="font-size:14px;line-height:1.65;color:rgba(128,128,128,0.75);word-break:break-word;">{ui.TEXTS["notion_quote_orig"].format(orig)}</div>
-                            {ko_html}
-                        </div>
-                    </details>''', unsafe_allow_html=True)
+                    with st.expander("👀 유저 리뷰 원문 보기"):
+                        orig = str(quote.get('original','')).replace('<','&lt;').replace('>','&gt;')
+                        ko = quote.get('korean') or ''
+                        html = f'<div style="border-left:2px solid rgba(128,128,128,0.3);padding:10px 14px;">'
+                        html += f'<div style="font-size:14px;line-height:1.65;color:rgba(128,128,128,0.75);word-break:break-word;">{ui.TEXTS["notion_quote_orig"].format(orig)}</div>'
+                        if ko:
+                            ko_esc = str(ko).replace('<','&lt;').replace('>','&gt;')
+                            html += f'<div style="font-size:14px;line-height:1.65;color:rgba(128,128,128,0.65);margin-top:6px;word-break:break-word;">{ui.TEXTS["notion_quote_ko"].format(ko_esc)}</div>'
+                        html += '</div>'
+                        st.markdown(html, unsafe_allow_html=True)
 
         st.divider()
         with st.expander(ui.TEXTS.get("sec_stats","🌐 글로벌 통계표") + " 펼치기"):
