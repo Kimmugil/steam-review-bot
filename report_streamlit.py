@@ -184,10 +184,32 @@ def render_report_tabs():
 
         st.divider()
         sec("sec_category")
-        for cat in sorted(ins.get('global_category_summary',[]), key=lambda x: get_cat_sort_key(x.get('category',''))):
+        cats_all = sorted(ins.get('global_category_summary',[]), key=lambda x: get_cat_sort_key(x.get('category','')))
+        cats_pos = [c for c in cats_all if "[긍정" in c.get('category','')]
+        cats_neg = [c for c in cats_all if "[부정" in c.get('category','')]
+        cats_etc = [c for c in cats_all if "[긍정" not in c.get('category','') and "[부정" not in c.get('category','')]
+
+        col_pos, col_neg = st.columns(2)
+        with col_pos:
+            if cats_pos:
+                st.markdown('<p style="font-size:15px;font-weight:500;color:#0C447C;margin-bottom:8px;">✅ 긍정 평가</p>', unsafe_allow_html=True)
+                for cat in cats_pos:
+                    name = cat.get('category','')
+                    with st.expander(f"✅ {clean_cat(name)}"):
+                        for line in sort_sentiments(cat.get('summary',[])):
+                            st.markdown(s_html(line), unsafe_allow_html=True)
+        with col_neg:
+            if cats_neg:
+                st.markdown('<p style="font-size:15px;font-weight:500;color:#791F1F;margin-bottom:8px;">⚠️ 부정 평가</p>', unsafe_allow_html=True)
+                for cat in cats_neg:
+                    name = cat.get('category','')
+                    with st.expander(f"⚠️ {clean_cat(name)}"):
+                        for line in sort_sentiments(cat.get('summary',[])):
+                            st.markdown(s_html(line), unsafe_allow_html=True)
+        # 중립 카테고리는 2열 아래에 전체 폭으로 표시
+        for cat in cats_etc:
             name = cat.get('category','')
-            icon = "✅" if "[긍정" in name else ("⚠️" if "[부정" in name else "📌")
-            with st.expander(f"{icon} {clean_cat(name)}"):
+            with st.expander(f"📌 {clean_cat(name)}"):
                 for line in sort_sentiments(cat.get('summary',[])):
                     st.markdown(s_html(line), unsafe_allow_html=True)
 
@@ -308,7 +330,21 @@ def render_report_tabs():
                     st.markdown(s_html(line), unsafe_allow_html=True)
                 quote = cat.get('quote',{})
                 if quote and quote.get('original'):
-                    quote_box(quote.get('original'), quote.get('korean') or None)
+                    with st.expander("👀 유저 리뷰 원문 보기"):
+                        orig = str(quote.get('original','')).replace('<','&lt;').replace('>','&gt;')
+                        ko = quote.get('korean') or ''
+                        # 원문에 🇰🇷 한국어 태그가 없으면 외국어 리뷰 → 번역 필요
+                        is_korean_review = '한국어' in str(quote.get('original',''))
+                        html = '<div style="border-left:2px solid rgba(128,128,128,0.3);padding:10px 14px;">'
+                        html += f'<div style="font-size:14px;line-height:1.65;color:rgba(128,128,128,0.75);word-break:break-word;">{ui.TEXTS["notion_quote_orig"].format(orig)}</div>'
+                        if ko:
+                            ko_esc = str(ko).replace('<','&lt;').replace('>','&gt;')
+                            html += f'<div style="font-size:14px;line-height:1.65;color:rgba(128,128,128,0.65);margin-top:6px;word-break:break-word;">{ui.TEXTS["notion_quote_ko"].format(ko_esc)}</div>'
+                        elif not is_korean_review:
+                            # 외국어인데 번역이 없는 경우 — AI가 번역을 누락한 케이스
+                            html += '<div style="font-size:13px;color:rgba(128,128,128,0.45);margin-top:6px;font-style:italic;">번역: (AI가 번역을 생성하지 않았습니다)</div>'
+                        html += '</div>'
+                        st.markdown(html, unsafe_allow_html=True)
 
         st.divider()
         with st.expander(ui.TEXTS.get("sec_stats","🌐 글로벌 통계표") + " 펼치기"):

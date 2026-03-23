@@ -73,11 +73,83 @@ TEXTS = {
 
     "period_toggle_why": "왜 이 기간으로 분석했나요?",
 
-    "region_lang_tooltip_html": """🌏 <b>아시아</b>: 한국어, 중국어(간체·번체), 일본어, 태국어, 베트남어, 인도네시아어<br>
-                🌍 <b>영미·유럽</b>: 영어, 프랑스어, 독일어, 스페인어, 이탈리아어, 폴란드어, 포르투갈어, 체코어 등<br>
-                🧊 <b>CIS(러시아권)</b>: 러시아어, 우크라이나어<br>
-                💃 <b>중남미</b>: 스페인어(중남미), 포르투갈어(브라질)<br>
-                🕌 <b>중동·기타</b>: 튀르키예어, 아랍어""",
+    "region_lang_tooltip_html": """
+<table style="width:100%;border-collapse:collapse;font-size:13px;">
+<thead>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.2);">
+  <th style="text-align:left;padding:6px 10px;color:rgba(128,128,128,0.7);font-weight:500;">권역</th>
+  <th style="text-align:left;padding:6px 10px;color:rgba(128,128,128,0.7);font-weight:500;">포함 언어</th>
+  <th style="text-align:left;padding:6px 10px;color:rgba(128,128,128,0.7);font-weight:500;">이렇게 나눈 이유</th>
+</tr>
+</thead>
+<tbody>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🌏 동아시아</td>
+  <td style="padding:7px 10px;">한국어, 중국어(간체·번체), 일본어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">공통된 동아시아 게임 문화권. 스토리·캐릭터 중시 경향 유사</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🌴 동남아시아</td>
+  <td style="padding:7px 10px;">태국어, 베트남어, 인도네시아어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">모바일 친화적·가격 민감도 높음. 동아시아와 소비 패턴 구분 필요</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🌐 영미권</td>
+  <td style="padding:7px 10px;">영어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">전 세계 공용어로 비중이 압도적. 유럽권과 묶으면 왜곡됨</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🏰 서유럽</td>
+  <td style="padding:7px 10px;">프랑스어, 독일어, 이탈리아어, 스페인어, 포르투갈어, 네덜란드어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">구매력 높고 그래픽·완성도 기준이 엄격한 편</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🏔 동유럽</td>
+  <td style="padding:7px 10px;">폴란드어, 체코어, 헝가리어, 루마니아어, 불가리아어, 그리스어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">서유럽보다 가격 민감도 높고 게임 소비 패턴 차이 있음</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🌨 북유럽</td>
+  <td style="padding:7px 10px;">스웨덴어, 덴마크어, 노르웨이어, 핀란드어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">인디·PC 게임 선호, 구매력 최상위. 독립적 성향 뚜렷</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🧊 CIS(러시아권)</td>
+  <td style="padding:7px 10px;">러시아어, 우크라이나어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">VPN·접속 이슈, 현지화 민감도 별도 파악 필요</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">💃 중남미</td>
+  <td style="padding:7px 10px;">스페인어(중남미), 포르투갈어(브라질)</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">세일 반응 높음, 가격 민감도 강함</td>
+</tr>
+<tr>
+  <td style="padding:7px 10px;white-space:nowrap;">🕌 중동·기타</td>
+  <td style="padding:7px 10px;">튀르키예어, 아랍어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">아랍어 지원 등 현지화 이슈가 별도로 나타남</td>
+</tr>
+</tbody>
+</table>""",
+
+    "notion_region_tooltip_text": """9대 권역 분류 기준 및 이유:
+🌏 동아시아 — 한국어, 중국어(간체·번체), 일본어
+    → 동아시아 게임 문화권, 스토리·캐릭터 중시 경향 유사
+🌴 동남아시아 — 태국어, 베트남어, 인도네시아어
+    → 모바일 친화·가격 민감도 높음, 동아시아와 소비 패턴 구분 필요
+🌐 영미권 — 영어
+    → 전 세계 공용어로 비중이 압도적. 유럽권과 묶으면 데이터 왜곡
+🏰 서유럽 — 프랑스어, 독일어, 이탈리아어, 스페인어, 포르투갈어, 네덜란드어
+    → 구매력 높고 그래픽·완성도 기준이 엄격한 편
+🏔 동유럽 — 폴란드어, 체코어, 헝가리어, 루마니아어, 불가리아어, 그리스어
+    → 서유럽보다 가격 민감도 높고 소비 패턴 차이 있음
+🌨 북유럽 — 스웨덴어, 덴마크어, 노르웨이어, 핀란드어
+    → 인디·PC 게임 선호, 구매력 최상위, 독립적 성향 뚜렷
+🧊 CIS(러시아권) — 러시아어, 우크라이나어
+    → VPN·접속 이슈, 현지화 민감도 별도 파악 필요
+💃 중남미 — 스페인어(중남미), 포르투갈어(브라질)
+    → 세일 반응 높음, 가격 민감도 강함
+🕌 중동·기타 — 튀르키예어, 아랍어
+    → 아랍어 지원 등 현지화 이슈가 별도로 나타남""",
 
     "sec_trend": "📈 전체 여론 동향",
     "sec_category": "📁 카테고리별 상세 평가",
@@ -233,7 +305,7 @@ TEXTS = {
     2. 모든 Key와 Value는 쌍따옴표(")로 묶어야 함.
     3. 배열(List) 요소 사이, 객체(Object) 요소 사이에는 반드시 쉼표(,)를 넣을 것. 마지막 요소 뒤에는 쉼표 금지.
     4. 리뷰 인용(quote) 시, 텍스트 내의 줄바꿈은 반드시 \\n 으로 처리하고, 쌍따옴표는 \\" 로 이스케이프 처리할 것.
-    5. 한국어가 아닌 모든 외국어 리뷰 인용 시, [원문]을 그대로 적고, 그 아래에 [한국어 번역]을 100% 누락 없이 추가할 것. (한국어 리뷰면 이 줄 생략)
+    5. 한국어가 아닌 모든 외국어 리뷰 인용 시, [원문]을 그대로 적고, 그 아래에 [한국어 번역]을 100% 누락 없이 추가할 것. 영어도 예외 없이 반드시 한국어 번역을 추가할 것. (한국어 리뷰면 이 줄만 생략)
     6. global_category_summary 작성 시, [긍정] 항목을 모두 먼저 쓰고 그 뒤에 [부정] 항목 나열.
     7. final_summary_all, final_summary_recent, country_analysis의 summary, 그리고 playtime_analysis의 newbie_summary와 core_summary 항목 맨 앞에 반드시 '[긍정]' 또는 '[부정]' 머리말을 붙일 것. 긍정 항목을 배열 앞쪽에 먼저 나열할 것.
     8. ai_issue_pick 작성 시 단순 현상 나열이 아니라 그로 인한 인사이트(시사점)를 반드시 포함할 것.
@@ -242,12 +314,16 @@ TEXTS = {
     11. [⚠️중요] 숫자 및 시간 단위(week, month, year, anniversary 등) 번역 시 절대 넘겨짚지 말고 원문 그대로 직역할 것.
     12. 텍스트 데이터 내부에 마크다운 볼드체(**) 기호를 절대 포함하지 말 것.
     13. 권역별 주요 키워드: 외국어 명사나 단어가 등장할 경우 반드시 "원문 (한국어 번역)" 형태로 작성.
-    14-1. [⚠️ 절대 규칙] region_analysis의 "region" 필드에는 반드시 아래 5개 권역명 중 하나만 사용할 것. 절대로 국가명(한국, 미국, 러시아 등)을 쓰지 말 것:
-        - 🌏 아시아 (한국어, 중국어, 일본어, 태국어, 베트남어, 인도네시아어 포함)
-        - 🌍 영미·유럽 (영어, 프랑스어, 독일어, 스페인어, 이탈리아어, 폴란드어 등 포함)
-        - 🧊 CIS(러시아권) (러시아어, 우크라이나어 포함)
-        - 💃 중남미 (스페인어(중남미), 포르투갈어(브라질) 포함)
-        - 🕌 중동·기타 (튀르키예어, 아랍어 포함)
+    14-1. [⚠️ 절대 규칙] region_analysis의 "region" 필드에는 반드시 아래 9개 권역명 중 하나만 사용할 것. 절대로 국가명(한국, 미국, 러시아 등)을 쓰지 말 것:
+        - 🌏 동아시아 (한국어, 중국어(간체), 중국어(번체), 일본어)
+        - 🌴 동남아시아 (태국어, 베트남어, 인도네시아어)
+        - 🌐 영미권 (영어)
+        - 🏰 서유럽 (프랑스어, 독일어, 이탈리아어, 스페인어, 포르투갈어, 네덜란드어)
+        - 🏔 동유럽 (폴란드어, 체코어, 헝가리어, 루마니아어, 불가리아어, 그리스어)
+        - 🌨 북유럽 (스웨덴어, 덴마크어, 노르웨이어, 핀란드어)
+        - 🧊 CIS(러시아권) (러시아어, 우크라이나어)
+        - 💃 중남미 (스페인어(중남미), 포르투갈어(브라질))
+        - 🕌 중동·기타 (튀르키예어, 아랍어)
     14-2. 국가별 유저 리뷰 원문 인용 (`country_analysis` 영역):
         - '권역(아시아 등)'이 아닌 실제 유저가 작성한 언어 기반의 '국가명(예: 러시아, 미국, 중국, 한국)'으로 명시.
         - 요약(summary)은 1~2문장으로 명확히 요약하며, 빈 배열([]) 절대 금지!!
@@ -283,7 +359,7 @@ TEXTS = {
         "divergence_insight": "권역별 여론이 상이할 경우 원인 분석 (비슷하면 빈 문자열)",
         "regions": [
             {{
-                "region": "반드시 아래 5개 권역 중 하나만 사용: 🌏 아시아 / 🌍 영미·유럽 / 🧊 CIS(러시아권) / 💃 중남미 / 🕌 중동·기타",
+                "region": "반드시 아래 9개 권역 중 하나만 사용: 🌏 동아시아 / 🌴 동남아시아 / 🌐 영미권 / 🏰 서유럽 / 🏔 동유럽 / 🌨 북유럽 / 🧊 CIS(러시아권) / 💃 중남미 / 🕌 중동·기타",
                 "trend": "대체로 긍정적 등",
                 "keywords": ["Оптимизация (최적화)", "Story (스토리)"], 
                 "categories": [{{"name": "[긍정] 카테고리명", "summary": ["[긍정] 요약"]}}]
@@ -296,7 +372,7 @@ TEXTS = {
             "categories": [{{ 
                 "name": "[긍정] 또는 [부정] 카테고리명", 
                 "summary": ["[긍정] 또는 [부정]으로 시작하는 요약 (빈 배열 절대 금지)"], 
-                "quote": {{"original": "원문 (해외 언어인 경우 반드시 원문 삽입)", "korean": "한국어 번역 (한국어 리뷰면 이 줄은 빈 문자열)"}} 
+                "quote": {{"original": "원문 그대로 삽입 (모든 언어)", "korean": "한국어 번역 (한국어 리뷰일 때만 빈 문자열. 영어 포함 모든 외국어는 반드시 한국어 번역 작성)"}} 
             }}] 
         }}
       ]
@@ -321,13 +397,16 @@ TEXTS = {
 
 [팀원 질문]: {question}
 
-[참고 데이터 - 초기 분석 결과]:
+[참고 데이터 1 - 분석 결과]:
 {insights}
+{review_context}
 
 답변 작성 규칙:
-1. 팩트 기반으로 3~4문장 이내로 핵심만 대답할 것.
-2. 제공된 데이터 내에서 유추할 수 없는 내용은 "제공된 데이터에서는 확인이 어렵습니다"라고 할 것.
-3. 노션에 텍스트로 들어갈 예정이므로 마크다운 볼드체 등 특수기호는 가급적 사용하지 말 것.
+1. 분석 결과에 있으면 거기서 먼저 답변할 것.
+2. 분석 결과에 없더라도 [수집된 전체 리뷰 원문]에 있으면 직접 찾아서 답변할 것. (예: 특정 주제 원문 인용 요청 등)
+3. 두 곳 모두에서 확인할 수 없는 내용은 "제공된 데이터에서는 확인이 어렵습니다"라고 할 것.
+4. 팩트 기반으로 3~4문장 이내로 핵심만 대답할 것. (리뷰 원문 인용 시 예외 허용)
+5. 노션에 텍스트로 들어갈 예정이므로 마크다운 볼드체 등 특수기호는 가급적 사용하지 말 것.
 """,
 
     "WAITING_MESSAGES": [

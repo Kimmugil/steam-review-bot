@@ -136,19 +136,36 @@ def get_category_summary_block(ai_data):
     if not ai_data.get('global_category_summary'): return []
     blocks = [heading2(ui.TEXTS['notion_category_summary_title'].replace("### ", ""))]
     cats = sorted(ai_data.get('global_category_summary', []), key=lambda x: get_cat_sort_key(x.get('category', '')))
-    for cat in cats:
-        cat_name = cat.get('category', '')
-        color = cat_color(cat_name)
-        clean = clean_cat_name(cat_name)
-        # 카테고리 제목: 긍정/부정 텍스트 + 카테고리명 같은 줄에
-        prefix = "긍정  " if "[긍정" in cat_name else ("부정  " if "[부정" in cat_name else "")
-        prefix_color = color if color != "default" else "gray"
-        blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [
-            {"text": {"content": prefix}, "annotations": {"color": prefix_color, "bold": True}},
-            {"text": {"content": clean}, "annotations": {"color": "default"}}
-        ]}})
-        for line in sort_sentiments(cat.get('summary', [])):
-            blocks.append(bullet(format_sentiment_line(line)))
+
+    pos_cats = [c for c in cats if "[긍정" in c.get('category', '')]
+    neg_cats = [c for c in cats if "[부정" in c.get('category', '')]
+    etc_cats = [c for c in cats if "[긍정" not in c.get('category', '') and "[부정" not in c.get('category', '')]
+
+    def cat_toggle_children(cat_list):
+        children = []
+        for cat in cat_list:
+            cat_name = cat.get('category', '')
+            clean = clean_cat_name(cat_name)
+            prefix = "긍정  " if "[긍정" in cat_name else ("부정  " if "[부정" in cat_name else "")
+            prefix_color = cat_color(cat_name) if cat_color(cat_name) != "default" else "gray"
+            children.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [
+                {"text": {"content": prefix}, "annotations": {"color": prefix_color, "bold": True}},
+                {"text": {"content": clean}}
+            ]}})
+            for line in sort_sentiments(cat.get('summary', [])):
+                children.append(bullet(format_sentiment_line(line)))
+        return children
+
+    # 긍정 카테고리 toggle
+    if pos_cats:
+        blocks.append(toggle("✅ 긍정 평가 항목", cat_toggle_children(pos_cats), color="blue"))
+    # 부정 카테고리 toggle
+    if neg_cats:
+        blocks.append(toggle("⚠️ 부정 평가 항목", cat_toggle_children(neg_cats), color="red"))
+    # 중립
+    if etc_cats:
+        blocks.append(toggle("📌 기타 평가 항목", cat_toggle_children(etc_cats), color="gray"))
+
     blocks.append(divider())
     return blocks
 
@@ -221,7 +238,9 @@ def get_region_analysis_block(ai_data):
     if not reg_data: return []
     blocks = [
         heading2(ui.TEXTS['notion_region_title']),
-        toggle(ui.TEXTS['notion_toggle_region'], [paragraph([{"text": {"content": ui.TEXTS['tooltip_region']}}])])
+        # 권역 분류 기준 상세 설명 (9대 권역 포함 언어 + 이유)
+        toggle(ui.TEXTS['notion_toggle_region'],
+               [paragraph([{"text": {"content": ui.TEXTS['notion_region_tooltip_text']}}])])
     ]
     if reg_data.get('divergence_insight'):
         blocks.append({"object": "block", "type": "callout", "callout": {
@@ -231,21 +250,37 @@ def get_region_analysis_block(ai_data):
                 {"text": {"content": reg_data['divergence_insight']}}
             ]
         }})
+
     for reg in reg_data.get('regions', []):
-        blocks.append(heading3(ui.TEXTS['region_expander'].format(reg.get('region'), reg.get('trend'))))
-        blocks.append(paragraph([{"text": {"content": ui.TEXTS['keyword_label'].format(', '.join(reg.get('keywords', [])))}, "annotations": {"color": "gray"}}]))
+        region_name = reg.get('region', '')
+        trend = reg.get('trend', '')
+        # 각 권역을 toggle 블록으로 감싸기
+        toggle_label = f"📍 {region_name}  —  {trend}"
+        toggle_children = []
+
+        kws = reg.get('keywords', [])
+        if kws:
+            toggle_children.append(paragraph([
+                {"text": {"content": ui.TEXTS['keyword_label'].format(', '.join(kws))},
+                 "annotations": {"color": "gray"}}
+            ]))
+
         for cat in sorted(reg.get('categories', []), key=lambda x: get_cat_sort_key(x.get('name', ''))):
             cat_name = cat.get('name', '')
             if cat_name:
                 clean = clean_cat_name(cat_name)
                 prefix = "긍정  " if "[긍정" in cat_name else ("부정  " if "[부정" in cat_name else "")
                 prefix_color = cat_color(cat_name)
-                blocks.append(paragraph([
-                    {"text": {"content": prefix}, "annotations": {"color": prefix_color if prefix_color != "default" else "gray", "bold": True}},
+                toggle_children.append(paragraph([
+                    {"text": {"content": prefix},
+                     "annotations": {"color": prefix_color if prefix_color != "default" else "gray", "bold": True}},
                     {"text": {"content": clean}, "annotations": {"bold": True}}
                 ]))
             for line in sort_sentiments(cat.get('summary', [])):
-                blocks.append(bullet(format_sentiment_line(line)))
+                toggle_children.append(bullet(format_sentiment_line(line)))
+
+        blocks.append(toggle(toggle_label, toggle_children))
+
     blocks.append(divider())
     return blocks
 
