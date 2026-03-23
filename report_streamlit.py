@@ -357,7 +357,14 @@ def render_report_tabs():
         if st.button(ui.TEXTS["qa_btn"], type="primary", key="btn_qa_ask"):
             if q_input:
                 with st.spinner(ui.TEXTS["qa_loading"]):
-                    ans, err = ask_followup_question(st.session_state.game_name, st.session_state.stats, st.session_state.insights, q_input)
+                    ans, err = ask_followup_question(
+                        st.session_state.game_name,
+                        st.session_state.stats,
+                        st.session_state.insights,
+                        q_input,
+                        reviews_all=st.session_state.get('reviews_all'),
+                        reviews_recent=st.session_state.get('reviews_recent'),
+                    )
                     if not err:
                         st.session_state.current_q = q_input
                         st.session_state.current_a = ans
