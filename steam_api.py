@@ -121,8 +121,11 @@ def _fetch_single_lang_stats(app_id, lang):
     except: return lang, {}
 
 def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
-    # ── 1차: 전체 30개 언어 통계 병렬 수집 ──────────────────────────────
-    # 이것이 글로벌 통계표, 권역 통계, 언어별 순위의 기반이 되는 데이터
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 1차: 전체 30개 언어 통계 병렬 수집
+    # 모든 하위 분석의 기반 데이터. 원문 없이 숫자만 가져옴.
+    # ══════════════════════════════════════════════════════════════════════
     lang_stats_all_dict = {}
     sum_total, sum_pos = 0, 0
 
@@ -149,20 +152,21 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
 
     all_desc = calculate_custom_score(sum_pos / sum_total, sum_total) if sum_total > 0 else ui.TEXTS["steam_eval_none"]
 
-    # ── 최근 기간 통계 수집 ───────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════
+    # 최근 기간 통계 수집
+    # ══════════════════════════════════════════════════════════════════════
     lang_stats_30_dict = {lang: {'total': 0, 'positive': 0} for lang in LANG_MAP.keys()}
     recent_total, recent_pos = 0, 0
     recent_custom_desc = ui.TEXTS["steam_eval_none"]
     days_since_release = (datetime.now() - release_date).days
 
     if recent_days_val:
-        # ── [3번 수정] 출시 4일 미만: 가장 최근 리뷰의 30%만 수집 ──────
+        # 출시 4일 미만: 최신 리뷰 최대 500개 중 30%만 샘플링
         if days_since_release < 4:
-            # 최신순으로 최대 500개만 가져온 뒤 30%만 사용
             sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&num_per_page=100&purchase_type=all")
             cursor = "*"
             raw_reviews = []
-            for _ in range(5):   # 최대 500개 수집
+            for _ in range(5):
                 try:
                     data = requests.get(sample_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=5).json()
                     revs = data.get('reviews', [])
@@ -171,7 +175,6 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
                     cursor = data.get('cursor', '*')
                     if not cursor: break
                 except: break
-            # 30%만 사용
             cutoff_count = max(1, int(len(raw_reviews) * 0.3))
             for r in raw_reviews[:cutoff_count]:
                 recent_total += 1
@@ -181,7 +184,7 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
                     lang_stats_30_dict[r_lang]['total'] += 1
                     if r.get('voted_up', False): lang_stats_30_dict[r_lang]['positive'] += 1
         else:
-            # 기존 방식: 타임스탬프 컷오프
+            # 출시 4일 이상: 타임스탬프 컷오프 방식
             cutoff_ts = int((datetime.now() - timedelta(days=recent_days_val)).timestamp())
             sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&num_per_page=100&purchase_type=all")
             cursor = "*"
@@ -210,9 +213,10 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
     else:
         recent_total, recent_custom_desc = sum_total, all_desc
 
-    # ── 2차: 글로벌 통계표 빌드 (전체 30개 언어 통계 기반) ───────────────
-    # 이 단계가 먼저 완성되어야 아래 언어 선정의 근거가 됨
-
+    # ══════════════════════════════════════════════════════════════════════
+    # 2차: 글로벌 통계표 빌드
+    # 이 단계 완료 후 언어 선정의 근거로 사용
+    # ══════════════════════════════════════════════════════════════════════
     def build_reg_table(lang_data, total):
         reg_stat = {}
         for l, s in lang_data.items():
@@ -240,29 +244,53 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
 
     table_data_all = build_lang_table(lang_stats_all_dict, sum_total)
 
-    # ── [4번 수정] 언어 선정 로직 재설계 ─────────────────────────────────
-    # 3차: 권역별 세부 평가용 → 각 권역의 대표 언어 1개 (리뷰 원문 20개)
-    # 4차: 국가별 원문 분석용 → 누적 TOP3 + koreana (중복 시 3개), 리뷰 원문 40개
-
-    # 4차 대상: table_data_all(전체 통계)에서 이미 순위가 매겨진 결과 활용
-    # 최소 표본 기준: 전체의 1% 이상 또는 최소 10개 이상 언어만 대상
-    min_review_threshold = max(10, int(sum_total * 0.01))
-    ranked_langs = [r['lang_with_flag'] for r in table_data_all
-                    if next((s['total'] for l, s in lang_stats_all_dict.items()
-                             if get_lang_name(l) == r['lang_with_flag']), 0) >= min_review_threshold]
-    # lang_with_flag → lang_code 역매핑
+    # lang_with_flag → lang_code 역매핑 (이후 선정 로직에서 공통 사용)
     flag_to_code = {get_lang_name(l): l for l in lang_stats_all_dict.keys()}
 
-    # 누적 TOP3 언어 코드 (순위대로)
+    # ══════════════════════════════════════════════════════════════════════
+    # 언어별 역할 선정
+    # ══════════════════════════════════════════════════════════════════════
+
+    # ── [주요 요약 여론용] 전체 비중 80% 커버까지 언어 추가, 각 20개 ──────
+    # 근거: 전체 유저 여론의 대표성 확보. "이 분석은 전체 리뷰의 N%를 커버"
+    # 최소 표본 기준: 전체의 1% 이상 OR 10개 이상
+    min_threshold = max(10, int(sum_total * 0.01))
+    summary_langs = []
+    cumulative_ratio = 0.0
+    for row in table_data_all:
+        code = flag_to_code.get(row['lang_with_flag'])
+        if not code or code not in lang_stats_all_dict: continue
+        if lang_stats_all_dict[code]['total'] < min_threshold: continue
+        summary_langs.append(code)
+        cumulative_ratio += lang_stats_all_dict[code]['total'] / sum_total
+        if cumulative_ratio >= 0.80:
+            break
+    summary_coverage = round(cumulative_ratio * 100, 1)  # 실제 커버리지 (표시용)
+
+    # ── [권역별 세부 평가용] 권역당 상위 2개 언어, 각 15개 ───────────────
+    # 근거: 권역 내 단일 언어에 편향되지 않고 권역 전체 여론을 대표
+    # 예) 아시아: 중국어(1위) + 한국어(2위) → 동아시아 전반 커버
+    region_langs = {}  # {lang_code: 15}
+    for region_prefix in ["아시아", "영미/유럽권", "CIS", "중남미", "중동/기타"]:
+        langs_in_region = [
+            l for l in lang_stats_all_dict.keys()
+            if region_prefix in REGION_MAP.get(l, '')
+        ]
+        if not langs_in_region: continue
+        top2 = sorted(langs_in_region, key=lambda x: lang_stats_all_dict[x]['total'], reverse=True)[:2]
+        for lang in top2:
+            region_langs[lang] = 15  # limit
+
+    # ── [국가별 원문 분석용] 누적 TOP3 + koreana, 각 40개 ────────────────
+    # 근거: 리뷰 비중 기준 대표 국가 여론 + 한국어 고정 포함
     top3_lang_codes = []
-    for flag_name in [r['lang_with_flag'] for r in table_data_all]:
-        code = flag_to_code.get(flag_name)
+    for row in table_data_all:
+        code = flag_to_code.get(row['lang_with_flag'])
         if code and code in lang_stats_all_dict:
             top3_lang_codes.append(code)
         if len(top3_lang_codes) >= 3:
             break
 
-    # country_analysis 대상: TOP3 + koreana (순서 보장, 중복 제거)
     country_langs_ordered = []
     for code in top3_lang_codes:
         if code not in country_langs_ordered:
@@ -270,37 +298,60 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
     if "koreana" not in country_langs_ordered:
         country_langs_ordered.append("koreana")
 
-    # region_analysis 대상: 각 권역별 리뷰 수 1위 언어 (권역 커버리지 확보)
-    region_langs = set()
-    for region_prefix in ["아시아", "영미/유럽권", "CIS", "중남미", "중동/기타"]:
-        langs_in_region = [l for l in lang_stats_all_dict.keys() if region_prefix in REGION_MAP.get(l, '')]
-        if langs_in_region:
-            top_lang = sorted(langs_in_region, key=lambda x: lang_stats_all_dict[x]['total'], reverse=True)[0]
-            region_langs.add(top_lang)
+    # ── [이슈픽용] 최근 기간 비중 상위 5개 언어, 각 10개 (최근 기간 리뷰) ─
+    # 근거: 현재 활발한 언어권의 최신 이슈를 놓치지 않기 위함
+    # lang_stats_30_dict: 최근 기간에 실제 리뷰가 작성된 언어만 포함
+    issue_langs = {}  # {lang_code: 10}
+    if lang_stats_30_dict:
+        top5_recent = sorted(lang_stats_30_dict.keys(),
+                             key=lambda x: lang_stats_30_dict[x]['total'], reverse=True)[:5]
+        for lang in top5_recent:
+            issue_langs[lang] = 10
 
+    # ── 전체 수집 대상 통합 및 limit 결정 ────────────────────────────────
+    # 동일 언어가 여러 역할에 걸칠 경우 가장 높은 limit 적용
+    # 우선순위: country(40) > summary(20) > region(15) > issue(10)
+    lang_limit_map = {}  # {lang_code: limit}
+
+    for lang in issue_langs:
+        lang_limit_map[lang] = max(lang_limit_map.get(lang, 0), 10)
+    for lang in region_langs:
+        lang_limit_map[lang] = max(lang_limit_map.get(lang, 0), 15)
+    for lang in summary_langs:
+        lang_limit_map[lang] = max(lang_limit_map.get(lang, 0), 20)
+    for lang in country_langs_ordered:
+        lang_limit_map[lang] = max(lang_limit_map.get(lang, 0), 40)
+
+    # ══════════════════════════════════════════════════════════════════════
     # 리뷰 원문 수집
-    # country_langs: 40개씩 (상세 원문 분석용)
-    # region_langs: 20개씩 (권역 트렌드 파악용, country와 겹치는 언어는 40개 유지)
-    all_fetch_langs = set(country_langs_ordered) | region_langs
+    # ══════════════════════════════════════════════════════════════════════
     filtered_all = {}
     filtered_recent = {}
     all_reviews_for_pt = []
 
-    for lang in all_fetch_langs:
-        fetch_limit = 40 if lang in country_langs_ordered else 20
+    for lang, fetch_limit in lang_limit_map.items():
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None, limit=fetch_limit)
         all_reviews_for_pt.extend([{'pt': r['playtime'], 'pos': r['is_positive']} for r in all_revs])
         lang_label = get_lang_name(lang)
-        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}"
-                               for r in all_revs]
+        filtered_all[lang] = [
+            f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}"
+            for r in all_revs
+        ]
         if recent_days_val:
-            rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val, limit=fetch_limit)
-            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}"
-                                     for r in rec_revs]
+            # 이슈픽용 언어는 최근 기간 리뷰만 별도로 더 수집
+            issue_limit = issue_langs.get(lang, 0)
+            rec_limit = max(fetch_limit, issue_limit)
+            rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val, limit=rec_limit)
+            filtered_recent[lang] = [
+                f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}"
+                for r in rec_revs
+            ]
         else:
             filtered_recent[lang] = filtered_all[lang]
 
-    # 플레이타임 분석
+    # ══════════════════════════════════════════════════════════════════════
+    # 플레이타임 분석 (현행 유지)
+    # ══════════════════════════════════════════════════════════════════════
     all_reviews_for_pt.sort(key=lambda x: x['pt'])
     n_len = len(all_reviews_for_pt)
     if n_len >= 4:
@@ -331,7 +382,11 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
         "norm_avg": norm_avg, "norm_total": norm_tot, "norm_desc": norm_desc,
         "core_avg": c_avg, "core_total": c_tot, "core_desc": c_desc,
         "collection_period": period_str,
-        # country_langs_ordered: AI 프롬프트에서 순서 보장용으로 전달
+        # AI 프롬프트에 역할별 언어 목록 전달
         "country_langs_ordered": country_langs_ordered,
+        "summary_langs": summary_langs,
+        "summary_coverage": summary_coverage,
+        "region_langs": list(region_langs.keys()),
+        "issue_langs": list(issue_langs.keys()),
     }
     return filtered_all, filtered_recent, store_stats
