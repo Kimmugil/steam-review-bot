@@ -285,8 +285,21 @@ def render_report_tabs():
         sec("sec_country")
         st.markdown(f'<p style="font-size:14px;color:rgba(128,128,128,0.7);margin-bottom:1rem;">{ui.TEXTS["country_analysis_desc"]}</p>', unsafe_allow_html=True)
 
-        for country in ins.get('country_analysis',[]):
-            st.markdown(f'<p style="font-size:17px;font-weight:500;margin-top:1.5rem;margin-bottom:0.75rem;">🚩 {strip_md(country.get("country",""))}</p>', unsafe_allow_html=True)
+        # [1번 수정] country_analysis는 AI가 country_langs_ordered 순서대로 생성하도록 프롬프트에서 보장됨
+        # 화면에는 순위 뱃지를 붙여서 TOP1~3 + 한국어 순서임을 명시
+        country_langs_ordered = stats.get('country_langs_ordered', [])
+        countries = ins.get('country_analysis', [])
+        for idx, country in enumerate(countries):
+            country_name = strip_md(country.get("country", ""))
+            # 순위 뱃지 표시
+            if idx < len(country_langs_ordered):
+                rank_label = f"TOP {idx+1}" if idx < 3 else "🇰🇷 한국어"
+                badge_bg = "#E6F1FB" if idx < 3 else "#F3F0FF"
+                badge_color = "#0C447C" if idx < 3 else "#5B3FB5"
+                rank_badge = f'<span style="background:{badge_bg};color:{badge_color};font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px;margin-right:8px;">{rank_label}</span>'
+            else:
+                rank_badge = ''
+            st.markdown(f'<p style="font-size:17px;font-weight:500;margin-top:1.5rem;margin-bottom:0.75rem;">🚩 {rank_badge}{country_name}</p>', unsafe_allow_html=True)
             for cat in sorted(country.get('categories',[]), key=lambda x: get_cat_sort_key(x.get('name',''))):
                 n = cat.get('name','')
                 if n:
