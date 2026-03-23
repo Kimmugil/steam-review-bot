@@ -73,15 +73,83 @@ TEXTS = {
 
     "period_toggle_why": "왜 이 기간으로 분석했나요?",
 
-    "region_lang_tooltip_html": """🌏 <b>동아시아</b>: 한국어, 중국어(간체·번체), 일본어<br>
-                🌴 <b>동남아시아</b>: 태국어, 베트남어, 인도네시아어<br>
-                🌐 <b>영미권</b>: 영어<br>
-                🏰 <b>서유럽</b>: 프랑스어, 독일어, 이탈리아어, 스페인어, 포르투갈어, 네덜란드어<br>
-                🏔 <b>동유럽</b>: 폴란드어, 체코어, 헝가리어, 루마니아어, 불가리아어, 그리스어<br>
-                🌨 <b>북유럽</b>: 스웨덴어, 덴마크어, 노르웨이어, 핀란드어<br>
-                🧊 <b>CIS(러시아권)</b>: 러시아어, 우크라이나어<br>
-                💃 <b>중남미</b>: 스페인어(중남미), 포르투갈어(브라질)<br>
-                🕌 <b>중동·기타</b>: 튀르키예어, 아랍어""",
+    "region_lang_tooltip_html": """
+<table style="width:100%;border-collapse:collapse;font-size:13px;">
+<thead>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.2);">
+  <th style="text-align:left;padding:6px 10px;color:rgba(128,128,128,0.7);font-weight:500;">권역</th>
+  <th style="text-align:left;padding:6px 10px;color:rgba(128,128,128,0.7);font-weight:500;">포함 언어</th>
+  <th style="text-align:left;padding:6px 10px;color:rgba(128,128,128,0.7);font-weight:500;">이렇게 나눈 이유</th>
+</tr>
+</thead>
+<tbody>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🌏 동아시아</td>
+  <td style="padding:7px 10px;">한국어, 중국어(간체·번체), 일본어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">공통된 동아시아 게임 문화권. 스토리·캐릭터 중시 경향 유사</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🌴 동남아시아</td>
+  <td style="padding:7px 10px;">태국어, 베트남어, 인도네시아어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">모바일 친화적·가격 민감도 높음. 동아시아와 소비 패턴 구분 필요</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🌐 영미권</td>
+  <td style="padding:7px 10px;">영어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">전 세계 공용어로 비중이 압도적. 유럽권과 묶으면 왜곡됨</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🏰 서유럽</td>
+  <td style="padding:7px 10px;">프랑스어, 독일어, 이탈리아어, 스페인어, 포르투갈어, 네덜란드어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">구매력 높고 그래픽·완성도 기준이 엄격한 편</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🏔 동유럽</td>
+  <td style="padding:7px 10px;">폴란드어, 체코어, 헝가리어, 루마니아어, 불가리아어, 그리스어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">서유럽보다 가격 민감도 높고 게임 소비 패턴 차이 있음</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🌨 북유럽</td>
+  <td style="padding:7px 10px;">스웨덴어, 덴마크어, 노르웨이어, 핀란드어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">인디·PC 게임 선호, 구매력 최상위. 독립적 성향 뚜렷</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">🧊 CIS(러시아권)</td>
+  <td style="padding:7px 10px;">러시아어, 우크라이나어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">VPN·접속 이슈, 현지화 민감도 별도 파악 필요</td>
+</tr>
+<tr style="border-bottom:1px solid rgba(128,128,128,0.08);">
+  <td style="padding:7px 10px;white-space:nowrap;">💃 중남미</td>
+  <td style="padding:7px 10px;">스페인어(중남미), 포르투갈어(브라질)</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">세일 반응 높음, 가격 민감도 강함</td>
+</tr>
+<tr>
+  <td style="padding:7px 10px;white-space:nowrap;">🕌 중동·기타</td>
+  <td style="padding:7px 10px;">튀르키예어, 아랍어</td>
+  <td style="padding:7px 10px;color:rgba(128,128,128,0.75);">아랍어 지원 등 현지화 이슈가 별도로 나타남</td>
+</tr>
+</tbody>
+</table>""",
+
+    "notion_region_tooltip_text": """9대 권역 분류 기준 및 이유:
+🌏 동아시아 — 한국어, 중국어(간체·번체), 일본어
+    → 동아시아 게임 문화권, 스토리·캐릭터 중시 경향 유사
+🌴 동남아시아 — 태국어, 베트남어, 인도네시아어
+    → 모바일 친화·가격 민감도 높음, 동아시아와 소비 패턴 구분 필요
+🌐 영미권 — 영어
+    → 전 세계 공용어로 비중이 압도적. 유럽권과 묶으면 데이터 왜곡
+🏰 서유럽 — 프랑스어, 독일어, 이탈리아어, 스페인어, 포르투갈어, 네덜란드어
+    → 구매력 높고 그래픽·완성도 기준이 엄격한 편
+🏔 동유럽 — 폴란드어, 체코어, 헝가리어, 루마니아어, 불가리아어, 그리스어
+    → 서유럽보다 가격 민감도 높고 소비 패턴 차이 있음
+🌨 북유럽 — 스웨덴어, 덴마크어, 노르웨이어, 핀란드어
+    → 인디·PC 게임 선호, 구매력 최상위, 독립적 성향 뚜렷
+🧊 CIS(러시아권) — 러시아어, 우크라이나어
+    → VPN·접속 이슈, 현지화 민감도 별도 파악 필요
+💃 중남미 — 스페인어(중남미), 포르투갈어(브라질)
+    → 세일 반응 높음, 가격 민감도 강함
+🕌 중동·기타 — 튀르키예어, 아랍어
+    → 아랍어 지원 등 현지화 이슈가 별도로 나타남""",
 
     "sec_trend": "📈 전체 여론 동향",
     "sec_category": "📁 카테고리별 상세 평가",
@@ -335,7 +403,7 @@ TEXTS = {
 
 답변 작성 규칙:
 1. 분석 결과에 있으면 거기서 먼저 답변할 것.
-2. 분석 결과에 없더라도 [수집된 전체 리뷰 원문]에 있으면 직접 찾아서 답변할 것. (예: 특정 주제에 대한 리뷰 원문 인용 요청 등)
+2. 분석 결과에 없더라도 [수집된 전체 리뷰 원문]에 있으면 직접 찾아서 답변할 것. (예: 특정 주제 원문 인용 요청 등)
 3. 두 곳 모두에서 확인할 수 없는 내용은 "제공된 데이터에서는 확인이 어렵습니다"라고 할 것.
 4. 팩트 기반으로 3~4문장 이내로 핵심만 대답할 것. (리뷰 원문 인용 시 예외 허용)
 5. 노션에 텍스트로 들어갈 예정이므로 마크다운 볼드체 등 특수기호는 가급적 사용하지 말 것.
