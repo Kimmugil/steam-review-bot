@@ -3,7 +3,7 @@ import urllib.parse
 import re
 import concurrent.futures
 from datetime import datetime, timedelta
-import ui_texts as ui  
+import ui_texts as ui
 from config import LANG_MAP, SCORE_MAP, REGION_MAP
 
 def get_lang_name(lang_code):
@@ -44,7 +44,7 @@ def get_steam_game_info(game_input):
         game_data = data[app_id]['data']
         exact_name = game_data['name'].encode('utf-8', 'ignore').decode('utf-8')
         header_image = game_data.get('header_image', '')
-        try: 
+        try:
             raw_date = game_data['release_date']['date']
             clean_date = re.sub(r'[^\d\s-]', '', raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", ""))
             release_date = datetime.strptime(clean_date.strip(), "%Y-%m-%d")
@@ -57,19 +57,15 @@ def fetch_latest_news(app_id):
         res = requests.get(sanitize_url(f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json"), timeout=5)
         news_items = res.json().get('appnews', {}).get('newsitems', [])
         if not news_items: return None, None, None, None, None
-        
+
         def parse_item(item):
             date_str = datetime.fromtimestamp(item.get('date', 0)).strftime('%Y-%m-%d')
             contents = item.get('contents', '')
-            
-            # 💡 [업데이트] 정규식으로 HTML 및 BBCode 내에서 첫 번째 이미지 URL 추출
             img_url = None
             img_match_html = re.search(r'<img[^>]+src=["\'](http[^"\']+)["\']', contents, re.IGNORECASE)
             img_match_bb = re.search(r'\[img\](http.*?)\[/img\]', contents, re.IGNORECASE)
-            
             if img_match_html: img_url = img_match_html.group(1)
             elif img_match_bb: img_url = img_match_bb.group(1)
-            
             return item['title'], contents, item['url'], date_str, img_url
 
         for item in news_items:
@@ -80,12 +76,11 @@ def fetch_latest_news(app_id):
 def get_smart_period(release_date):
     now = datetime.now()
     days_since = (now - release_date).days
-    
-    if days_since < 6: 
+    if days_since < 6:
         days = 3
         label = ui.TEXTS["steam_period_early"]
         reason = ui.TEXTS["steam_period_early_desc"]
-    elif days_since < 40: 
+    elif days_since < 40:
         days = days_since // 2
         label = ui.TEXTS["steam_period_mid"].format(days)
         reason = ui.TEXTS["steam_period_mid_desc"]
@@ -93,7 +88,6 @@ def get_smart_period(release_date):
         days = 30
         label = ui.TEXTS["steam_period_long"]
         reason = ui.TEXTS["steam_period_long_desc"]
-        
     start_date = now - timedelta(days=days)
     period_str = f"{start_date.strftime('%Y.%m.%d')} ~ {now.strftime('%Y.%m.%d')}"
     return days, label, reason, period_str
@@ -104,7 +98,7 @@ def fetch_lang_reviews(app_id, lang, day_range=None):
     base_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter={filter_type}&language={lang}&num_per_page=100&purchase_type=all")
     if day_range: base_url += f"&day_range={day_range}"
     cursor = "*"
-    for _ in range(3): 
+    for _ in range(3):
         try:
             res = requests.get(base_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=10).json()
             if not res.get('reviews'): break
@@ -129,7 +123,7 @@ def _fetch_single_lang_stats(app_id, lang):
 def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
     lang_stats_all_dict = {}
     sum_total, sum_pos = 0, 0
-    
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         futures = [executor.submit(_fetch_single_lang_stats, app_id, lang) for lang in LANG_MAP.keys()]
         for future in concurrent.futures.as_completed(futures):
@@ -145,8 +139,10 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
         try:
             summ = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json().get('query_summary', {})
             score_code = summ.get('review_score', 0)
-            if score_code == 0 and summ.get('total_reviews', 0) > 0: official_desc = calculate_custom_score(summ.get('total_positive', 0) / summ.get('total_reviews', 0), summ.get('total_reviews', 0))
-            else: official_desc = SCORE_MAP.get(score_code, ui.TEXTS["steam_eval_none"])
+            if score_code == 0 and summ.get('total_reviews', 0) > 0:
+                official_desc = calculate_custom_score(summ.get('total_positive', 0) / summ.get('total_reviews', 0), summ.get('total_reviews', 0))
+            else:
+                official_desc = SCORE_MAP.get(score_code, ui.TEXTS["steam_eval_none"])
         except: official_desc = ui.TEXTS["steam_eval_none"]
 
     all_desc = calculate_custom_score(sum_pos / sum_total, sum_total) if sum_total > 0 else ui.TEXTS["steam_eval_none"]
@@ -166,7 +162,7 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
                 stop_fetching = False
                 for r in revs:
                     if r.get('timestamp_created', 0) < cutoff_ts:
-                        stop_fetching = True; break 
+                        stop_fetching = True; break
                     recent_total += 1
                     if r.get('voted_up', False): recent_pos += 1
                     r_lang = r.get('language')
@@ -179,12 +175,16 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
             except: break
         if recent_total > 0: recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
         lang_stats_30_dict = {k: v for k, v in lang_stats_30_dict.items() if v['total'] > 0}
-    else: recent_total, recent_custom_desc = sum_total, all_desc
+    else:
+        recent_total, recent_custom_desc = sum_total, all_desc
 
+    # [버그 수정] 권역 필터 문자열 이모지 포함 여부 무관하게 매칭
+    # 기존: REGION_MAP 값 "🌏 아시아" 와 "아시아" 가 == 비교로 매칭 안 됨
+    # 수정: region_prefix 가 REGION_MAP 값에 포함(in)되는지로 판단
     target_langs = set([l[0] for l in sorted(lang_stats_all_dict.items(), key=lambda x: x[1]['total'], reverse=True)[:3]])
     target_langs.add("koreana")
-    for region in ["아시아", "영미/유럽권", "CIS", "중남미", "중동/기타"]:
-        langs_in_region = [l for l in lang_stats_all_dict.keys() if REGION_MAP.get(l, '기타') == region]
+    for region_prefix in ["아시아", "영미/유럽권", "CIS", "중남미", "중동/기타"]:
+        langs_in_region = [l for l in lang_stats_all_dict.keys() if region_prefix in REGION_MAP.get(l, '')]
         if langs_in_region:
             top_lang_in_reg = sorted(langs_in_region, key=lambda x: lang_stats_all_dict[x]['total'], reverse=True)[0]
             target_langs.add(top_lang_in_reg)
@@ -194,14 +194,12 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
         all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
         all_reviews_for_pt.extend([{'pt': r['playtime'], 'pos': r['is_positive']} for r in all_revs])
         lang_label = get_lang_name(lang)
-        # [v2.2.5] AI 분석 대표성 향상을 위해 언어별 전달 리뷰 수를 20개 → 40개로 상향
-        # [v2.2.6] 리뷰 태그를 권역명 → 언어/국가명으로 변경 (원문 인용 시 국가명 노출)
         filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}" for r in all_revs][:40]
         if recent_days_val:
             rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val)
-            # [v2.2.5] AI 분석 대표성 향상을 위해 언어별 전달 리뷰 수를 20개 → 40개로 상향
             filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}" for r in rec_revs][:40]
-        else: filtered_recent[lang] = filtered_all[lang]
+        else:
+            filtered_recent[lang] = filtered_all[lang]
 
     all_reviews_for_pt.sort(key=lambda x: x['pt'])
     n_len = len(all_reviews_for_pt)
@@ -212,7 +210,7 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
         cores = all_reviews_for_pt[q3:]
     else:
         newbies, normals, cores = all_reviews_for_pt, [], []
-    
+
     def calc_pt_stats(group):
         if not group: return 0, 0, ui.TEXTS["steam_eval_none"]
         pos = sum(1 for x in group if x['pos'])
@@ -229,21 +227,21 @@ def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
             if rg not in reg_stat: reg_stat[rg] = {"total": 0, "positive": 0}
             reg_stat[rg]["total"] += s["total"]
             reg_stat[rg]["positive"] += s["positive"]
-        return [{"rank": f"{i+1}위", "region": rg, "count": s['total'], "ratio": f"{(s['total']/total)*100:.1f}%" if total>0 else "0%", "pos_ratio": f"{(s['positive']/s['total'])*100:.1f}%", "neg_ratio": f"{((s['total']-s['positive'])/s['total'])*100:.1f}%", "eval": calculate_custom_score(s['positive']/s['total'], s['total'])} for i, (rg, s) in enumerate(sorted(reg_stat.items(), key=lambda x: x[1]['total'], reverse=True))]
+        return [{"rank": f"{i+1}위", "region": rg, "count": s['total'], "ratio": f"{(s['total']/total)*100:.1f}%" if total > 0 else "0%", "pos_ratio": f"{(s['positive']/s['total'])*100:.1f}%", "neg_ratio": f"{((s['total']-s['positive'])/s['total'])*100:.1f}%", "eval": calculate_custom_score(s['positive']/s['total'], s['total'])} for i, (rg, s) in enumerate(sorted(reg_stat.items(), key=lambda x: x[1]['total'], reverse=True))]
 
     def build_lang_table(lang_data, total):
-        return [{"rank": f"{i+1}위", "lang": get_lang_name(l).split(" ", 1)[-1].strip(), "lang_with_flag": get_lang_name(l), "count": s['total'], "ratio": f"{(s['total']/total)*100:.1f}%" if total>0 else "0%", "pos_ratio": f"{(s['positive']/s['total'])*100:.1f}%", "neg_ratio": f"{((s['total']-s['positive'])/s['total'])*100:.1f}%", "eval": calculate_custom_score(s['positive']/s['total'], s['total'])} for i, (l, s) in enumerate(sorted(lang_data.items(), key=lambda x: x[1]['total'], reverse=True))]
+        return [{"rank": f"{i+1}위", "lang": get_lang_name(l).split(" ", 1)[-1].strip(), "lang_with_flag": get_lang_name(l), "count": s['total'], "ratio": f"{(s['total']/total)*100:.1f}%" if total > 0 else "0%", "pos_ratio": f"{(s['positive']/s['total'])*100:.1f}%", "neg_ratio": f"{((s['total']-s['positive'])/s['total'])*100:.1f}%", "eval": calculate_custom_score(s['positive']/s['total'], s['total'])} for i, (l, s) in enumerate(sorted(lang_data.items(), key=lambda x: x[1]['total'], reverse=True))]
 
     store_stats = {
         "official_desc": official_desc, "all_desc": all_desc, "all_total": sum_total,
         "recent_desc": recent_custom_desc, "recent_total": recent_total,
-        "table_data_all": build_lang_table(lang_stats_all_dict, sum_total), 
-        "table_data_30": build_lang_table(lang_stats_30_dict, sum([v['total'] for v in lang_stats_30_dict.values()])), 
+        "table_data_all": build_lang_table(lang_stats_all_dict, sum_total),
+        "table_data_30": build_lang_table(lang_stats_30_dict, sum([v['total'] for v in lang_stats_30_dict.values()])),
         "table_data_region": build_reg_table(lang_stats_all_dict, sum_total),
         "days_since_release": (datetime.now() - release_date).days,
         "newbie_avg": n_avg, "newbie_total": n_tot, "newbie_desc": n_desc,
         "norm_avg": norm_avg, "norm_total": norm_tot, "norm_desc": norm_desc,
         "core_avg": c_avg, "core_total": c_tot, "core_desc": c_desc,
-        "collection_period": period_str 
+        "collection_period": period_str
     }
     return filtered_all, filtered_recent, store_stats
