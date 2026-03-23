@@ -1,327 +1,247 @@
-# ui_texts.py
+import requests
+import urllib.parse
+import re
+import concurrent.futures
+from datetime import datetime, timedelta
+import ui_texts as ui
+from config import LANG_MAP, SCORE_MAP, REGION_MAP
 
-TEXTS = {
-    # ── 공통 UI ────────────────────────────────────────────────────────────
-    "main_title": "스팀 리뷰 탈곡기",
-    "dev_banner": "🚧 개발 환경 (DEV MODE) - 테스트 데이터를 자유롭게 활용하세요.",
-    "api_error": "🚨 API 키 설정이 누락되었습니다.",
-    "env_label": "### 📍 환경: `{}`",
-    "recent_history_title": "### 📚 최근 분석 기록",
-    "no_history": "기록된 이력이 없습니다.",
-    "click_history": "👇 게임명을 클릭하면 과거 분석을 다시 볼 수 있습니다.",
-    "btn_history_item": "🎮 {}",
-    "version_label": "Version: {}",
-    "update_history_title": "🛠️ 업데이트 이력",
-    "report_link": "👉 통합 리포트 열람",
+def get_lang_name(lang_code):
+    return LANG_MAP.get(lang_code, f"🏳️ {lang_code}")
 
-    # ── 스텝 인디케이터 ────────────────────────────────────────────────────
-    "step_1": "분석 대상 입력",
-    "step_2": "리포트 검수",
-    "step_3": "발행 완료",
+def calculate_custom_score(pos_ratio, total):
+    if total == 0: return ui.TEXTS["steam_eval_none"]
+    if pos_ratio >= 0.95: return ui.TEXTS["steam_eval_op"]
+    elif pos_ratio >= 0.80: return ui.TEXTS["steam_eval_vp"]
+    elif pos_ratio >= 0.70: return ui.TEXTS["steam_eval_mp"]
+    elif pos_ratio >= 0.40: return ui.TEXTS["steam_eval_mixed"]
+    elif pos_ratio >= 0.20: return ui.TEXTS["steam_eval_mn"]
+    elif pos_ratio >= 0.01: return ui.TEXTS["steam_eval_vn"]
+    return ui.TEXTS["steam_eval_on"]
 
-    # ── 버튼 ───────────────────────────────────────────────────────────────
-    "btn_analyze": "🚜 리뷰 탈곡기 가동하기",
-    "btn_reset": "🔄 노션 발행 없이 다른 게임 분석하기",
-    "btn_reset_after_publish": "🔄 다른 게임 분석하기",
-    "btn_notion": "📤 노션 리포트 최종 발행",
-    "qa_btn": "💬 질문하기",
-    "qa_add_btn": "✅ 리포트에 추가",
+def sanitize_url(url):
+    return "".join(char for char in url if 32 <= ord(char) <= 126).strip()
 
-    # ── Step 0: 입력 화면 ──────────────────────────────────────────────────
-    "step1_title": "확인하고 싶은 게임의 스팀 상점 URL을 넣어주세요.",
-    "step1_caption": "ℹ️ 스팀 상점 페이지의 주소(URL) 전체를 복사해서 붙여넣거나, 주소에 포함된 숫자(App ID)만 입력하셔도 됩니다.",
-    "input_placeholder": "예: https://store.steampowered.com/app/2215430",
-    "prompt_analyze_game": "#### 🌾 **{}** 리뷰를 탈곡합니다.",
-    "prompt_release_date": "이 게임은 {} 스팀에 출시되었습니다.",
-    "warn_invalid_id": "유효한 App ID 또는 주소를 입력해 주세요.",
+def fetch_store_official_rating(app_id):
+    url = f"https://store.steampowered.com/app/{app_id}/?l=korean"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    cookies = {"birthtime": "0", "lastagecheckage": "1-0-1900", "wants_mature_content": "1"}
+    try:
+        res = requests.get(url, headers=headers, cookies=cookies, timeout=10)
+        res.raise_for_status()
+        html = res.text
+        rating_match = re.search(r'<span class="game_review_summary[^>]*>([^<]+)</span>', html)
+        return rating_match.group(1).strip() if rating_match else ui.TEXTS["steam_eval_none"], 0
+    except: return None, None
 
-    # ── Hero 섹션 (탈곡기 소개 이미지) ────────────────────────────────────
-    "hero_image_path": "image/tractor.png",
-    "hero_image_not_found": "💡 image/tractor.png 이미지를 찾을 수 없습니다.",
-    "hero_section_title": "🌾 스팀 리뷰 탈곡해 드립니다.",
-    "hero_section_desc": "(ง •̀_•́)ง 스팀 상점 주소나 App ID를 입력하면, 스팀 유저 리뷰를 탈탈 털어 글로벌 민심을 확인할 수 있습니다.",
+def get_steam_game_info(game_input):
+    app_id = str(game_input).strip()
+    if not app_id.isdigit(): return None, None, None, None
+    try:
+        res = requests.get(sanitize_url(f"https://store.steampowered.com/api/appdetails?appids={app_id}&l=korean"), timeout=10)
+        data = res.json()
+        if not data or app_id not in data or not data[app_id]['success']: return None, None, None, None
+        game_data = data[app_id]['data']
+        exact_name = game_data['name'].encode('utf-8', 'ignore').decode('utf-8')
+        header_image = game_data.get('header_image', '')
+        try:
+            raw_date = game_data['release_date']['date']
+            clean_date = re.sub(r'[^\d\s-]', '', raw_date.replace("년 ", "-").replace("월 ", "-").replace("일", ""))
+            release_date = datetime.strptime(clean_date.strip(), "%Y-%m-%d")
+        except: release_date = datetime(2020, 1, 1)
+        return app_id, exact_name, release_date, header_image
+    except: return None, None, None, None
 
-    # ── 로딩 텍스트 ────────────────────────────────────────────────────────
-    "loading_1": "🔍 게임 기본 정보 확인 중...",
-    "loading_2": "📥 데이터 수집 중...",
-    "loading_3": "🧠 탈곡기 두뇌 풀가동 중...",
-    "loading_error_info": "게임 정보 불러오기 실패",
-    "loading_error_data": "데이터 없음",
-    "status_analyzing": "[{}] 탈곡 중... 🌾",
-    "status_complete": "✅ 완료",
-    "status_error": "에러",
+def fetch_latest_news(app_id):
+    try:
+        res = requests.get(sanitize_url(f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={app_id}&count=5&maxlength=3000&format=json"), timeout=5)
+        news_items = res.json().get('appnews', {}).get('newsitems', [])
+        if not news_items: return None, None, None, None, None
 
-    # ── Step 1: 게임 히어로 (리포트 상단) ─────────────────────────────────
-    "game_hero_released": "출시일",
+        def parse_item(item):
+            date_str = datetime.fromtimestamp(item.get('date', 0)).strftime('%Y-%m-%d')
+            contents = item.get('contents', '')
+            img_url = None
+            img_match_html = re.search(r'<img[^>]+src=["\'](http[^"\']+)["\']', contents, re.IGNORECASE)
+            img_match_bb = re.search(r'\[img\](http.*?)\[/img\]', contents, re.IGNORECASE)
+            if img_match_html: img_url = img_match_html.group(1)
+            elif img_match_bb: img_url = img_match_bb.group(1)
+            return item['title'], contents, item['url'], date_str, img_url
 
-    # ── Step 1: 발행 영역 ──────────────────────────────────────────────────
-    "publish_title_label": "📝 최종 발행 및 다음 스텝",
-    "publish_loading": "노션으로 쏘는 중...",
-    "publish_success": "🎉 리포트 발행 완료!",
-    "publish_link": "생성된 노션 리포트 확인하기",
-    "publish_notion_released": "노션 리포트가 발행되었습니다",
+        for item in news_items:
+            if any(kw in item.get('title', '').lower() for kw in ['update', 'patch', '패치', '업데이트']): return parse_item(item)
+        return parse_item(news_items[0])
+    except: return None, None, None, None, None
 
-    # ── HTML 버튼 CSS 클래스용 ─────────────────────────────────────────────
-    "hbtn_css": ".hbtn{display:block;padding:11px 20px;border-radius:10px;font-size:15px;font-weight:500;text-align:center;text-decoration:none;box-sizing:border-box;}.hbtn-filled{background:#1a1a1a;border:none;color:#fff!important;}",
+def get_smart_period(release_date):
+    now = datetime.now()
+    days_since = (now - release_date).days
+    if days_since < 6:
+        days = 3
+        label = ui.TEXTS["steam_period_early"]
+        reason = ui.TEXTS["steam_period_early_desc"]
+    elif days_since < 40:
+        days = days_since // 2
+        label = ui.TEXTS["steam_period_mid"].format(days)
+        reason = ui.TEXTS["steam_period_mid_desc"]
+    else:
+        days = 30
+        label = ui.TEXTS["steam_period_long"]
+        reason = ui.TEXTS["steam_period_long_desc"]
+    start_date = now - timedelta(days=days)
+    period_str = f"{start_date.strftime('%Y.%m.%d')} ~ {now.strftime('%Y.%m.%d')}"
+    return days, label, reason, period_str
 
-    # ── 탭 레이블 ──────────────────────────────────────────────────────────
-    "tab_1": "📊 주요 요약",
-    "tab_2": "📰 소식 & 이슈",
-    "tab_3": "⏱ 플레이타임",
-    "tab_4": "🌍 글로벌 분석",
-    "tab_5": "🙋 AI 질문",
+def fetch_lang_reviews(app_id, lang, day_range=None):
+    reviews = []
+    filter_type = "recent" if day_range else "all"
+    base_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter={filter_type}&language={lang}&num_per_page=100&purchase_type=all")
+    if day_range: base_url += f"&day_range={day_range}"
+    cursor = "*"
+    for _ in range(3):
+        try:
+            res = requests.get(base_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=10).json()
+            if not res.get('reviews'): break
+            for r in res['reviews']:
+                reviews.append({
+                    "language": lang, "is_positive": r['voted_up'],
+                    "playtime": round(r['author'].get('playtime_at_review', 0) / 60, 1),
+                    "steam_id": str(r['author'].get('steamid', '익명'))[-4:],
+                    "review": r['review'][:400].replace('\n', ' ')
+                })
+            cursor = res.get('cursor', '*')
+            if not cursor: break
+        except: break
+    return reviews
 
-    # ── 섹션 제목 (sec() 함수에서 키로 사용) ──────────────────────────────
-    "sec_trend": "📈 전체 여론 동향",
-    "sec_category": "📁 카테고리별 상세 평가",
-    "sec_news": "📢 최신 소식",
-    "sec_issue": "🚨 주요 이슈 픽",
-    "sec_playtime": "⏱ 플레이타임별 민심 교차 분석",
-    "sec_region": "🗺️ 권역별 세부 평가",
-    "sec_country": "🌍 리뷰 작성 언어별 분석",
-    "sec_stats": "🌐 글로벌 언어 및 권역 통계표",
-    "sec_qa": "🙋 AI에게 추가 질문하기",
+def _fetch_single_lang_stats(app_id, lang):
+    try:
+        res_all = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language={lang}&num_per_page=0&purchase_type=all"), timeout=5).json().get('query_summary', {})
+        return lang, res_all
+    except: return lang, {}
 
-    # ── 기간 안내 ──────────────────────────────────────────────────────────
-    "period_collect": "📅 수집 기간: {}",
-    "period_toggle_why": "왜 이 기간으로 분석했나요?",
-    "date_period_info": "📅 수집 기간: {}  \n(ℹ️ 추출 기준: {})",
+def fetch_steam_reviews(app_id, recent_days_val, release_date, period_str):
+    lang_stats_all_dict = {}
+    sum_total, sum_pos = 0, 0
 
-    # ── 탈곡기 안내 ────────────────────────────────────────────────────────
-    "bot_info_title": "ℹ️ 탈곡기 안내 및 리포트 해석시 유의사항",
-    "bot_info_desc": "본 리포트는 스팀의 유저 리뷰 원문 데이터를 수집하여 AI 텍스트 분석 엔진을 통해 주요 내용을 추출한 결과물입니다. AI는 실수할 수 있음을 고려해 주세요.\n\n리뷰는 유저의 실제 국적이 아닌 '리뷰 작성 시 설정된 언어'를 기준으로 집계됩니다. 따라서 글로벌 공용어인 '영어' 리뷰 비중이 실제 영미권 유저 수보다 높게 나타날 수 있습니다.",
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = [executor.submit(_fetch_single_lang_stats, app_id, lang) for lang in LANG_MAP.keys()]
+        for future in concurrent.futures.as_completed(futures):
+            lang, summ_all = future.result()
+            t_all, p_all = summ_all.get('total_reviews', 0), summ_all.get('total_positive', 0)
+            if t_all > 0:
+                lang_stats_all_dict[lang] = {"total": t_all, "positive": p_all}
+                sum_total += t_all
+                sum_pos += p_all
 
-    # ── 노션 전용 제목 ─────────────────────────────────────────────────────
-    "ai_one_liner_title": "🤖 AI 한줄평",
-    "ai_one_liner_desc": "{} 스팀에 출시된 [{}]에 대한 AI 분석 결과입니다.",
-    "notion_metric_title": "📊 스팀 민심 온도계",
-    "notion_summary_title": "🎯 전체 리뷰 요약",
-    "notion_summary_all": "📈 전체 리뷰로 확인한 주요 여론",
-    "notion_summary_recent": "🔥 {} 주요 여론",
-    "notion_playtime_title": "⏱️ 플레이타임별 여론 교차 분석",
-    "notion_region_title": "🗺️ 권역별 리뷰 분석",
-    "notion_country_title": "🌍 리뷰 작성 언어(국가)별 분석",
-    "notion_table_global_title": "🌐 글로벌 언어 및 권역 통계표",
-    "notion_qa_title": "🙋‍♀️ 추가 문의사항 답변",
-    "notion_news_title": "📢 최신 소식",
-    "notion_issue_pick_title": "🚨 주요 이슈 픽",
-    "notion_category_summary_title": "📁 세부 카테고리 평가",
-    "notion_toggle_guide": "ℹ️ 각 평점 지표별 산출 기준 안내",
-    "notion_toggle_playtime": "ℹ️ 플레이타임 산출 기준 안내",
-    "notion_toggle_region": "ℹ️ 권역 맵핑 기준 안내",
-    "notion_quote_orig": "원문: {}",
-    "notion_quote_ko": "번역: {}",
-    "notion_toggle_quote": "유저 리뷰 원문 보기",
+    official_desc, _ = fetch_store_official_rating(app_id)
+    if not official_desc or official_desc == ui.TEXTS["steam_eval_none"]:
+        try:
+            summ = requests.get(sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&language=all&num_per_page=0&purchase_type=steam"), timeout=5).json().get('query_summary', {})
+            score_code = summ.get('review_score', 0)
+            if score_code == 0 and summ.get('total_reviews', 0) > 0:
+                official_desc = calculate_custom_score(summ.get('total_positive', 0) / summ.get('total_reviews', 0), summ.get('total_reviews', 0))
+            else:
+                official_desc = SCORE_MAP.get(score_code, ui.TEXTS["steam_eval_none"])
+        except: official_desc = ui.TEXTS["steam_eval_none"]
 
-    # ── 평점 툴팁 ──────────────────────────────────────────────────────────
-    "tooltip_official": "스팀 상점을 통해 직접 구매한 유저만 반영된 점수입니다.",
-    "tooltip_all": "키 등록 및 무료 플레이 등 모든 유저를 포함한 포괄적 민심입니다.",
-    "tooltip_playtime": "전체 리뷰를 플레이타임순으로 정렬 후, 하위 25%(뉴비), 중위 50%(일반), 상위 25%(코어)로 분할하여 여론을 비교합니다.",
-    "tooltip_region": "전 세계를 5대 권역으로 맵핑하여 문화권별 여론의 차이를 분석합니다.\n\n🌏 아시아: 한국어, 중국어, 일본어, 태국어 등\n🌍 영미/유럽: 영어, 프랑스어, 독일어 등\n🧊 CIS: 러시아어 등\n💃 중남미: 스페인어(중남미), 포르투갈어(브라질)\n🕌 중동/기타: 튀르키예어, 아랍어 등",
+    all_desc = calculate_custom_score(sum_pos / sum_total, sum_total) if sum_total > 0 else ui.TEXTS["steam_eval_none"]
+    lang_stats_30_dict = {lang: {'total': 0, 'positive': 0} for lang in LANG_MAP.keys()}
+    recent_total, recent_pos = 0, 0
+    recent_custom_desc = ui.TEXTS["steam_eval_none"]
 
-    # ── 종합 브리핑 ────────────────────────────────────────────────────────
-    "summary_briefing": "🎯 종합 여론 브리핑",
+    if recent_days_val:
+        cutoff_ts = int((datetime.now() - timedelta(days=recent_days_val)).timestamp())
+        sample_url = sanitize_url(f"https://store.steampowered.com/appreviews/{app_id}?json=1&filter=recent&language=all&num_per_page=100&purchase_type=all")
+        cursor = "*"
+        for _ in range(50):
+            try:
+                data = requests.get(sample_url + f"&cursor={urllib.parse.quote(cursor)}", timeout=5).json()
+                revs = data.get('reviews', [])
+                if not revs: break
+                stop_fetching = False
+                for r in revs:
+                    if r.get('timestamp_created', 0) < cutoff_ts:
+                        stop_fetching = True; break
+                    recent_total += 1
+                    if r.get('voted_up', False): recent_pos += 1
+                    r_lang = r.get('language')
+                    if r_lang in lang_stats_30_dict:
+                        lang_stats_30_dict[r_lang]['total'] += 1
+                        if r.get('voted_up', False): lang_stats_30_dict[r_lang]['positive'] += 1
+                if stop_fetching: break
+                cursor = data.get('cursor', '*')
+                if not cursor: break
+            except: break
+        if recent_total > 0: recent_custom_desc = calculate_custom_score(recent_pos / recent_total, recent_total)
+        lang_stats_30_dict = {k: v for k, v in lang_stats_30_dict.items() if v['total'] > 0}
+    else:
+        recent_total, recent_custom_desc = sum_total, all_desc
 
-    # ── 이슈 픽 ────────────────────────────────────────────────────────────
-    "issue_pick_desc": "💡 최신 동향 추출 기간 내 작성된 리뷰를 중심으로 도출된 핵심 체크포인트입니다.",
-    "no_issue_pick": "데이터가 부족하거나 유의미한 주요 이슈(논란/체크포인트)가 발견되지 않았습니다.",
+    # [버그 수정] 권역 필터 문자열 이모지 포함 여부 무관하게 매칭
+    # 기존: REGION_MAP 값 "🌏 아시아" 와 "아시아" 가 == 비교로 매칭 안 됨
+    # 수정: region_prefix 가 REGION_MAP 값에 포함(in)되는지로 판단
+    target_langs = set([l[0] for l in sorted(lang_stats_all_dict.items(), key=lambda x: x[1]['total'], reverse=True)[:3]])
+    target_langs.add("koreana")
+    for region_prefix in ["아시아", "영미/유럽권", "CIS", "중남미", "중동/기타"]:
+        langs_in_region = [l for l in lang_stats_all_dict.keys() if region_prefix in REGION_MAP.get(l, '')]
+        if langs_in_region:
+            top_lang_in_reg = sorted(langs_in_region, key=lambda x: lang_stats_all_dict[x]['total'], reverse=True)[0]
+            target_langs.add(top_lang_in_reg)
 
-    # ── 최신 소식 ──────────────────────────────────────────────────────────
-    "no_news": "관련 소식이 없습니다.",
+    filtered_all, filtered_recent, all_reviews_for_pt = {l: [] for l in target_langs}, {l: [] for l in target_langs}, []
+    for lang in target_langs:
+        all_revs = fetch_lang_reviews(app_id, lang, day_range=None)
+        all_reviews_for_pt.extend([{'pt': r['playtime'], 'pos': r['is_positive']} for r in all_revs])
+        lang_label = get_lang_name(lang)
+        filtered_all[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}" for r in all_revs][:40]
+        if recent_days_val:
+            rec_revs = fetch_lang_reviews(app_id, lang, day_range=recent_days_val)
+            filtered_recent[lang] = [f"[{'👍' if r['is_positive'] else '👎'} | 🌐 {lang_label} | ⏱️ {r['playtime']}h] {r['review']}" for r in rec_revs][:40]
+        else:
+            filtered_recent[lang] = filtered_all[lang]
 
-    # ── 플레이타임 ─────────────────────────────────────────────────────────
-    "insight_core_title": "핵심 교차 인사이트",
-    "newbie_title_default": "🌱 뉴비 여론 (하위 25%)",
-    "normal_title_default": "🚶 일반 여론 (중위 50%)",
-    "core_title_default": "💀 코어 여론 (상위 25%)",
-    "sample_opinion": "표본: {:,}개 | 평균 플레이타임: {}시간 | 여론: {}",
+    all_reviews_for_pt.sort(key=lambda x: x['pt'])
+    n_len = len(all_reviews_for_pt)
+    if n_len >= 4:
+        q1, q3 = n_len // 4, n_len * 3 // 4
+        newbies = all_reviews_for_pt[:q1]
+        normals = all_reviews_for_pt[q1:q3]
+        cores = all_reviews_for_pt[q3:]
+    else:
+        newbies, normals, cores = all_reviews_for_pt, [], []
 
-    # ── 권역 분석 ──────────────────────────────────────────────────────────
-    "divergence_insight_title": "권역별 주요 체크포인트",
-    "region_expander": "📍 {} (동향: {})",
-    "keyword_label": "🔑 주요 키워드: {}",
-    "region_lang_tooltip_html": """🌏 <b>아시아</b>: 한국어, 중국어(간체·번체), 일본어, 태국어, 베트남어, 인도네시아어<br>
-                🌍 <b>영미·유럽</b>: 영어, 프랑스어, 독일어, 스페인어, 이탈리아어, 폴란드어, 포르투갈어, 체코어 등<br>
-                🧊 <b>CIS(러시아권)</b>: 러시아어, 우크라이나어<br>
-                💃 <b>중남미</b>: 스페인어(중남미), 포르투갈어(브라질)<br>
-                🕌 <b>중동·기타</b>: 튀르키예어, 아랍어""",
+    def calc_pt_stats(group):
+        if not group: return 0, 0, ui.TEXTS["steam_eval_none"]
+        pos = sum(1 for x in group if x['pos'])
+        return round(sum(x['pt'] for x in group) / len(group), 1), len(group), calculate_custom_score(pos / len(group), len(group))
 
-    # ── 국가별 분석 ────────────────────────────────────────────────────────
-    "country_analysis_desc": "누적 리뷰 작성 언어 상위(TOP) 1위~3위 국가와 '한국어' 리뷰에서 나타난 핵심 의견과 유저 원문을 모아서 보여줍니다.",
+    n_avg, n_tot, n_desc = calc_pt_stats(newbies)
+    norm_avg, norm_tot, norm_desc = calc_pt_stats(normals)
+    c_avg, c_tot, c_desc = calc_pt_stats(cores)
 
-    # ── 통계표 ─────────────────────────────────────────────────────────────
-    "disclaimer_language": "💡 스팀 리뷰 특성상 유저의 실제 국적이 아닌 '리뷰 작성 언어'를 기준으로 분류됩니다. (영어 리뷰 비중이 실제보다 높게 나타날 수 있음)",
-    "table_region_title": "##### 🗺️ 주요 권역별 누적 리뷰 비중",
-    "table_all_title": "##### 🥇 언어별 누적 리뷰 비중 TOP 10",
-    "toggle_all_table": "👀 언어별 누적 리뷰 비중 (전체 보기)",
-    "table_30_title": "##### 🔥 최근 30일 누적 리뷰 언어별 비중 TOP 10",
-    "info_30_days": "ℹ️ 출시일로부터 30일 이후부터 지원하는 표입니다.",
-    "toggle_30_table": "👀 최근 30일 누적 리뷰 비중 (전체보기)",
-    "col_rank": "순위",
-    "col_region": "권역",
-    "col_lang": "언어",
-    "col_count": "리뷰 수",
-    "col_ratio": "비중",
-    "col_pos": "👍 긍정 비율",
-    "col_neg": "👎 부정 비율",
-    "col_eval": "📊 평가 결과",
+    def build_reg_table(lang_data, total):
+        reg_stat = {}
+        for l, s in lang_data.items():
+            rg = REGION_MAP.get(l, f"🌐 {ui.TEXTS['steam_etc']}")
+            if rg not in reg_stat: reg_stat[rg] = {"total": 0, "positive": 0}
+            reg_stat[rg]["total"] += s["total"]
+            reg_stat[rg]["positive"] += s["positive"]
+        return [{"rank": f"{i+1}위", "region": rg, "count": s['total'], "ratio": f"{(s['total']/total)*100:.1f}%" if total > 0 else "0%", "pos_ratio": f"{(s['positive']/s['total'])*100:.1f}%", "neg_ratio": f"{((s['total']-s['positive'])/s['total'])*100:.1f}%", "eval": calculate_custom_score(s['positive']/s['total'], s['total'])} for i, (rg, s) in enumerate(sorted(reg_stat.items(), key=lambda x: x[1]['total'], reverse=True))]
 
-    # ── Q&A ────────────────────────────────────────────────────────────────
-    "qa_desc": "현재 작성된 분석 리포트를 기반으로 궁금한 점을 물어보세요. 마음에 드는 답변은 리포트에 박제할 수 있습니다!",
-    "qa_input_ph": "예: 그래픽 관련 부정적인 여론이 있어?",
-    "qa_loading": "AI가 분석 중입니다...",
+    def build_lang_table(lang_data, total):
+        return [{"rank": f"{i+1}위", "lang": get_lang_name(l).split(" ", 1)[-1].strip(), "lang_with_flag": get_lang_name(l), "count": s['total'], "ratio": f"{(s['total']/total)*100:.1f}%" if total > 0 else "0%", "pos_ratio": f"{(s['positive']/s['total'])*100:.1f}%", "neg_ratio": f"{((s['total']-s['positive'])/s['total'])*100:.1f}%", "eval": calculate_custom_score(s['positive']/s['total'], s['total'])} for i, (l, s) in enumerate(sorted(lang_data.items(), key=lambda x: x[1]['total'], reverse=True))]
 
-    # ── 스팀 평가 분기 기간 ────────────────────────────────────────────────
-    "steam_period_early": "출시 초기",
-    "steam_period_early_desc": "출시 직후 민심을 파악하기 위해 오픈 시점부터의 동향을 분석했습니다.",
-    "steam_period_mid": "최근 {}일",
-    "steam_period_mid_desc": "오픈 초기 노이즈를 배제하기 위해 출시일의 절반인 기간의 동향을 분석했습니다.",
-    "steam_period_long": "최근 30일",
-    "steam_period_long_desc": "서비스가 안정화된 상태로 장기 동향을 분석했습니다.",
-
-    # ── 스팀 평가 문자열 ───────────────────────────────────────────────────
-    "steam_eval_none": "평가 없음",
-    "steam_eval_op": "압도적으로 긍정적",
-    "steam_eval_vp": "매우 긍정적",
-    "steam_eval_mp": "대체로 긍정적",
-    "steam_eval_mixed": "복합적",
-    "steam_eval_mn": "대체로 부정적",
-    "steam_eval_vn": "매우 부정적",
-    "steam_eval_on": "압도적으로 부정적",
-    "steam_eval_play_none": "평가 없음",
-    "steam_etc": "기타",
-
-    # ── AI 프롬프트 ────────────────────────────────────────────────────────
-    "ai_prompt_template": """
-    넌 글로벌 게임 사업 PM이야. '{game_name}'의 스팀 유저 평가 데이터야.{feedback_instruction}
-    
-    🎯 [최우선 절대 강령 - 위반 시 해고]:
-    - 분석 요약이나 내용 어디에서도 '스팀 공식 평가'의 '리뷰 개수'나 '0개', '데이터 부족', '오류' 등의 단어를 절대 언급하지 마. 
-    - 공식 평가는 오직 '상태(예: 복합적, 긍정적 등)'만 참고해서 전체 민심과 비교하는 용도로만 써.
-    - 만약 '0개' 혹은 '데이터 수집 오류' 같은 말을 한 자라도 섞으면 분석 전체가 무효화됨을 명심해.
-    
-    🎯 [필수 선행 지시사항]: 
-    분석을 시작하기 전, 반드시 해당 게임에 대한 배경지식을 인지하고, 이를 바탕으로 리뷰의 맥락을 깊게 해석해. 
-    주의: 검색된 정보 중 유저의 사견은 배제하고 객관적 팩트 위주로 참고할 것.
-    
-    [엄격한 작성 규칙 - 위반 시 시스템 오류 발생]:
-    1. 마크다운 코드 블록 기호(백틱 3개 등) 절대 금지. 오직 순수한 JSON 문자열만 출력할 것.
-    2. 모든 Key와 Value는 쌍따옴표(")로 묶어야 함.
-    3. 배열(List) 요소 사이, 객체(Object) 요소 사이에는 반드시 쉼표(,)를 넣을 것. 마지막 요소 뒤에는 쉼표 금지.
-    4. 리뷰 인용(quote) 시, 텍스트 내의 줄바꿈은 반드시 \\n 으로 처리하고, 쌍따옴표는 \\" 로 이스케이프 처리할 것.
-    5. 한국어가 아닌 모든 외국어 리뷰 인용 시, [원문]을 그대로 적고, 그 아래에 [한국어 번역]을 100% 누락 없이 추가할 것. (한국어 리뷰면 이 줄 생략)
-    6. global_category_summary 작성 시, [긍정] 항목을 모두 먼저 쓰고 그 뒤에 [부정] 항목 나열.
-    7. final_summary_all, final_summary_recent, country_analysis의 summary, 그리고 playtime_analysis의 newbie_summary와 core_summary 항목 맨 앞에 반드시 '[긍정]' 또는 '[부정]' 머리말을 붙일 것. 긍정 항목을 배열 앞쪽에 먼저 나열할 것.
-    8. ai_issue_pick 작성 시 단순 현상 나열이 아니라 그로 인한 인사이트(시사점)를 반드시 포함할 것.
-    9. news_summary는 공지/업데이트의 핵심을 3~4개의 배열 형태로 요약할 것.
-    10. 💡 playtime_analysis: 수집된 리뷰 표본을 플레이타임 기준 하위 25%(뉴비 여론)와 상위 25%(코어 여론)로 양극화하여 분석합니다. 두 그룹 간의 공통/상반된 평가를 comparison_insights에 교차 비교할 것.
-    11. [⚠️중요] 숫자 및 시간 단위(week, month, year, anniversary 등) 번역 시 절대 넘겨짚지 말고 원문 그대로 직역할 것.
-    12. 텍스트 데이터 내부에 마크다운 볼드체(**) 기호를 절대 포함하지 말 것.
-    13. 권역별 주요 키워드: 외국어 명사나 단어가 등장할 경우 반드시 "원문 (한국어 번역)" 형태로 작성.
-    14-1. [⚠️ 절대 규칙] region_analysis의 "region" 필드에는 반드시 아래 5개 권역명 중 하나만 사용할 것. 절대로 국가명(한국, 미국, 러시아 등)을 쓰지 말 것:
-        - 🌏 아시아 (한국어, 중국어, 일본어, 태국어, 베트남어, 인도네시아어 포함)
-        - 🌍 영미·유럽 (영어, 프랑스어, 독일어, 스페인어, 이탈리아어, 폴란드어 등 포함)
-        - 🧊 CIS(러시아권) (러시아어, 우크라이나어 포함)
-        - 💃 중남미 (스페인어(중남미), 포르투갈어(브라질) 포함)
-        - 🕌 중동·기타 (튀르키예어, 아랍어 포함)
-    14-2. 국가별 유저 리뷰 원문 인용 (`country_analysis` 영역):
-        - '권역(아시아 등)'이 아닌 실제 유저가 작성한 언어 기반의 '국가명(예: 러시아, 미국, 중국, 한국)'으로 명시.
-        - 요약(summary)은 1~2문장으로 명확히 요약하며, 빈 배열([]) 절대 금지!!
-        - quote(원문 인용)는 반드시 위 [리뷰 데이터]에서 제공된 실제 리뷰 원문 중, 해당 카테고리 요약과 가장 관련성이 높은 리뷰를 그대로 복사하여 사용할 것.
-        - quote를 절대 임의로 창작하거나 내용을 수정하지 말 것. 반드시 [👍 또는 👎 | 🌐 언어명 | ⏱️ Xh] 태그가 포함된 원문을 그대로 발췌할 것.
-    
-    [출력 JSON 형식]:
-    {json_format}
-    {{
-      "critic_one_liner": "한줄평 (이모지 포함)",
-      "sentiment_analysis": "민심 코멘트 (공식 평점과 전체 평점 간의 차이가 있다면 이에 대한 분석 포함)",
-      "final_summary_all": ["[긍정] 코멘트1", "[부정] 코멘트2"],
-      "final_summary_recent": ["[긍정] 코멘트1", "[부정] 코멘트2"],
-      "ai_issue_pick": ["이슈 현상 및 인사이트 1"],
-      "news_summary": ["공지 요약1"],
-      "playtime_analysis": {{
-        "comparison_insights": ["교차 인사이트1"],
-        "newbie_title": "🌱 뉴비 여론 (하위 25%)", "newbie_summary": ["[긍정] 요약1", "[부정] 요약2"],
-        "normal_title": "🚶 일반 여론 (중위 50%)", "normal_summary": ["[긍정] 요약1", "[부정] 요약2"],
-        "core_title": "💀 코어 여론 (상위 25%)", "core_summary": ["[긍정] 요약1", "[부정] 요약2"]
-      }},
-      "global_category_summary": [{{"category": "[긍정] 카테고리명", "summary": ["[긍정] 요약"]}}],
-      "region_analysis": {{
-        "divergence_insight": "권역별 여론이 상이할 경우 원인 분석 (비슷하면 빈 문자열)",
-        "regions": [
-            {{
-                "region": "반드시 아래 5개 권역 중 하나만 사용: 🌏 아시아 / 🌍 영미·유럽 / 🧊 CIS(러시아권) / 💃 중남미 / 🕌 중동·기타",
-                "trend": "대체로 긍정적 등",
-                "keywords": ["Оптимизация (최적화)", "Story (스토리)"],
-                "categories": [{{"name": "[긍정] 카테고리명", "summary": ["[긍정] 요약"]}}]
-            }}
-        ]
-      }},
-      "country_analysis": [
-        {{
-            "country": "국가명 (예: 러시아, 중국, 한국)",
-            "categories": [{{
-                "name": "[긍정] 또는 [부정] 카테고리명",
-                "summary": ["[긍정] 또는 [부정]으로 시작하는 요약 (빈 배열 절대 금지)"],
-                "quote": {{"original": "원문 (해외 언어인 경우 반드시 원문 삽입)", "korean": "한국어 번역 (한국어 리뷰면 이 줄은 빈 문자열)"}}
-            }}]
-        }}
-      ]
-    }}
-    {backticks}
-    
-    [통계 데이터]
-    - 🛑 스팀 공식 평가 (상점 노출 지표): {official_rating_info}
-    - 📈 전체 누적 평가 (무료/외부키 포함): {all_desc} (총 {all_total}개)
-    - 🔥 {recent_label} 민심 (최근 분석 표본): {recent_desc} (분석 표본 {recent_total}개)
-    - 누적 리뷰 언어 비중: {top_langs_str}
-    - 📊 표본 기준 하위 25% 뉴비 평균 플레이타임: {newbie_avg}시간
-    - 🚶 표본 기준 중위 50% 일반 평균 플레이타임: {norm_avg}시간
-    - 💀 표본 기준 상위 25% 코어 평균 플레이타임: {core_avg}시간
-    {news_text}
-    
-    [리뷰 데이터]
-    {review_text}
-    """,
-
-    # ── [버그 수정] qa_prompt_template 복원
-    # 기존에 ai_analyzer.py에 동일 함수가 2개 선언되어 두 번째(하드코딩)가 덮어써서 이 키가 무시됐음.
-    # ai_analyzer.py에서 중복 함수를 제거하여 이 키가 정상적으로 사용되도록 수정.
-    "qa_prompt_template": """넌 글로벌 게임 사업 PM이야. 이미 작성된 분석 리포트와 데이터를 바탕으로, 팀원의 추가 질문에 빠르고 객관적으로 답변해줘.
-
-[팀원 질문]: {question}
-
-[참고 데이터 - 초기 분석 결과]:
-{insights}
-
-답변 작성 규칙:
-1. 팩트 기반으로 3~4문장 이내로 핵심만 대답할 것.
-2. 제공된 데이터 내에서 유추할 수 없는 내용은 "제공된 데이터에서는 확인이 어렵습니다"라고 할 것.
-3. 노션에 텍스트로 들어갈 예정이므로 마크다운 볼드체 등 특수기호는 가급적 사용하지 말 것.
-""",
-
-    # ── 대기 중 랜덤 메시지 ────────────────────────────────────────────────
-    "WAITING_MESSAGES": [
-        "민첩한 하루 되세요", "( •̀ω•́ )✧",
-        "척추수술 3000만원 척 추 피 세 요 ! ! !",
-        "(๑˃ᴗ˂)ﻭ", "탈곡기가 탈탈탈 탈곡중 탈탈",
-        "이거 생각보다 똑똑한 문제네요",
-        "와,,, 이건 정말 ✌️핵심✌️을 찌르는 리뷰네요.",
-        "이거 느낌이 뭔가 될 것 같은데요 근거는 없습니다",
-        "좋습니다 제 뇌가 납득했습니다",
-        "느낌이 좋지 않습니다",
-        "패치노트에 뭐라고 써야 멋있을까요??? ( •̀ω•́ )✧",
-        "단서를 찾고 있습니다 (ง •̀_•́)ง",
-        "지금 컴퓨터와 진대중입니다",
-        "어제까지는 잘 됐던 것 같은데요;;; 확인해보겠습니다.",
-        "잠깐만요 트랙터가 재시작 중입니다 (๑•̀ㅂ•́)و✧",
-        "지금 많은 생각이 지나가고 있습니다 (｡•̀ᴗ-)✧",
-        "뭔가 큰 게 숨어 있습니다",
-        "상황을 침착하게 정리하고 있습니다",
-        "지금 트랙터가 깊은 생각에 잠겼습니다",
-        "이건 살짝 수상한 상황입니다 ( •̀_•́ )",
-        "좋습니다 이제 문제를 잡으러 가겠습니다 (ง •̀_•́)ง",
-        "잠깐 스트레칭 타임입니다 (ง •̀_•́)ง",
-        "척추수술 3천만원!!! 모두 척 추 피 세 요 ! ! !"
-    ]
-}
+    store_stats = {
+        "official_desc": official_desc, "all_desc": all_desc, "all_total": sum_total,
+        "recent_desc": recent_custom_desc, "recent_total": recent_total,
+        "table_data_all": build_lang_table(lang_stats_all_dict, sum_total),
+        "table_data_30": build_lang_table(lang_stats_30_dict, sum([v['total'] for v in lang_stats_30_dict.values()])),
+        "table_data_region": build_reg_table(lang_stats_all_dict, sum_total),
+        "days_since_release": (datetime.now() - release_date).days,
+        "newbie_avg": n_avg, "newbie_total": n_tot, "newbie_desc": n_desc,
+        "norm_avg": norm_avg, "norm_total": norm_tot, "norm_desc": norm_desc,
+        "core_avg": c_avg, "core_total": c_tot, "core_desc": c_desc,
+        "collection_period": period_str
+    }
+    return filtered_all, filtered_recent, store_stats
