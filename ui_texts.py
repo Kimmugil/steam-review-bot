@@ -254,6 +254,14 @@ TEXTS = {
         - quote(원문 인용)는 반드시 위 [리뷰 데이터]에서 제공된 실제 리뷰 원문 중, 해당 카테고리 요약과 가장 관련성이 높은 리뷰를 그대로 복사하여 사용할 것.
         - quote를 절대 임의로 창작하거나 내용을 수정하지 말 것. 반드시 [👍 또는 👎 | 🌐 언어명 | ⏱️ Xh] 태그가 포함된 원문을 그대로 발췌할 것.
     {country_order_instruction}
+
+    [⚠️ 리뷰 데이터 역할별 사용 규칙]:
+    아래 [리뷰 데이터]는 분석 목적에 따라 섹션이 구분되어 있음. 각 JSON 항목 작성 시 반드시 지정된 섹션의 리뷰만 근거로 사용할 것:
+    - final_summary_all / global_category_summary / playtime_analysis → [전체 여론 동향용 누적 리뷰] 사용
+    - final_summary_recent → [전체 여론 동향용 최근 리뷰] 사용
+    - region_analysis → [권역별 세부 평가용 누적 리뷰] 사용. 해당 섹션에 없는 권역은 "데이터 부족으로 분석 생략"으로 처리
+    - ai_issue_pick → [이슈픽용 최근 리뷰] 만 사용. 최근 기간 리뷰에서만 이슈를 도출할 것
+    - country_analysis → [국가별 원문 분석용 누적 리뷰] 및 [국가별 원문 분석용 최근 리뷰] 사용
     
     [출력 JSON 형식]:
     {json_format}
