@@ -86,10 +86,11 @@ def issue_card(text):
 def quote_box(original, korean=None):
     orig = str(original).replace("<","&lt;").replace(">","&gt;")
     html = '<div style="border-left:2px solid rgba(128,128,128,0.3);padding:10px 14px;margin:10px 0 16px;">'
-    html += f'<div style="font-size:15px;line-height:1.65;color:var(--color-text-secondary);word-break:break-word;white-space:normal;">원문: {orig}</div>'
+    # [버그 수정] 하드코딩 "원문: ", "번역: " → ui_texts 키로 교체
+    html += f'<div style="font-size:15px;line-height:1.65;color:var(--color-text-secondary);word-break:break-word;white-space:normal;">{ui.TEXTS["notion_quote_orig"].format(orig)}</div>'
     if korean:
         ko = str(korean).replace("<","&lt;").replace(">","&gt;")
-        html += f'<div style="font-size:15px;line-height:1.65;color:var(--color-text-secondary);margin-top:7px;word-break:break-word;white-space:normal;">번역: {ko}</div>'
+        html += f'<div style="font-size:15px;line-height:1.65;color:var(--color-text-secondary);margin-top:7px;word-break:break-word;white-space:normal;">{ui.TEXTS["notion_quote_ko"].format(ko)}</div>'
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
@@ -114,19 +115,19 @@ def render_report_tabs():
     with st.expander(ui.TEXTS['bot_info_title']):
         st.markdown(f'<p style="font-size:15px;line-height:1.8;color:var(--color-text-secondary);">{ui.TEXTS["bot_info_desc"]}</p>', unsafe_allow_html=True)
 
+    # [버그 수정] 탭 레이블 하드코딩 → ui_texts 키로 교체
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 주요 요약",
-        "📰 소식 & 이슈",
-        "⏱ 플레이타임",
-        "🌍 글로벌 분석",
-        "🙋 AI 질문",
+        ui.TEXTS["tab_1"],
+        ui.TEXTS["tab_2"],
+        ui.TEXTS["tab_3"],
+        ui.TEXTS["tab_4"],
+        ui.TEXTS["tab_5"],
     ])
 
     # ════════════════════════════════════════════════════
     # Tab 1: 주요 요약
     # ════════════════════════════════════════════════════
     with tab1:
-        # 민심 3지표 — 툴팁 + 기간 정보
         c1, c2, c3 = st.columns(3)
         with c1:
             st.markdown(f'''
@@ -153,12 +154,12 @@ def render_report_tabs():
                 <div style="font-size:13px;color:rgba(128,128,128,0.7);margin-top:5px;">표본 {stats["recent_total"]:,}개</div>
             </div>''', unsafe_allow_html=True)
             if period:
-                st.caption(f"📅 {period}")
-            # ② 기간 토글 → expander 제거, 작은 회색 접힘 캡션으로 교체
+                st.caption(ui.TEXTS["period_collect"].format(period))
+            # [버그 수정] period_toggle_label 키 사용 + <details> 방식으로 expander 크기 문제 우회
             st.markdown(f'''
             <details style="margin-top:4px;">
                 <summary style="font-size:12px;color:rgba(128,128,128,0.6);cursor:pointer;list-style:none;user-select:none;">
-                    ▸ 왜 이 기간으로 분석했나요?
+                    ▸ {ui.TEXTS["period_toggle_why"]}
                 </summary>
                 <div style="font-size:13px;line-height:1.7;color:rgba(128,128,128,0.7);margin-top:6px;padding:8px 10px;background:rgba(128,128,128,0.05);border-radius:6px;">
                     {st.session_state.smart_reason}
@@ -253,20 +254,17 @@ def render_report_tabs():
     # ════════════════════════════════════════════════════
     with tab4:
         sec("sec_region")
-        # 권역별 언어 구성 안내 툴팁
+        # [버그 수정] 권역 언어 안내 하드코딩 → ui_texts "region_lang_tooltip_html" 키로 교체
         st.markdown(f'''
         <details style="margin-bottom:1rem;">
             <summary style="font-size:13px;color:rgba(128,128,128,0.6);cursor:pointer;list-style:none;user-select:none;">
                 ▸ 각 권역에 어떤 언어가 포함되나요?
             </summary>
             <div style="font-size:13px;line-height:1.9;color:rgba(128,128,128,0.75);margin-top:8px;padding:10px 14px;background:rgba(128,128,128,0.05);border-radius:8px;">
-                🌏 <b>아시아</b>: 한국어, 중국어(간체·번체), 일본어, 태국어, 베트남어, 인도네시아어<br>
-                🌍 <b>영미·유럽</b>: 영어, 프랑스어, 독일어, 스페인어, 이탈리아어, 폴란드어, 포르투갈어, 체코어 등<br>
-                🧊 <b>CIS(러시아권)</b>: 러시아어, 우크라이나어<br>
-                💃 <b>중남미</b>: 스페인어(중남미), 포르투갈어(브라질)<br>
-                🕌 <b>중동·기타</b>: 튀르키예어, 아랍어
+                {ui.TEXTS["region_lang_tooltip_html"]}
             </div>
         </details>''', unsafe_allow_html=True)
+
         reg_data = ins.get('region_analysis',{})
         if reg_data.get('divergence_insight'):
             gray_box(ui.TEXTS["divergence_insight_title"], reg_data['divergence_insight'])
