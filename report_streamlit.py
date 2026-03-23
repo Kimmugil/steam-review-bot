@@ -333,11 +333,16 @@ def render_report_tabs():
                     with st.expander("👀 유저 리뷰 원문 보기"):
                         orig = str(quote.get('original','')).replace('<','&lt;').replace('>','&gt;')
                         ko = quote.get('korean') or ''
-                        html = f'<div style="border-left:2px solid rgba(128,128,128,0.3);padding:10px 14px;">'
+                        # 원문에 🇰🇷 한국어 태그가 없으면 외국어 리뷰 → 번역 필요
+                        is_korean_review = '한국어' in str(quote.get('original',''))
+                        html = '<div style="border-left:2px solid rgba(128,128,128,0.3);padding:10px 14px;">'
                         html += f'<div style="font-size:14px;line-height:1.65;color:rgba(128,128,128,0.75);word-break:break-word;">{ui.TEXTS["notion_quote_orig"].format(orig)}</div>'
                         if ko:
                             ko_esc = str(ko).replace('<','&lt;').replace('>','&gt;')
                             html += f'<div style="font-size:14px;line-height:1.65;color:rgba(128,128,128,0.65);margin-top:6px;word-break:break-word;">{ui.TEXTS["notion_quote_ko"].format(ko_esc)}</div>'
+                        elif not is_korean_review:
+                            # 외국어인데 번역이 없는 경우 — AI가 번역을 누락한 케이스
+                            html += '<div style="font-size:13px;color:rgba(128,128,128,0.45);margin-top:6px;font-style:italic;">번역: (AI가 번역을 생성하지 않았습니다)</div>'
                         html += '</div>'
                         st.markdown(html, unsafe_allow_html=True)
 
