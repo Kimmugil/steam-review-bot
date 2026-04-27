@@ -54,15 +54,13 @@ async function getOrCreateGameSheet(appId: string, gameName: string): Promise<st
       serviceAccountEmail
     }),
   });
-  
-  let data;
+
+  const rawText = await response.text();
+  let data: { ok: boolean; spreadsheetId?: string; reused?: boolean; error?: string };
   try {
-    // GAS fetch might return redirect if we don't handle it well, but POST with application/json should work.
-    // Wait, GAS web app responds with redirects for POST sometimes. fetch() follows it.
-    data = await response.json();
-  } catch (err) {
-    const text = await response.text();
-    throw new Error(`GAS fetch failed: ${text}`);
+    data = JSON.parse(rawText);
+  } catch {
+    throw new Error(`GAS fetch failed (invalid JSON): ${rawText.slice(0, 300)}`);
   }
 
   if (!data.ok) {

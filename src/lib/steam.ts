@@ -298,11 +298,7 @@ export async function fetchSteamReviews(
         `https://store.steampowered.com/appreviews/${appId}?json=1&filter=recent&language=all&num_per_page=100&purchase_type=all`
       );
       let cursor = "*";
-      // A: cap at 20 iterations (~2,000 reviews max) instead of 50
-      // C: hard 30-second deadline so popular games can't blow past the Vercel limit
-      const scanDeadline = Date.now() + 30_000;
-      outer: for (let i = 0; i < 20; i++) {
-        if (Date.now() > scanDeadline) break; // C: timeout cutoff
+      outer: for (let i = 0; i < 50; i++) {
         try {
           const res = await fetch(url + `&cursor=${encodeURIComponent(cursor)}`, { headers: STEAM_HEADERS });
           const json = await res.json();

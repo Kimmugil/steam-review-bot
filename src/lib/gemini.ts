@@ -148,6 +148,9 @@ export async function analyzeWithGemini(
   newsData: { title: string | null; contents: string | null },
   feedback?: string
 ): Promise<{ insights: AiInsights | null; error: string | null }> {
+  if (!GEMINI_API_KEY) {
+    return { insights: null, error: "GEMINI_API_KEY 환경 변수가 설정되지 않았습니다. GitHub Secrets 또는 .env.local을 확인해주세요." };
+  }
   const feedbackInstruction = feedback
     ? `\n\n[사용자 추가 피드백!! 반드시 최우선으로 반영할 것!]:\n${feedback}\n`
     : "";
@@ -224,6 +227,9 @@ export async function askFollowupQuestion(
   reviewsAll?: Record<string, string[]>,
   reviewsRecent?: Record<string, string[]>
 ): Promise<{ answer: string | null; error: string | null }> {
+  if (!GEMINI_API_KEY) {
+    return { answer: null, error: "GEMINI_API_KEY 환경 변수가 설정되지 않았습니다." };
+  }
   let reviewContext = "";
   if (reviewsAll || reviewsRecent) {
     const lines = ["[수집된 전체 리뷰 원문 — 리포트에 표시되지 않은 내용도 여기서 찾을 수 있음]"];
