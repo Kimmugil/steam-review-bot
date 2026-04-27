@@ -37,24 +37,31 @@ async function getOrCreateGameSheet(appId: string, gameName: string): Promise<st
   let serviceAccountEmail = "";
   try { serviceAccountEmail = JSON.parse(raw).client_email || ""; } catch {}
 
-  const response = await fetch(GAS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folderId: "1cMuannCe1rQGArv1vseTKtlTetg_U1Mr", fileName: sheetName, serviceAccountEmail }),
-  });
+  let lastError = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, attempt * 2000));
+    const response = await fetch(GAS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId: "1cMuannCe1rQGArv1vseTKtlTetg_U1Mr", fileName: sheetName, serviceAccountEmail }),
+    });
 
-  const rawText = await response.text();
-  let data: { ok: boolean; spreadsheetId?: string; reused?: boolean; error?: string };
-  try {
-    data = JSON.parse(rawText);
-  } catch {
-    throw new Error(`GAS fetch failed (invalid JSON): ${rawText.slice(0, 300)}`);
-  }
+    const rawText = await response.text();
+    let data: { ok: boolean; spreadsheetId?: string; reused?: boolean; error?: string };
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      lastError = `GAS fetch failed (invalid JSON): ${rawText.slice(0, 300)}`;
+      continue;
+    }
 
-  if (!data.ok || !data.spreadsheetId) {
-    throw new Error(`Failed to create spreadsheet: ${data.error ?? "spreadsheetId missing"}`);
+    if (!data.ok || !data.spreadsheetId) {
+      lastError = data.error ?? "spreadsheetId missing";
+      continue;
+    }
+    return data.spreadsheetId;
   }
-  return data.spreadsheetId;
+  throw new Error(`Failed to create spreadsheet after retries: ${lastError}`);
 }
 
 // ── Tab header definitions ──────────────────────────────────────────────────
