@@ -80,7 +80,7 @@ const DETAIL_HEADER = [
 ];
 
 const RAW_HEADER = [
-  "UUID", "분析시각", "언어코드", "언어명", "타입", "추천여부", "플레이타임(h)", "리뷰원문",
+  "UUID", "분석시각", "언어코드", "언어명", "타입", "추천여부", "플레이타임(h)", "리뷰원문",
 ];
 
 async function ensureTabWithHeader(
@@ -238,7 +238,7 @@ export async function updateNotionStatus(uuid: string, notionPageId: string, not
   // 분석 목록: UUID in col A, 노션발행 in col X (24th), 노션URL in col Y (25th)
   const gameRows = await sheetsApi.spreadsheets.values.get({
     spreadsheetId: gameSheetId,
-    range: "분析 목록!A:A",
+    range: "분석 목록!A:A",
   });
   const gv = gameRows.data.values ?? [];
   for (let i = 1; i < gv.length; i++) {
@@ -249,8 +249,8 @@ export async function updateNotionStatus(uuid: string, notionPageId: string, not
         requestBody: {
           valueInputOption: "RAW",
           data: [
-            { range: `분析 목록!X${rowNum}`, values: [["true"]] },
-            { range: `분析 목록!Y${rowNum}`, values: [[notionUrl]] },
+            { range: `분석 목록!X${rowNum}`, values: [["true"]] },
+            { range: `분석 목록!Y${rowNum}`, values: [[notionUrl]] },
           ],
         },
       });
@@ -288,7 +288,7 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
   try {
     const detailRows = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: gameSheetId,
-      range: "분析 상세!A:K",
+      range: "분석 상세!A:K",
     });
     const dv = detailRows.data.values ?? [];
 
@@ -313,7 +313,7 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
         };
       }
     }
-    console.error(`[getReportFromSheets] UUID ${uuid} not found in 분析 상세 tab (gameSheetId: ${gameSheetId}, rows: ${dv.length})`);
+    console.error(`[getReportFromSheets] UUID ${uuid} not found in 분석 상세 tab (gameSheetId: ${gameSheetId}, rows: ${dv.length})`);
     return null;
   } catch (err) {
     console.error(`[getReportFromSheets] Error reading game sheet ${gameSheetId}:`, err);
