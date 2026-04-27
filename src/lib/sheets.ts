@@ -280,7 +280,10 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
       break;
     }
   }
-  if (!gameSheetId) return null;
+  if (!gameSheetId) {
+    console.error(`[getReportFromSheets] UUID ${uuid} not found in reports_index (total rows: ${values.length})`);
+    return null;
+  }
 
   try {
     const detailRows = await sheetsApi.spreadsheets.values.get({
@@ -310,8 +313,10 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
         };
       }
     }
+    console.error(`[getReportFromSheets] UUID ${uuid} not found in 분析 상세 tab (gameSheetId: ${gameSheetId}, rows: ${dv.length})`);
     return null;
-  } catch {
+  } catch (err) {
+    console.error(`[getReportFromSheets] Error reading game sheet ${gameSheetId}:`, err);
     return null;
   }
 }
