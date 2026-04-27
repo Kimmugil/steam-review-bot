@@ -3,7 +3,7 @@
 import type { AiInsights, StoreStats } from "@/lib/types";
 import SentimentLine from "./SentimentLine";
 import SentimentBadge from "./SentimentBadge";
-import { sentimentBg } from "@/lib/utils";
+
 
 interface Props {
   insights: AiInsights;

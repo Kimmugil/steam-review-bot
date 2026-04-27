@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { AiInsights, StoreStats, TableRow, RegionTableRow, RegionCategory } from "@/lib/types";
+import type { AiInsights, StoreStats, TableRow, RegionTableRow } from "@/lib/types";
 import SentimentLine from "./SentimentLine";
 import SentimentBadge from "./SentimentBadge";
 import Collapsible from "./Collapsible";

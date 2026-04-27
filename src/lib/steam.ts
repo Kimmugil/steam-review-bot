@@ -343,6 +343,7 @@ export async function fetchSteamReviews(
     }
   }
 
+
   const recentDesc = recentTotal > 0 ? calculateCustomScore(recentPos / recentTotal, recentTotal) : EVAL_LABELS.none;
   const tableDataAll = buildLangTable(langStatsAll, sumTotal);
   const flagToCode = Object.fromEntries(Object.keys(langStatsAll).map((l) => [getLangName(l), l]));

@@ -2,7 +2,7 @@
 
 import type { AiInsights, StoreStats } from "@/lib/types";
 import SentimentLine from "./SentimentLine";
-import SentimentBadge from "./SentimentBadge";
+
 import Collapsible from "./Collapsible";
 import { sentimentBg } from "@/lib/utils";
 

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p _legacy)",
+      "Bash(mv app.py steam_api.py ai_analyzer.py report_streamlit.py report_notion.py ui_texts.py config.py updates.py requirements.txt _legacy/)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(del \"C:\\\\Users\\\\haluj\\\\OneDrive\\\\바탕 화면\\\\Kimmugil-Farm\\\\steam-review-bot\\\\src\\\\app\\\\api\\\\analyze\\\\route.ts\")"
+    ]
+  }
+}
