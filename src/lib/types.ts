@@ -153,8 +153,6 @@ export interface AnalysisReport {
   news_data: NewsData;
   qa_history: QAItem[];
   analysis_time: string;
-  notion_published: boolean;
-  notion_url: string | null;
 }
 
 export interface ReportIndex {
@@ -167,8 +165,6 @@ export interface ReportIndex {
   all_total: number;
   recent_desc: string;
   recent_total: number;
-  notion_published: boolean;
-  notion_url: string | null;
   game_sheet_id: string | null;
 }
 

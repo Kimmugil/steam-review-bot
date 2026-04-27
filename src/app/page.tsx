@@ -164,9 +164,6 @@ export default function HomePage() {
                   <span className={sentimentClass(r.all_desc)}>{r.all_desc}</span>
                 </div>
                 <p className="text-xs text-slate-400">{formatDateTime(r.analysis_time)}</p>
-                {r.notion_published && (
-                  <p className="text-xs text-violet-500 mt-1">📤 노션 발행됨</p>
-                )}
               </a>
             ))}
           </div>

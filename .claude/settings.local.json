@@ -6,7 +6,15 @@
       "Bash(npm install *)",
       "Bash(npx tsc *)",
       "Bash(npm run *)",
-      "Bash(del \"C:\\\\Users\\\\haluj\\\\OneDrive\\\\바탕 화면\\\\Kimmugil-Farm\\\\steam-review-bot\\\\src\\\\app\\\\api\\\\analyze\\\\route.ts\")"
+      "Bash(del \"C:\\\\Users\\\\haluj\\\\OneDrive\\\\바탕 화면\\\\Kimmugil-Farm\\\\steam-review-bot\\\\src\\\\app\\\\api\\\\analyze\\\\route.ts\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(git commit *)",
+      "Bash(/usr/local/bin/npx tsc *)",
+      "Bash(git checkout *)",
+      "Bash(git merge --no-ff claude/quizzical-rubin-cde1ae -m ' *)"
     ]
   }
 }

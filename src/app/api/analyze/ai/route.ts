@@ -53,8 +53,6 @@ export async function POST(req: NextRequest) {
     news_data: newsData,
     qa_history: [],
     analysis_time: new Date().toISOString(),
-    notion_published: false,
-    notion_url: null,
   };
 
   await saveAnalysisToSheets(report, [], []);

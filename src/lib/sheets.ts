@@ -71,7 +71,7 @@ const LIST_HEADER = [
   "뉴비평균PT(h)", "뉴비표본수", "뉴비평가",
   "일반평균PT(h)", "일반표본수", "일반평가",
   "코어평균PT(h)", "코어표본수", "코어평가",
-  "플레이타임표본수", "AI한줄평", "종합여론", "노션발행", "노션URL",
+  "플레이타임표본수", "AI한줄평", "종합여론",
 ];
 
 const DETAIL_HEADER = [
@@ -129,7 +129,7 @@ export async function saveAnalysisToSheets(
   // 4) Append to master reports_index
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId: MASTER_SHEET_ID,
-    range: "reports_index!A:M",
+    range: "reports_index!A:K",
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
@@ -138,7 +138,7 @@ export async function saveAnalysisToSheets(
         report.store_stats.collection_period,
         report.store_stats.all_desc, report.store_stats.all_total,
         report.store_stats.recent_desc, report.store_stats.recent_total,
-        "false", "", gameSheetId, `[${report.app_id}] ${report.game_name.slice(0, 50)}`,
+        gameSheetId, `[${report.app_id}] ${report.game_name.slice(0, 50)}`,
       ]],
     },
   });
@@ -146,7 +146,7 @@ export async function saveAnalysisToSheets(
   // 5) Append summary row to 분석 목록 (flat columns, easy to read in Sheets)
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId: gameSheetId,
-    range: "분석 목록!A:Y",
+    range: "분석 목록!A:W",
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
@@ -160,7 +160,6 @@ export async function saveAnalysisToSheets(
         report.store_stats.core_avg, report.store_stats.core_total, report.store_stats.core_desc,
         report.store_stats.playtime_sample_total ?? "",
         report.ai_data.critic_one_liner, report.ai_data.sentiment_analysis,
-        "false", "",
       ]],
     },
   });
@@ -204,60 +203,6 @@ export async function saveAnalysisToSheets(
   }
 }
 
-// ── Update notion published status ─────────────────────────────────────────
-export async function updateNotionStatus(uuid: string, notionPageId: string, notionUrl: string): Promise<void> {
-  const sheetsApi = await getSheetsClient();
-
-  const rows = await sheetsApi.spreadsheets.values.get({
-    spreadsheetId: MASTER_SHEET_ID,
-    range: "reports_index!A:M",
-  });
-  const values = rows.data.values ?? [];
-  let gameSheetId: string | null = null;
-
-  for (let i = 1; i < values.length; i++) {
-    if (values[i][0] === uuid) {
-      const rowNum = i + 1;
-      await sheetsApi.spreadsheets.values.batchUpdate({
-        spreadsheetId: MASTER_SHEET_ID,
-        requestBody: {
-          valueInputOption: "RAW",
-          data: [
-            { range: `reports_index!J${rowNum}`, values: [["true"]] },
-            { range: `reports_index!K${rowNum}`, values: [[notionUrl]] },
-          ],
-        },
-      });
-      gameSheetId = values[i][11] ?? null;
-      break;
-    }
-  }
-
-  if (!gameSheetId) return;
-
-  // 분석 목록: UUID in col A, 노션발행 in col X (24th), 노션URL in col Y (25th)
-  const gameRows = await sheetsApi.spreadsheets.values.get({
-    spreadsheetId: gameSheetId,
-    range: "분석 목록!A:A",
-  });
-  const gv = gameRows.data.values ?? [];
-  for (let i = 1; i < gv.length; i++) {
-    if (gv[i][0] === uuid) {
-      const rowNum = i + 1;
-      await sheetsApi.spreadsheets.values.batchUpdate({
-        spreadsheetId: gameSheetId,
-        requestBody: {
-          valueInputOption: "RAW",
-          data: [
-            { range: `분석 목록!X${rowNum}`, values: [["true"]] },
-            { range: `분석 목록!Y${rowNum}`, values: [[notionUrl]] },
-          ],
-        },
-      });
-      break;
-    }
-  }
-}
 
 // ── Get report data from sheets ─────────────────────────────────────────────
 export async function getReportFromSheets(uuid: string): Promise<AnalysisReport | null> {
@@ -265,19 +210,14 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
 
   const rows = await sheetsApi.spreadsheets.values.get({
     spreadsheetId: MASTER_SHEET_ID,
-    range: "reports_index!A:M",
+    range: "reports_index!A:K",
   });
   const values = rows.data.values ?? [];
   let gameSheetId: string | null = null;
-  let notionPublished = false;
-  let notionUrl: string | null = null;
-
   for (let i = 1; i < values.length; i++) {
     const rowUuid = values[i][0]?.toString().trim();
     if (rowUuid === uuid.trim()) {
-      gameSheetId = values[i][11] ?? null;
-      notionPublished = values[i][9] === "true";
-      notionUrl = values[i][10] || null;
+      gameSheetId = values[i][9] ?? null;
       break;
     }
   }
@@ -310,8 +250,6 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
           ai_data: JSON.parse(row[9] ?? "{}"),
           news_data: JSON.parse(row[10] ?? "{}"),
           qa_history: [],
-          notion_published: notionPublished,
-          notion_url: notionUrl,
         };
       }
     }
@@ -343,9 +281,7 @@ export async function getAllReports(): Promise<ReportIndex[]> {
       all_total: Number(row[6] ?? 0),
       recent_desc: row[7] ?? "",
       recent_total: Number(row[8] ?? 0),
-      notion_published: row[9] === "true",
-      notion_url: row[10] || null,
-      game_sheet_id: row[11] ?? null,
+      game_sheet_id: row[9] ?? null,
     }));
   } catch {
     return [];
