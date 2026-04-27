@@ -34,43 +34,54 @@ async function ensureTab(sheetsApi: ReturnType<typeof google.sheets>, spreadshee
   }
 }
 
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzGgJ2fObM3i01BFDBBfs-9uNxuGEV_D9Fk_0NZGBVMuZ_iVefSRJ20clo2Pf6JqwWrdQ/exec";
+
 // ── Get or create per-game spreadsheet ──────────────────────────────────────
 async function getOrCreateGameSheet(appId: string, gameName: string): Promise<string> {
-  const sheetsApi = await getSheetsClient();
-  const driveApi = await getDriveClient();
   const sheetName = `[${appId}] ${gameName.slice(0, 50)}`;
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON ?? "{}";
+  let serviceAccountEmail = "";
+  try {
+    serviceAccountEmail = JSON.parse(raw).client_email || "";
+  } catch {}
 
-  // Search in Drive for existing sheet
-  const search = await driveApi.files.list({
-    q: `name='${sheetName.replace("'", "\\'")}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
-    fields: "files(id,name)",
+  const response = await fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      folderId: "1cMuannCe1rQGArv1vseTKtlTetg_U1Mr",
+      fileName: sheetName,
+      serviceAccountEmail
+    }),
   });
-
-  if (search.data.files?.length) {
-    return search.data.files[0].id!;
+  
+  let data;
+  try {
+    // GAS fetch might return redirect if we don't handle it well, but POST with application/json should work.
+    // Wait, GAS web app responds with redirects for POST sometimes. fetch() follows it.
+    data = await response.json();
+  } catch (err) {
+    const text = await response.text();
+    throw new Error(`GAS fetch failed: ${text}`);
   }
 
-  // Create new spreadsheet
-  const newSheet = await sheetsApi.spreadsheets.create({
-    requestBody: {
-      properties: { title: sheetName },
-      sheets: [{ properties: { title: "분석 목록" } }],
-    },
-  });
-  const newId = newSheet.data.spreadsheetId!;
+  if (!data.ok) {
+    throw new Error(`Failed to create spreadsheet: ${data.error}`);
+  }
+  const newId = data.spreadsheetId;
 
-  // Set header for 분석 목록
-  await sheetsApi.spreadsheets.values.update({
-    spreadsheetId: newId,
-    range: "분석 목록!A1:I1",
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [["UUID", "분석 시각", "수집 기간", "전체 평가", "전체 리뷰수", "최근 평가", "최근 리뷰수", "노션 발행", "노션 URL"]],
-    },
-  });
-
-  // Share the sheet with the same account that owns the master sheet (via domain)
-  // The service account itself already has owner access.
+  if (!data.reused) {
+    const sheetsApi = await getSheetsClient();
+    await ensureTab(sheetsApi, newId, "분석 목록");
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId: newId,
+      range: "분석 목록!A1:I1",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [["UUID", "분석 시각", "수집 기간", "전체 평가", "전체 리뷰수", "최근 평가", "최근 리뷰수", "노션 발행", "노션 URL"]],
+      },
+    });
+  }
 
   return newId;
 }
@@ -384,4 +395,61 @@ async function initUiTexts(sheetsApi: ReturnType<typeof google.sheets>): Promise
     valueInputOption: "RAW",
     requestBody: { values: defaults },
   });
+}
+
+// ── Queue Management ────────────────────────────────────────────────────────
+export async function addAnalysisToQueue(appId: string, gameName: string, uuid: string): Promise<void> {
+  const sheetsApi = await getSheetsClient();
+  await ensureTab(sheetsApi, MASTER_SHEET_ID, "Queue");
+
+  const now = new Date().toISOString();
+  await sheetsApi.spreadsheets.values.append({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: "Queue!A:E",
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [[appId, gameName, uuid, "PENDING", now]],
+    },
+  });
+}
+
+export async function updateQueueStatus(uuid: string, status: "COMPLETED" | "ERROR"): Promise<void> {
+  const sheetsApi = await getSheetsClient();
+  const rows = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: "Queue!A:E",
+  });
+  const values = rows.data.values ?? [];
+  for (let i = 0; i < values.length; i++) {
+    if (values[i][2] === uuid) {
+      await sheetsApi.spreadsheets.values.update({
+        spreadsheetId: MASTER_SHEET_ID,
+        range: `Queue!D${i + 1}`,
+        valueInputOption: "RAW",
+        requestBody: { values: [[status]] },
+      });
+      break;
+    }
+  }
+}
+
+export async function getPendingQueue(): Promise<Array<{appId: string, gameName: string, uuid: string, status: string, timestamp: string}>> {
+  const sheetsApi = await getSheetsClient();
+  try {
+    const rows = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      range: "Queue!A:E",
+    });
+    const values = rows.data.values ?? [];
+    return values.map(row => ({
+      appId: row[0] ?? "",
+      gameName: row[1] ?? "",
+      uuid: row[2] ?? "",
+      status: row[3] ?? "",
+      timestamp: row[4] ?? ""
+    })).filter(q => q.status === "PENDING" || q.status === "PROCESSING");
+  } catch {
+    return [];
+  }
 }

@@ -151,7 +151,7 @@ async function fetchLangReviews(
           language: lang,
           is_positive: Boolean(r.voted_up),
           playtime: Math.round((r.author?.playtime_at_review ?? 0) / 60 * 10) / 10,
-          review: (r.review as string).slice(0, 400).replace(/\n/g, " "),
+          review: (r.review ? String(r.review) : "").slice(0, 400).replace(/\n/g, " "),
         });
       }
       cursor = json.cursor ?? "*";
