@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     notion_url: null,
   };
 
-  await saveAnalysisToSheets(report);
+  await saveAnalysisToSheets(report, [], []);
 
   return NextResponse.json({ uuid });
 }

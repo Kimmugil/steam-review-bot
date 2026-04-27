@@ -32,7 +32,7 @@ async function main() {
       fetchSteamReviews(appId, days, gameInfo.releaseDate, periodStr),
     ]);
 
-    const { filteredAll, filteredRecent, storeStats, actualRecentLabel } = reviewResult;
+    const { filteredAll, filteredRecent, storeStats, actualRecentLabel, rawReviewsAll, rawReviewsRecent } = reviewResult;
 
     // 4) AI 분석 (Gemini)
     console.log("Analyzing with AI (Gemini)...");
@@ -63,7 +63,7 @@ async function main() {
 
     // 4) 구글 시트에 적재
     console.log("Saving to Google Sheets...");
-    await saveAnalysisToSheets(report);
+    await saveAnalysisToSheets(report, rawReviewsAll, rawReviewsRecent);
 
     // 5) 큐 상태 업데이트
     console.log("Updating Queue status to COMPLETED...");

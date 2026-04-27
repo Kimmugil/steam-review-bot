@@ -1,5 +1,6 @@
 import { google } from "googleapis";
-import type { AnalysisReport, ReportIndex } from "./types";
+import { getLangName } from "./config";
+import type { AnalysisReport, ReportIndex, RawReview } from "./types";
 
 const MASTER_SHEET_ID = process.env.GOOGLE_SHEETS_MASTER_ID ?? "";
 
@@ -17,12 +18,6 @@ async function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-async function getDriveClient() {
-  const auth = getAuth();
-  return google.drive({ version: "v3", auth });
-}
-
-// ── Ensure a tab exists, create if not ──────────────────────────────────────
 async function ensureTab(sheetsApi: ReturnType<typeof google.sheets>, spreadsheetId: string, tabName: string): Promise<void> {
   const meta = await sheetsApi.spreadsheets.get({ spreadsheetId });
   const exists = meta.data.sheets?.some((s) => s.properties?.title === tabName);
@@ -36,23 +31,16 @@ async function ensureTab(sheetsApi: ReturnType<typeof google.sheets>, spreadshee
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbzGgJ2fObM3i01BFDBBfs-9uNxuGEV_D9Fk_0NZGBVMuZ_iVefSRJ20clo2Pf6JqwWrdQ/exec";
 
-// ── Get or create per-game spreadsheet ──────────────────────────────────────
 async function getOrCreateGameSheet(appId: string, gameName: string): Promise<string> {
   const sheetName = `[${appId}] ${gameName.slice(0, 50)}`;
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON ?? "{}";
   let serviceAccountEmail = "";
-  try {
-    serviceAccountEmail = JSON.parse(raw).client_email || "";
-  } catch {}
+  try { serviceAccountEmail = JSON.parse(raw).client_email || ""; } catch {}
 
   const response = await fetch(GAS_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      folderId: "1cMuannCe1rQGArv1vseTKtlTetg_U1Mr",
-      fileName: sheetName,
-      serviceAccountEmail
-    }),
+    body: JSON.stringify({ folderId: "1cMuannCe1rQGArv1vseTKtlTetg_U1Mr", fileName: sheetName, serviceAccountEmail }),
   });
 
   const rawText = await response.text();
@@ -66,51 +54,72 @@ async function getOrCreateGameSheet(appId: string, gameName: string): Promise<st
   if (!data.ok || !data.spreadsheetId) {
     throw new Error(`Failed to create spreadsheet: ${data.error ?? "spreadsheetId missing"}`);
   }
-  const newId: string = data.spreadsheetId;
-
-  if (!data.reused) {
-    const sheetsApi = await getSheetsClient();
-    await ensureTab(sheetsApi, newId, "분석 목록");
-    await sheetsApi.spreadsheets.values.update({
-      spreadsheetId: newId,
-      range: "분석 목록!A1:I1",
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [["UUID", "분석 시각", "수집 기간", "전체 평가", "전체 리뷰수", "최근 평가", "최근 리뷰수", "노션 발행", "노션 URL"]],
-      },
-    });
-  }
-
-  return newId;
+  return data.spreadsheetId;
 }
 
-// ── Save analysis to Google Sheets ──────────────────────────────────────────
-export async function saveAnalysisToSheets(report: AnalysisReport): Promise<void> {
+// ── Tab header definitions ──────────────────────────────────────────────────
+const LIST_HEADER = [
+  "UUID", "분석시각", "앱ID", "게임명", "수집기간", "릴리즈일",
+  "공식평가", "전체평가", "전체리뷰수", "최근평가", "최근리뷰수",
+  "뉴비평균PT(h)", "뉴비표본수", "뉴비평가",
+  "일반평균PT(h)", "일반표본수", "일반평가",
+  "코어평균PT(h)", "코어표본수", "코어평가",
+  "플레이타임표본수", "AI한줄평", "종합여론", "노션발행", "노션URL",
+];
+
+const DETAIL_HEADER = [
+  "UUID", "분석시각", "앱ID", "게임명", "release_date", "recent_label",
+  "smart_reason", "header_image", "store_stats", "ai_data", "news_data",
+];
+
+const RAW_HEADER = [
+  "UUID", "분析시각", "언어코드", "언어명", "타입", "추천여부", "플레이타임(h)", "리뷰원문",
+];
+
+async function ensureTabWithHeader(
+  sheetsApi: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+  tabName: string,
+  header: string[]
+): Promise<void> {
+  await ensureTab(sheetsApi, spreadsheetId, tabName);
+  const existing = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${tabName}!A1:1`,
+  });
+  if (!existing.data.values?.length) {
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${tabName}!A1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [header] },
+    });
+  }
+}
+
+// ── Save analysis to Google Sheets ─────────────────────────────────────────
+export async function saveAnalysisToSheets(
+  report: AnalysisReport,
+  rawReviewsAll: RawReview[],
+  rawReviewsRecent: RawReview[]
+): Promise<void> {
   const sheetsApi = await getSheetsClient();
 
   // 1) Master sheet: reports_index
-  await ensureTab(sheetsApi, MASTER_SHEET_ID, "reports_index");
+  await ensureTabWithHeader(sheetsApi, MASTER_SHEET_ID, "reports_index", [
+    "UUID", "App ID", "게임명", "분석시각", "수집기간", "전체평가", "전체리뷰수",
+    "최근평가", "최근리뷰수", "노션발행", "노션URL", "게임시트ID", "게임시트명",
+  ]);
 
-  // Check if header exists
-  const masterHeader = await sheetsApi.spreadsheets.values.get({
-    spreadsheetId: MASTER_SHEET_ID,
-    range: "reports_index!A1:M1",
-  });
-  if (!masterHeader.data.values?.length) {
-    await sheetsApi.spreadsheets.values.update({
-      spreadsheetId: MASTER_SHEET_ID,
-      range: "reports_index!A1:M1",
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [["UUID", "App ID", "게임명", "분석 시각", "수집 기간", "전체 평가", "전체 리뷰수", "최근 평가", "최근 리뷰수", "노션 발행", "노션 URL", "게임 시트 ID", "게임 시트명"]],
-      },
-    });
-  }
-
-  // 2) Get or create per-game sheet
+  // 2) Get or create per-game spreadsheet
   const gameSheetId = await getOrCreateGameSheet(report.app_id, report.game_name);
 
-  // 3) Append row to master reports_index
+  // 3) Ensure per-game tabs with headers
+  await ensureTabWithHeader(sheetsApi, gameSheetId, "분석 목록", LIST_HEADER);
+  await ensureTabWithHeader(sheetsApi, gameSheetId, "분석 상세", DETAIL_HEADER);
+  await ensureTabWithHeader(sheetsApi, gameSheetId, "리뷰 원문", RAW_HEADER);
+
+  // 4) Append to master reports_index
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId: MASTER_SHEET_ID,
     range: "reports_index!A:M",
@@ -118,79 +127,87 @@ export async function saveAnalysisToSheets(report: AnalysisReport): Promise<void
     insertDataOption: "INSERT_ROWS",
     requestBody: {
       values: [[
-        report.uuid,
-        report.app_id,
-        report.game_name,
-        report.analysis_time,
+        report.uuid, report.app_id, report.game_name, report.analysis_time,
         report.store_stats.collection_period,
-        report.store_stats.all_desc,
-        report.store_stats.all_total,
-        report.store_stats.recent_desc,
-        report.store_stats.recent_total,
-        "false",
-        "",
-        gameSheetId,
-        `[${report.app_id}] ${report.game_name.slice(0, 50)}`,
+        report.store_stats.all_desc, report.store_stats.all_total,
+        report.store_stats.recent_desc, report.store_stats.recent_total,
+        "false", "", gameSheetId, `[${report.app_id}] ${report.game_name.slice(0, 50)}`,
       ]],
     },
   });
 
-  // 4) Per-game sheet: 분석 목록
+  // 5) Append summary row to 분석 목록 (flat columns, easy to read in Sheets)
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId: gameSheetId,
-    range: "분석 목록!A:I",
+    range: "분석 목록!A:Y",
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
       values: [[
-        report.uuid,
-        report.analysis_time,
-        report.store_stats.collection_period,
-        report.store_stats.all_desc,
-        report.store_stats.all_total,
-        report.store_stats.recent_desc,
-        report.store_stats.recent_total,
-        "false",
-        "",
+        report.uuid, report.analysis_time, report.app_id, report.game_name,
+        report.store_stats.collection_period, report.release_date,
+        report.store_stats.official_desc, report.store_stats.all_desc, report.store_stats.all_total,
+        report.store_stats.recent_desc, report.store_stats.recent_total,
+        report.store_stats.newbie_avg, report.store_stats.newbie_total, report.store_stats.newbie_desc,
+        report.store_stats.norm_avg, report.store_stats.norm_total, report.store_stats.norm_desc,
+        report.store_stats.core_avg, report.store_stats.core_total, report.store_stats.core_desc,
+        report.store_stats.playtime_sample_total ?? "",
+        report.ai_data.critic_one_liner, report.ai_data.sentiment_analysis,
+        "false", "",
       ]],
     },
   });
 
-  // 5) Per-game sheet: data tab (store full JSON)
-  const dataTabName = `data_${report.uuid.slice(0, 8)}`;
-  await ensureTab(sheetsApi, gameSheetId, dataTabName);
-  await sheetsApi.spreadsheets.values.batchUpdate({
+  // 6) Append full JSON blobs to 분석 상세
+  await sheetsApi.spreadsheets.values.append({
     spreadsheetId: gameSheetId,
+    range: "분석 상세!A:K",
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
     requestBody: {
-      valueInputOption: "RAW",
-      data: [
-        { range: `${dataTabName}!A1`, values: [["필드", "데이터"]] },
-        { range: `${dataTabName}!A2`, values: [["uuid", report.uuid]] },
-        { range: `${dataTabName}!A3`, values: [["app_id", report.app_id]] },
-        { range: `${dataTabName}!A4`, values: [["game_name", report.game_name]] },
-        { range: `${dataTabName}!A5`, values: [["analysis_time", report.analysis_time]] },
-        { range: `${dataTabName}!A6`, values: [["release_date", report.release_date]] },
-        { range: `${dataTabName}!A7`, values: [["recent_label", report.recent_label]] },
-        { range: `${dataTabName}!A8`, values: [["smart_reason", report.smart_reason]] },
-        { range: `${dataTabName}!A9`, values: [["store_stats", JSON.stringify(report.store_stats)]] },
-        { range: `${dataTabName}!A10`, values: [["ai_data", JSON.stringify(report.ai_data)]] },
-        { range: `${dataTabName}!A11`, values: [["news_data", JSON.stringify(report.news_data)]] },
-        { range: `${dataTabName}!A12`, values: [["header_image", report.header_image]] },
-      ],
+      values: [[
+        report.uuid, report.analysis_time, report.app_id, report.game_name,
+        report.release_date, report.recent_label, report.smart_reason, report.header_image,
+        JSON.stringify(report.store_stats),
+        JSON.stringify(report.ai_data),
+        JSON.stringify(report.news_data),
+      ]],
     },
   });
+
+  // 7) Append raw review rows to 리뷰 원문
+  const reviewRows: string[][] = [
+    ...rawReviewsAll.map((r) => [
+      report.uuid, report.analysis_time, r.language, getLangName(r.language),
+      "누적", r.is_positive ? "TRUE" : "FALSE", String(r.playtime), r.review,
+    ]),
+    ...rawReviewsRecent.map((r) => [
+      report.uuid, report.analysis_time, r.language, getLangName(r.language),
+      "최근", r.is_positive ? "TRUE" : "FALSE", String(r.playtime), r.review,
+    ]),
+  ];
+  if (reviewRows.length) {
+    await sheetsApi.spreadsheets.values.append({
+      spreadsheetId: gameSheetId,
+      range: "리뷰 원문!A:H",
+      valueInputOption: "RAW",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: reviewRows },
+    });
+  }
 }
 
-// ── Update notion published status ──────────────────────────────────────────
+// ── Update notion published status ─────────────────────────────────────────
 export async function updateNotionStatus(uuid: string, notionPageId: string, notionUrl: string): Promise<void> {
   const sheetsApi = await getSheetsClient();
 
-  // Find row in master reports_index
   const rows = await sheetsApi.spreadsheets.values.get({
     spreadsheetId: MASTER_SHEET_ID,
     range: "reports_index!A:M",
   });
   const values = rows.data.values ?? [];
+  let gameSheetId: string | null = null;
+
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] === uuid) {
       const rowNum = i + 1;
@@ -204,101 +221,95 @@ export async function updateNotionStatus(uuid: string, notionPageId: string, not
           ],
         },
       });
+      gameSheetId = values[i][11] ?? null;
+      break;
+    }
+  }
 
-      // Also update per-game sheet
-      const gameSheetId = values[i][11];
-      if (gameSheetId) {
-        const gameRows = await sheetsApi.spreadsheets.values.get({
-          spreadsheetId: gameSheetId,
-          range: "분석 목록!A:I",
-        });
-        const gv = gameRows.data.values ?? [];
-        for (let j = 1; j < gv.length; j++) {
-          if (gv[j][0] === uuid) {
-            await sheetsApi.spreadsheets.values.batchUpdate({
-              spreadsheetId: gameSheetId,
-              requestBody: {
-                valueInputOption: "RAW",
-                data: [
-                  { range: `분석 목록!H${j + 1}`, values: [["true"]] },
-                  { range: `분석 목록!I${j + 1}`, values: [[notionUrl]] },
-                ],
-              },
-            });
-            break;
-          }
-        }
-      }
+  if (!gameSheetId) return;
+
+  // 분석 목록: UUID in col A, 노션발행 in col X (24th), 노션URL in col Y (25th)
+  const gameRows = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId: gameSheetId,
+    range: "분析 목록!A:A",
+  });
+  const gv = gameRows.data.values ?? [];
+  for (let i = 1; i < gv.length; i++) {
+    if (gv[i][0] === uuid) {
+      const rowNum = i + 1;
+      await sheetsApi.spreadsheets.values.batchUpdate({
+        spreadsheetId: gameSheetId,
+        requestBody: {
+          valueInputOption: "RAW",
+          data: [
+            { range: `분析 목록!X${rowNum}`, values: [["true"]] },
+            { range: `분析 목록!Y${rowNum}`, values: [[notionUrl]] },
+          ],
+        },
+      });
       break;
     }
   }
 }
 
-// ── Get report data from sheets ──────────────────────────────────────────────
+// ── Get report data from sheets ─────────────────────────────────────────────
 export async function getReportFromSheets(uuid: string): Promise<AnalysisReport | null> {
   const sheetsApi = await getSheetsClient();
 
-  // Find in master sheet
   const rows = await sheetsApi.spreadsheets.values.get({
     spreadsheetId: MASTER_SHEET_ID,
     range: "reports_index!A:M",
   });
   const values = rows.data.values ?? [];
   let gameSheetId: string | null = null;
+  let notionPublished = false;
+  let notionUrl: string | null = null;
+
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] === uuid) {
       gameSheetId = values[i][11] ?? null;
+      notionPublished = values[i][9] === "true";
+      notionUrl = values[i][10] || null;
       break;
     }
   }
   if (!gameSheetId) return null;
 
-  // Read data tab
-  const dataTabName = `data_${uuid.slice(0, 8)}`;
   try {
-    const dataRows = await sheetsApi.spreadsheets.values.get({
+    const detailRows = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: gameSheetId,
-      range: `${dataTabName}!A:B`,
+      range: "분析 상세!A:K",
     });
-    const dv = dataRows.data.values ?? [];
-    const map: Record<string, string> = {};
-    for (const row of dv) {
-      if (row[0] && row[1]) map[row[0]] = row[1];
-    }
+    const dv = detailRows.data.values ?? [];
 
-    // Also get notion status from master
-    let notionPublished = false;
-    let notionUrl: string | null = null;
-    for (let i = 1; i < values.length; i++) {
-      if (values[i][0] === uuid) {
-        notionPublished = values[i][9] === "true";
-        notionUrl = values[i][10] || null;
-        break;
+    for (let i = 1; i < dv.length; i++) {
+      if (dv[i][0] === uuid) {
+        const row = dv[i];
+        return {
+          uuid: row[0] ?? uuid,
+          analysis_time: row[1] ?? "",
+          app_id: row[2] ?? "",
+          game_name: row[3] ?? "",
+          release_date: row[4] ?? "",
+          recent_label: row[5] ?? "최근 30일",
+          smart_reason: row[6] ?? "",
+          header_image: row[7] ?? "",
+          store_stats: JSON.parse(row[8] ?? "{}"),
+          ai_data: JSON.parse(row[9] ?? "{}"),
+          news_data: JSON.parse(row[10] ?? "{}"),
+          qa_history: [],
+          notion_published: notionPublished,
+          notion_url: notionUrl,
+        };
       }
     }
-
-    return {
-      uuid: map.uuid ?? uuid,
-      app_id: map.app_id ?? "",
-      game_name: map.game_name ?? "",
-      release_date: map.release_date ?? "",
-      header_image: map.header_image ?? "",
-      recent_label: map.recent_label ?? "최근 30일",
-      smart_reason: map.smart_reason ?? "",
-      store_stats: JSON.parse(map.store_stats ?? "{}"),
-      ai_data: JSON.parse(map.ai_data ?? "{}"),
-      news_data: JSON.parse(map.news_data ?? "{}"),
-      qa_history: [],
-      analysis_time: map.analysis_time ?? "",
-      notion_published: notionPublished,
-      notion_url: notionUrl,
-    };
+    return null;
   } catch {
     return null;
   }
 }
 
-// ── Get all reports index ────────────────────────────────────────────────────
+// ── Get all reports index ───────────────────────────────────────────────────
 export async function getAllReports(): Promise<ReportIndex[]> {
   const sheetsApi = await getSheetsClient();
   try {
@@ -327,7 +338,7 @@ export async function getAllReports(): Promise<ReportIndex[]> {
   }
 }
 
-// ── Get UI texts from master sheet ──────────────────────────────────────────
+// ── Get UI texts from master sheet ─────────────────────────────────────────
 export async function getUiTexts(): Promise<Record<string, string>> {
   const sheetsApi = await getSheetsClient();
   try {
@@ -338,19 +349,12 @@ export async function getUiTexts(): Promise<Record<string, string>> {
     });
     const values = rows.data.values ?? [];
     const texts: Record<string, string> = {};
-
-    // Skip header row if it looks like a header
     const start = values.length > 0 && values[0][0] === "key" ? 1 : 0;
     for (let i = start; i < values.length; i++) {
       const [key, value] = values[i];
       if (key && value !== undefined) texts[key] = value;
     }
-
-    // If empty, initialize with defaults
-    if (Object.keys(texts).length === 0) {
-      await initUiTexts(sheetsApi);
-    }
-
+    if (Object.keys(texts).length === 0) await initUiTexts(sheetsApi);
     return texts;
   } catch {
     return {};
@@ -386,7 +390,6 @@ async function initUiTexts(sheetsApi: ReturnType<typeof google.sheets>): Promise
     ["dashboard_all_tab", "전체", "대시보드 전체 탭"],
     ["footer_version", "v3.0.0", "버전"],
   ];
-
   await sheetsApi.spreadsheets.values.update({
     spreadsheetId: MASTER_SHEET_ID,
     range: "ui_texts!A1",
@@ -399,16 +402,13 @@ async function initUiTexts(sheetsApi: ReturnType<typeof google.sheets>): Promise
 export async function addAnalysisToQueue(appId: string, gameName: string, uuid: string): Promise<void> {
   const sheetsApi = await getSheetsClient();
   await ensureTab(sheetsApi, MASTER_SHEET_ID, "Queue");
-
   const now = new Date().toISOString();
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId: MASTER_SHEET_ID,
     range: "Queue!A:E",
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
-    requestBody: {
-      values: [[appId, gameName, uuid, "PENDING", now]],
-    },
+    requestBody: { values: [[appId, gameName, uuid, "PENDING", now]] },
   });
 }
 
@@ -432,7 +432,7 @@ export async function updateQueueStatus(uuid: string, status: "COMPLETED" | "ERR
   }
 }
 
-export async function getPendingQueue(): Promise<Array<{appId: string, gameName: string, uuid: string, status: string, timestamp: string}>> {
+export async function getPendingQueue(): Promise<Array<{ appId: string; gameName: string; uuid: string; status: string; timestamp: string }>> {
   const sheetsApi = await getSheetsClient();
   try {
     const rows = await sheetsApi.spreadsheets.values.get({
@@ -440,13 +440,13 @@ export async function getPendingQueue(): Promise<Array<{appId: string, gameName:
       range: "Queue!A:E",
     });
     const values = rows.data.values ?? [];
-    return values.map(row => ({
+    return values.map((row) => ({
       appId: row[0] ?? "",
       gameName: row[1] ?? "",
       uuid: row[2] ?? "",
       status: row[3] ?? "",
-      timestamp: row[4] ?? ""
-    })).filter(q => q.status === "PENDING" || q.status === "PROCESSING");
+      timestamp: row[4] ?? "",
+    })).filter((q) => q.status === "PENDING" || q.status === "PROCESSING");
   } catch {
     return [];
   }

@@ -32,6 +32,13 @@ export interface RegionTableRow {
   eval: string;
 }
 
+export interface RawReview {
+  language: string;
+  is_positive: boolean;
+  playtime: number;
+  review: string;
+}
+
 export interface StoreStats {
   official_desc: string;
   all_desc: string;
@@ -51,6 +58,7 @@ export interface StoreStats {
   core_avg: number;
   core_total: number;
   core_desc: string;
+  playtime_sample_total: number;
   collection_period: string;
   country_langs_ordered: string[];
   summary_langs: string[];

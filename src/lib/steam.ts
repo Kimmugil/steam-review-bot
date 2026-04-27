@@ -1,5 +1,5 @@
 import { LANG_MAP, REGION_MAP, SCORE_MAP, calculateCustomScore, getLangName, EVAL_LABELS } from "./config";
-import type { StoreStats, TableRow, RegionTableRow, NewsData } from "./types";
+import type { StoreStats, TableRow, RegionTableRow, NewsData, RawReview } from "./types";
 
 function sanitizeUrl(url: string): string {
   return url.split("").filter((c) => c.charCodeAt(0) >= 32 && c.charCodeAt(0) <= 126).join("").trim();
@@ -161,6 +161,33 @@ async function fetchLangReviews(
     }
   }
   return reviews.slice(0, limit);
+}
+
+async function fetchPlaytimeSample(
+  appId: string,
+  limit = 2000
+): Promise<Array<{ pt: number; pos: boolean }>> {
+  const results: Array<{ pt: number; pos: boolean }> = [];
+  let cursor = "*";
+  const baseUrl = sanitizeUrl(
+    `https://store.steampowered.com/appreviews/${appId}?json=1&filter=all&language=all&num_per_page=100&purchase_type=all`
+  );
+  for (let i = 0; i < Math.ceil(limit / 100); i++) {
+    try {
+      const res = await fetch(baseUrl + `&cursor=${encodeURIComponent(cursor)}`, { headers: STEAM_HEADERS });
+      const json = await res.json();
+      if (!json?.reviews?.length) break;
+      for (const r of json.reviews) {
+        results.push({
+          pt: Math.round((r.author?.playtime_at_review ?? 0) / 60 * 10) / 10,
+          pos: Boolean(r.voted_up),
+        });
+      }
+      cursor = json.cursor ?? "*";
+      if (!cursor) break;
+    } catch { break; }
+  }
+  return results.slice(0, limit);
 }
 
 function summaryLimit(ratio: number): number {
@@ -390,15 +417,16 @@ export async function fetchSteamReviews(
   for (const [lang, lim] of Object.entries(summaryLangsMap)) langLimitMap[lang] = Math.max(langLimitMap[lang] ?? 0, lim);
   for (const lang of countryLangsOrdered) langLimitMap[lang] = Math.max(langLimitMap[lang] ?? 0, 40);
 
-  // ── Phase 4: fetch review texts in parallel ──
+  // ── Phase 4: fetch review texts in parallel, collect raw reviews ──
   const filteredAll: Record<string, string[]> = {};
   const filteredRecent: Record<string, string[]> = {};
-  const allReviewsForPt: Array<{ pt: number; pos: boolean }> = [];
+  const rawReviewsAll: RawReview[] = [];
+  const rawReviewsRecent: RawReview[] = [];
 
   await Promise.all(
     Object.entries(langLimitMap).map(async ([lang, fetchLimit]) => {
       const allRevs = await fetchLangReviews(appId, lang, null, fetchLimit);
-      allReviewsForPt.push(...allRevs.map((r) => ({ pt: r.playtime, pos: r.is_positive })));
+      rawReviewsAll.push(...allRevs.map((r) => ({ language: r.language, is_positive: r.is_positive, playtime: r.playtime, review: r.review })));
       const langLabel = getLangName(lang);
       filteredAll[lang] = allRevs.map(
         (r) => `[${r.is_positive ? "👍" : "👎"} | 🌐 ${langLabel} | ⏱️ ${r.playtime}h] ${r.review}`
@@ -407,23 +435,26 @@ export async function fetchSteamReviews(
         const issueLimit = issueLangsMap[lang] ?? 0;
         const recLimit = Math.max(fetchLimit, issueLimit);
         const recRevs = await fetchLangReviews(appId, lang, recentDaysVal, recLimit);
+        rawReviewsRecent.push(...recRevs.map((r) => ({ language: r.language, is_positive: r.is_positive, playtime: r.playtime, review: r.review })));
         filteredRecent[lang] = recRevs.map(
           (r) => `[${r.is_positive ? "👍" : "👎"} | 🌐 ${langLabel} | ⏱️ ${r.playtime}h] ${r.review}`
         );
       } else {
+        rawReviewsRecent.push(...rawReviewsAll.filter((r) => r.language === lang));
         filteredRecent[lang] = filteredAll[lang];
       }
     })
   );
 
-  // ── Phase 5: playtime segmentation ──
-  allReviewsForPt.sort((a, b) => a.pt - b.pt);
-  const n = allReviewsForPt.length;
+  // ── Phase 5: playtime segmentation (dedicated 2000-review sample) ──
+  const playtimeSample = await fetchPlaytimeSample(appId, 2000);
+  playtimeSample.sort((a, b) => a.pt - b.pt);
+  const n = playtimeSample.length;
   const q1 = Math.floor(n / 4);
   const q3 = Math.floor((n * 3) / 4);
-  const newbies = n >= 4 ? allReviewsForPt.slice(0, q1) : allReviewsForPt;
-  const normals = n >= 4 ? allReviewsForPt.slice(q1, q3) : [];
-  const cores = n >= 4 ? allReviewsForPt.slice(q3) : [];
+  const newbies = n >= 4 ? playtimeSample.slice(0, q1) : playtimeSample;
+  const normals = n >= 4 ? playtimeSample.slice(q1, q3) : [];
+  const cores = n >= 4 ? playtimeSample.slice(q3) : [];
 
   function calcPtStats(group: Array<{ pt: number; pos: boolean }>): [number, number, string] {
     if (!group.length) return [0, 0, EVAL_LABELS.none];
@@ -449,7 +480,8 @@ export async function fetchSteamReviews(
     newbie_avg: nAvg, newbie_total: nTot, newbie_desc: nDesc,
     norm_avg: normAvg, norm_total: normTot, norm_desc: normDesc,
     core_avg: cAvg, core_total: cTot, core_desc: cDesc,
-    collection_period: actualPeriodStr, // A+C로 잘린 경우 실제 수집 기간으로 보정
+    playtime_sample_total: n,
+    collection_period: actualPeriodStr,
     country_langs_ordered: countryLangsOrdered,
     summary_langs: Object.keys(summaryLangsMap),
     summary_coverage: summaryLangsCoverage,
@@ -457,5 +489,5 @@ export async function fetchSteamReviews(
     issue_langs: Object.keys(issueLangsMap),
   };
 
-  return { filteredAll, filteredRecent, storeStats, actualRecentLabel };
+  return { filteredAll, filteredRecent, storeStats, actualRecentLabel, rawReviewsAll, rawReviewsRecent };
 }
