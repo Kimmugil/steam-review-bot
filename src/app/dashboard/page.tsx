@@ -1,11 +1,14 @@
-import { getAllReports } from "@/lib/sheets";
+import { getAllReports, getUiTexts } from "@/lib/sheets";
 import { formatDateTime, sentimentClass, sentimentBg } from "@/lib/utils";
 import type { ReportIndex } from "@/lib/types";
+import { unstable_cache } from "next/cache";
 
 export const revalidate = 60;
 
+const getCachedUiTexts = unstable_cache(() => getUiTexts(), ["ui_texts"], { revalidate: 300 });
+
 export default async function DashboardPage() {
-  const reports = await getAllReports();
+  const [reports, t] = await Promise.all([getAllReports(), getCachedUiTexts()]);
 
   // Group by game
   const byGame = reports.reduce<Record<string, ReportIndex[]>>((acc, r) => {
@@ -25,7 +28,7 @@ export default async function DashboardPage() {
     <div className="max-w-6xl mx-auto px-4 py-10">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 mb-1">리포트 대시보드</h1>
+        <h1 className="text-2xl font-bold text-slate-900 mb-1">{t.dashboard_title ?? "리포트 대시보드"}</h1>
         <p className="text-slate-500 text-sm">
           총 {reports.length}개 분석 기록 · {games.length}개 게임
         </p>

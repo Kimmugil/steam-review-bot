@@ -10,20 +10,29 @@ import GlobalTab from "./GlobalTab";
 import QASection from "./QASection";
 import { formatDateTime } from "@/lib/utils";
 
-const TABS = [
-  { id: "summary", label: "주요 요약" },
-  { id: "news", label: "소식 & 이슈" },
-  { id: "playtime", label: "플레이타임" },
-  { id: "global", label: "글로벌 분석" },
-  { id: "qa", label: "AI 질문" },
-];
+const TAB_DEFAULTS: Record<string, string> = {
+  tab_summary: "주요 요약",
+  tab_news: "소식 & 이슈",
+  tab_playtime: "플레이타임",
+  tab_global: "글로벌 분석",
+  tab_qa: "AI 질문",
+};
 
 interface Props {
   report: AnalysisReport;
+  texts?: Record<string, string>;
 }
 
-export default function ReportView({ report }: Props) {
+export default function ReportView({ report, texts = {} }: Props) {
   const [activeTab, setActiveTab] = useState("summary");
+
+  const TABS = [
+    { id: "summary", label: texts.tab_summary ?? TAB_DEFAULTS.tab_summary },
+    { id: "news", label: texts.tab_news ?? TAB_DEFAULTS.tab_news },
+    { id: "playtime", label: texts.tab_playtime ?? TAB_DEFAULTS.tab_playtime },
+    { id: "global", label: texts.tab_global ?? TAB_DEFAULTS.tab_global },
+    { id: "qa", label: texts.tab_qa ?? TAB_DEFAULTS.tab_qa },
+  ];
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -87,7 +96,12 @@ export default function ReportView({ report }: Props) {
           <GlobalTab insights={report.ai_data} storeStats={report.store_stats} />
         )}
         {activeTab === "qa" && (
-          <QASection uuid={report.uuid} initialQA={report.qa_history} />
+          <QASection
+            uuid={report.uuid}
+            initialQA={report.qa_history}
+            placeholder={texts.report_qa_placeholder}
+            btnLabel={texts.report_qa_btn}
+          />
         )}
       </div>
     </div>

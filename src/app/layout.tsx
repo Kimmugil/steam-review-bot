@@ -1,12 +1,27 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { getUiTexts } from "@/lib/sheets";
+import { unstable_cache } from "next/cache";
 
-export const metadata: Metadata = {
-  title: "스팀 리뷰 탈곡기",
-  description: "스팀 유저 리뷰 글로벌 민심 분석 도구",
-};
+const getCachedUiTexts = unstable_cache(
+  () => getUiTexts(),
+  ["ui_texts"],
+  { revalidate: 300 }
+);
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getCachedUiTexts();
+  return {
+    title: t.app_title ?? "스팀 리뷰 탈곡기",
+    description: t.app_desc ?? "스팀 유저 리뷰 글로벌 민심 분석 도구",
+  };
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const t = await getCachedUiTexts();
+  const appTitle = t.app_title ?? "스팀 리뷰 탈곡기";
+  const dashboardTitle = t.dashboard_title ?? "리포트 대시보드";
+
   return (
     <html lang="ko">
       <body className="min-h-screen bg-slate-50">
@@ -14,11 +29,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
             <a href="/" className="flex items-center gap-2 font-bold text-slate-800 hover:text-slate-600 transition-colors">
               <span className="text-xl">🌾</span>
-              <span>스팀 리뷰 탈곡기</span>
+              <span>{appTitle}</span>
             </a>
             <div className="flex items-center gap-4">
               <a href="/dashboard" className="text-sm text-slate-500 hover:text-slate-800 transition-colors font-medium">
-                리포트 대시보드
+                {dashboardTitle}
               </a>
             </div>
           </div>

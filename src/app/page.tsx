@@ -16,9 +16,10 @@ export default function HomePage() {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  
+
   const [recentReports, setRecentReports] = useState<ReportIndex[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [t, setT] = useState<Record<string, string>>({});
 
   const fetchData = async () => {
     try {
@@ -38,6 +39,10 @@ export default function HomePage() {
       // Ignore poll errors
     }
   };
+
+  useEffect(() => {
+    fetch("/api/ui-texts").then(r => r.ok ? r.json() : {}).then(setT).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -81,10 +86,9 @@ export default function HomePage() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-100 text-4xl mb-6">
           🌾
         </div>
-        <h1 className="text-3xl font-bold text-slate-900 mb-3">스팀 리뷰 탈곡기</h1>
+        <h1 className="text-3xl font-bold text-slate-900 mb-3">{t.app_title ?? "스팀 리뷰 탈곡기"}</h1>
         <p className="text-slate-500 text-base leading-relaxed max-w-md mx-auto">
-          스팀 상점 주소나 App ID를 입력하면,<br />
-          유저 리뷰를 탈탈 털어 글로벌 민심을 확인할 수 있습니다.
+          {t.home_hero_desc ?? "스팀 상점 주소나 App ID를 입력하면, 유저 리뷰를 탈탈 털어 글로벌 민심을 확인할 수 있습니다."}
         </p>
       </div>
 
@@ -96,7 +100,7 @@ export default function HomePage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !submitting && startAnalysis()}
-            placeholder="예: https://store.steampowered.com/app/2215430"
+            placeholder={t.home_input_placeholder ?? "예: https://store.steampowered.com/app/2215430"}
             disabled={submitting}
             className="flex-1 border border-slate-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent disabled:bg-slate-100 disabled:text-slate-400 transition"
           />
@@ -105,7 +109,7 @@ export default function HomePage() {
             disabled={submitting || !input.trim()}
             className="px-5 py-3 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition whitespace-nowrap"
           >
-            {submitting ? "등록 중..." : "🚜 탈곡 대기열 등록"}
+            {submitting ? "등록 중..." : (t.home_analyze_btn ?? "🚜 탈곡 대기열 등록")}
           </button>
         </div>
         {error && (
@@ -121,7 +125,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-              리포트 발행 대기소 (진행 중)
+              {t.home_queue_title ?? "리포트 발행 대기소 (진행 중)"}
             </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -136,7 +140,7 @@ export default function HomePage() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">요청 시각: {formatDateTime(q.timestamp)}</p>
-                <p className="text-xs text-slate-500 mt-2">약 1~3분 소요됩니다.</p>
+                <p className="text-xs text-slate-500 mt-2">{t.home_queue_wait ?? "약 1~3분 소요됩니다."}</p>
               </div>
             ))}
           </div>
@@ -148,10 +152,10 @@ export default function HomePage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
-              최근 완료된 리포트
+              {t.home_recent_title ?? "최근 완료된 리포트"}
             </h2>
             <a href="/dashboard" className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
-              전체 보기 →
+              {t.home_view_all ?? "전체 보기 →"}
             </a>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

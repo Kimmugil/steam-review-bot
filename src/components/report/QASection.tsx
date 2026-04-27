@@ -7,9 +7,11 @@ import { Send } from "lucide-react";
 interface Props {
   uuid: string;
   initialQA?: QAItem[];
+  placeholder?: string;
+  btnLabel?: string;
 }
 
-export default function QASection({ uuid, initialQA = [] }: Props) {
+export default function QASection({ uuid, initialQA = [], placeholder, btnLabel }: Props) {
   const [history, setHistory] = useState<QAItem[]>(initialQA);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
@@ -73,7 +75,7 @@ export default function QASection({ uuid, initialQA = [] }: Props) {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && askQuestion()}
-            placeholder="예: 그래픽 관련 부정적인 여론이 있어?"
+            placeholder={placeholder ?? "예: 그래픽 관련 부정적인 여론이 있어?"}
             disabled={loading}
             className="flex-1 text-sm border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-slate-800 disabled:bg-slate-100 transition"
           />
@@ -87,7 +89,7 @@ export default function QASection({ uuid, initialQA = [] }: Props) {
             ) : (
               <Send className="w-4 h-4" />
             )}
-            {loading ? "분석 중..." : "질문하기"}
+            {loading ? "분석 중..." : (btnLabel ?? "질문하기")}
           </button>
         </div>
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
