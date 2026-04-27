@@ -29,39 +29,35 @@ async function ensureTab(sheetsApi: ReturnType<typeof google.sheets>, spreadshee
   }
 }
 
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzGgJ2fObM3i01BFDBBfs-9uNxuGEV_D9Fk_0NZGBVMuZ_iVefSRJ20clo2Pf6JqwWrdQ/exec";
+const GAME_SHEETS_FOLDER_ID = "1cMuannCe1rQGArv1vseTKtlTetg_U1Mr";
 
 async function getOrCreateGameSheet(appId: string, gameName: string): Promise<string> {
   const sheetName = `[${appId}] ${gameName.slice(0, 50)}`;
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON ?? "{}";
-  let serviceAccountEmail = "";
-  try { serviceAccountEmail = JSON.parse(raw).client_email || ""; } catch {}
+  const auth = getAuth();
+  const driveApi = google.drive({ version: "v3", auth });
 
-  let lastError = "";
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await new Promise((r) => setTimeout(r, attempt * 2000));
-    const response = await fetch(GAS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderId: "1cMuannCe1rQGArv1vseTKtlTetg_U1Mr", fileName: sheetName, serviceAccountEmail }),
-    });
+  // Search for existing spreadsheet with this name in the folder
+  const search = await driveApi.files.list({
+    q: `name = '${sheetName.replace(/'/g, "\\'")}' and '${GAME_SHEETS_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+    fields: "files(id,name)",
+    pageSize: 1,
+  });
 
-    const rawText = await response.text();
-    let data: { ok: boolean; spreadsheetId?: string; reused?: boolean; error?: string };
-    try {
-      data = JSON.parse(rawText);
-    } catch {
-      lastError = `GAS fetch failed (invalid JSON): ${rawText.slice(0, 300)}`;
-      continue;
-    }
+  const existing = search.data.files?.[0];
+  if (existing?.id) return existing.id;
 
-    if (!data.ok || !data.spreadsheetId) {
-      lastError = data.error ?? "spreadsheetId missing";
-      continue;
-    }
-    return data.spreadsheetId;
-  }
-  throw new Error(`Failed to create spreadsheet after retries: ${lastError}`);
+  // Create new spreadsheet in the folder
+  const created = await driveApi.files.create({
+    requestBody: {
+      name: sheetName,
+      mimeType: "application/vnd.google-apps.spreadsheet",
+      parents: [GAME_SHEETS_FOLDER_ID],
+    },
+    fields: "id",
+  });
+
+  if (!created.data.id) throw new Error("Drive file create returned no id");
+  return created.data.id;
 }
 
 // ── Tab header definitions ──────────────────────────────────────────────────
