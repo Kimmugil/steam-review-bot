@@ -14,7 +14,7 @@ const TABS = [
   { id: "summary", label: "주요 요약" },
   { id: "news", label: "소식 & 이슈" },
   { id: "playtime", label: "플레이타임" },
-  { id: "global", label: "글로벌 분析" },
+  { id: "global", label: "글로벌 분석" },
   { id: "qa", label: "AI 질문" },
 ];
 
@@ -55,7 +55,7 @@ export default function ReportView({ report }: Props) {
 
       {/* Meta row */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-xs text-slate-400">분析 {formatDateTime(report.analysis_time)}</p>
+        <p className="text-xs text-slate-400">분석 {formatDateTime(report.analysis_time)}</p>
       </div>
 
       {/* Tabs */}

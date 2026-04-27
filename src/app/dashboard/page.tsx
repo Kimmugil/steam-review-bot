@@ -27,16 +27,16 @@ export default async function DashboardPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900 mb-1">리포트 대시보드</h1>
         <p className="text-slate-500 text-sm">
-          총 {reports.length}개 분析 기록 · {games.length}개 게임
+          총 {reports.length}개 분석 기록 · {games.length}개 게임
         </p>
       </div>
 
       {reports.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-4xl mb-4">🌾</div>
-          <p className="text-slate-500">아직 분析 기록이 없습니다.</p>
+          <p className="text-slate-500">아직 분석 기록이 없습니다.</p>
           <a href="/" className="mt-4 inline-block text-sm text-slate-700 font-medium underline">
-            게임 분析 시작하기 →
+            게임 분석 시작하기 →
           </a>
         </div>
       ) : (
@@ -46,7 +46,7 @@ export default async function DashboardPage() {
               <div className={`px-5 py-4 border-b border-slate-100 flex items-center justify-between ${sentimentBg(latest.all_desc)}`}>
                 <div>
                   <h3 className="font-bold text-base leading-tight">{gameName}</h3>
-                  <p className="text-xs opacity-60 mt-0.5">App ID: {appId} · 총 {gameReports.length}회 분析</p>
+                  <p className="text-xs opacity-60 mt-0.5">App ID: {appId} · 총 {gameReports.length}회 분석</p>
                 </div>
                 <span className={sentimentClass(latest.all_desc)}>{latest.all_desc}</span>
               </div>
