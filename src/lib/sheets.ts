@@ -273,7 +273,8 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
   let notionUrl: string | null = null;
 
   for (let i = 1; i < values.length; i++) {
-    if (values[i][0] === uuid) {
+    const rowUuid = values[i][0]?.toString().trim();
+    if (rowUuid === uuid.trim()) {
       gameSheetId = values[i][11] ?? null;
       notionPublished = values[i][9] === "true";
       notionUrl = values[i][10] || null;
@@ -281,7 +282,8 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
     }
   }
   if (!gameSheetId) {
-    console.error(`[getReportFromSheets] UUID ${uuid} not found in reports_index (total rows: ${values.length})`);
+    const storedUuids = values.slice(1).map((r) => JSON.stringify(r[0]));
+    console.error(`[getReportFromSheets] UUID ${JSON.stringify(uuid)} not found. Stored: ${storedUuids.join(", ")}`);
     return null;
   }
 
