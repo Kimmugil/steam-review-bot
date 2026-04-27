@@ -262,6 +262,7 @@ export async function fetchSteamReviews(
   // ── Phase 2: recent period stats ──
   const langStats30: Record<string, { total: number; positive: number }> = {};
   let recentTotal = 0, recentPos = 0;
+  let actualOldestTs: number | null = null; // 실제로 수집된 가장 오래된 리뷰의 timestamp
 
   if (recentDaysVal) {
     if (daysSinceRelease < 4) {
@@ -300,7 +301,6 @@ export async function fetchSteamReviews(
       // A: cap at 20 iterations (~2,000 reviews max) instead of 50
       // C: hard 30-second deadline so popular games can't blow past the Vercel limit
       const scanDeadline = Date.now() + 30_000;
-      let actualOldestTs: number | null = null; // 실제로 수집된 가장 오래된 리뷰의 timestamp
       outer: for (let i = 0; i < 20; i++) {
         if (Date.now() > scanDeadline) break; // C: timeout cutoff
         try {
