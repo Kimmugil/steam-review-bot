@@ -13,7 +13,6 @@ type QueueItem = {
 };
 
 export default function HomePage() {
-  const router = useRouter();
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
