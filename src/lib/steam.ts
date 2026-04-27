@@ -247,7 +247,9 @@ export async function fetchSteamReviews(
   filteredAll: Record<string, string[]>;
   filteredRecent: Record<string, string[]>;
   storeStats: StoreStats;
-  actualRecentLabel: string | null; // null = 의도한 기간 그대로, 값 있으면 실제 수집 기간으로 보정됨
+  actualRecentLabel: string | null;
+  rawReviewsAll: RawReview[];
+  rawReviewsRecent: RawReview[];
 }> {
   const now = new Date();
   const daysSinceRelease = Math.floor((now.getTime() - releaseDate.getTime()) / 86400000);
