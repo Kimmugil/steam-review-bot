@@ -210,14 +210,18 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
 
   const rows = await sheetsApi.spreadsheets.values.get({
     spreadsheetId: MASTER_SHEET_ID,
-    range: "reports_index!A:K",
+    range: "reports_index!A:M",
   });
   const values = rows.data.values ?? [];
   let gameSheetId: string | null = null;
   for (let i = 1; i < values.length; i++) {
     const rowUuid = values[i][0]?.toString().trim();
     if (rowUuid === uuid.trim()) {
-      gameSheetId = values[i][9] ?? null;
+      // 구 포맷(notion 컬럼 포함): index 11이 gameSheetId
+      // 신 포맷(notion 제거): index 9가 gameSheetId
+      const v9 = values[i][9]?.toString() ?? "";
+      const v11 = values[i][11]?.toString() ?? "";
+      gameSheetId = v9.length > 10 && v9 !== "false" ? v9 : (v11.length > 10 ? v11 : null);
       break;
     }
   }
@@ -267,22 +271,27 @@ export async function getAllReports(): Promise<ReportIndex[]> {
   try {
     const rows = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: MASTER_SHEET_ID,
-      range: "reports_index!A:K",
+      range: "reports_index!A:M",
     });
     const values = rows.data.values ?? [];
     if (values.length <= 1) return [];
-    return values.slice(1).reverse().map((row) => ({
-      uuid: row[0] ?? "",
-      app_id: row[1] ?? "",
-      game_name: row[2] ?? "",
-      analysis_time: row[3] ?? "",
-      collection_period: row[4] ?? "",
-      all_desc: row[5] ?? "",
-      all_total: Number(row[6] ?? 0),
-      recent_desc: row[7] ?? "",
-      recent_total: Number(row[8] ?? 0),
-      game_sheet_id: row[9] ?? null,
-    }));
+    return values.slice(1).reverse().map((row) => {
+      const v9 = row[9]?.toString() ?? "";
+      const v11 = row[11]?.toString() ?? "";
+      const gameSheetId = v9.length > 10 && v9 !== "false" ? v9 : (v11.length > 10 ? v11 : null);
+      return {
+        uuid: row[0] ?? "",
+        app_id: row[1] ?? "",
+        game_name: row[2] ?? "",
+        analysis_time: row[3] ?? "",
+        collection_period: row[4] ?? "",
+        all_desc: row[5] ?? "",
+        all_total: Number(row[6] ?? 0),
+        recent_desc: row[7] ?? "",
+        recent_total: Number(row[8] ?? 0),
+        game_sheet_id: gameSheetId,
+      };
+    });
   } catch {
     return [];
   }
