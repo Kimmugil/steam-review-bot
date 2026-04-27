@@ -31,6 +31,7 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_SHEETS_MASTER_ID: ${{ secrets.GOOGLE_SHEETS_MASTER_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           # Use github.event.client_payload for repository_dispatch, or github.event.inputs for workflow_dispatch
           APP_ID="${{ github.event.client_payload.appId || github.event.inputs.appId }}"
