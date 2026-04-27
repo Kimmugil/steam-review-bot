@@ -29,7 +29,7 @@ async function ensureTab(sheetsApi: ReturnType<typeof google.sheets>, spreadshee
   }
 }
 
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzGgJ2fObM3i01BFDBBfs-9uNxuGEV_D9Fk_0NZGBVMuZ_iVefSRJ20clo2Pf6JqwWrdQ/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzOHTcqZAsvfiB53b2tmx8xdGQz5hI6F5GSvet6byYy1WJyH01vIZLb2prwqSZ2Y-PPVw/exec";
 
 async function getOrCreateGameSheet(appId: string, gameName: string): Promise<string> {
   const sheetName = `[${appId}] ${gameName.slice(0, 50)}`;
