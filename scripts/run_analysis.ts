@@ -57,8 +57,6 @@ async function main() {
       ai_data: insights,
       qa_history: [],
       analysis_time: new Date().toISOString(),
-      notion_published: false,
-      notion_url: null,
     };
 
     // 4) 구글 시트에 적재
