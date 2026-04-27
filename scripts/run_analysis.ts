@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { getSteamGameInfo, fetchLatestNews, getSmartPeriod, fetchSteamReviews } from "../src/lib/steam";
 import { saveAnalysisToSheets, updateQueueStatus } from "../src/lib/sheets";
+import { analyzeWithGemini } from "../src/lib/gemini";
 import type { AnalysisReport } from "../src/lib/types";
 
 async function main() {
@@ -33,6 +34,16 @@ async function main() {
 
     const { filteredAll, filteredRecent, storeStats, actualRecentLabel } = reviewResult;
 
+    // 4) AI 분석 (Gemini)
+    console.log("Analyzing with AI (Gemini)...");
+    const { insights, error: aiError } = await analyzeWithGemini(
+      gameInfo.gameName, filteredAll, filteredRecent, storeStats, actualRecentLabel ?? label, newsData
+    );
+
+    if (aiError || !insights) {
+      throw new Error(`AI Analysis failed: ${aiError}`);
+    }
+
     const report: AnalysisReport = {
       uuid,
       app_id: appId,
@@ -43,7 +54,7 @@ async function main() {
       smart_reason: reason,
       store_stats: storeStats,
       news_data: newsData,
-      ai_data: null, // No AI data yet (assumed done later or skipped)
+      ai_data: insights,
       qa_history: [],
       analysis_time: new Date().toISOString(),
       notion_published: false,

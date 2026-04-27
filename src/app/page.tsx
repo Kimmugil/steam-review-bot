@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { extractAppId, formatDateTime, sentimentClass } from "@/lib/utils";
 import type { ReportIndex } from "@/lib/types";
 
