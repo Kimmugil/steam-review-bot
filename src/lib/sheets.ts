@@ -63,10 +63,10 @@ async function getOrCreateGameSheet(appId: string, gameName: string): Promise<st
     throw new Error(`GAS fetch failed (invalid JSON): ${rawText.slice(0, 300)}`);
   }
 
-  if (!data.ok) {
-    throw new Error(`Failed to create spreadsheet: ${data.error}`);
+  if (!data.ok || !data.spreadsheetId) {
+    throw new Error(`Failed to create spreadsheet: ${data.error ?? "spreadsheetId missing"}`);
   }
-  const newId = data.spreadsheetId;
+  const newId: string = data.spreadsheetId;
 
   if (!data.reused) {
     const sheetsApi = await getSheetsClient();
