@@ -415,6 +415,7 @@ async function initConfig(sheetsApi: ReturnType<typeof google.sheets>): Promise<
         ["site_title", "스팀 리뷰 탈곡기", "브라우저 탭 & 네비게이션 타이틀"],
         ["site_description", "스팀 유저 리뷰 글로벌 민심 분석 도구", "메타 디스크립션"],
         ["admin_password", "admin1234", "관리자 패널 비밀번호 (반드시 변경하세요)"],
+        ["marquee.speed_per_card", "10", "마퀴 카드당 스크롤 속도(초) — 낮을수록 빠름"],
       ],
     },
   });

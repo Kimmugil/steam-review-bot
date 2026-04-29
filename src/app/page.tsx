@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { extractAppId, formatDateTime, formatDate, sentimentClass } from "@/lib/utils";
+import { extractAppId, formatDate } from "@/lib/utils";
 import type { ReportIndex } from "@/lib/types";
 import { Search } from "lucide-react";
+import ItemCard from "@/components/ItemCard";
 
-// 카드 회전값 순환
 const CARD_ROTATIONS = [1.2, -1.0, 0.8, -1.5, 1.0, -0.8];
 
 type QueueItem = {
@@ -14,57 +14,6 @@ type QueueItem = {
 type GamePreview = {
   appId: string; gameName: string; headerImage: string; releaseDate: string;
 };
-
-// Steam CDN 썸네일 URL
-function steamThumb(appId: string) {
-  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
-}
-
-// ── 회전 리포트 카드 ────────────────────────────────────────────────────────
-function ReportCard({ r, rotation }: { r: ReportIndex; rotation: number }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <a
-      href={`/report/${r.uuid}`}
-      className="block overflow-hidden transition-all duration-200"
-      style={{
-        background: "#FFFFFF",
-        border: "2px solid #1A1A1A",
-        borderRadius: 16,
-        boxShadow: hovered ? "4px 4px 0px 0px #1A1A1A" : "2px 2px 0px 0px #1A1A1A",
-        transform: `rotate(${hovered ? 0 : rotation}deg) ${hovered ? "translate(-1px,-1px)" : ""}`,
-        textDecoration: "none",
-        cursor: "pointer",
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {/* 썸네일 */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={steamThumb(r.app_id)}
-        alt={r.game_name}
-        className="w-full object-cover"
-        style={{ height: 90, borderBottom: "2px solid #1A1A1A", display: "block" }}
-        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-      />
-      <div className="p-3">
-        {/* 게임명 + 배지 */}
-        <p className="font-black text-sm leading-tight line-clamp-2 mb-1.5" style={{ color: "#1A1A1A" }}>
-          {r.game_name}
-        </p>
-        <span className={sentimentClass(r.all_desc)}>{r.all_desc}</span>
-        {/* AI 한줄평 */}
-        {r.one_liner && (
-          <p className="text-xs mt-2 leading-snug line-clamp-2 italic" style={{ color: "#4A4A4A" }}>
-            &ldquo;{r.one_liner}&rdquo;
-          </p>
-        )}
-        <p className="text-xs mt-2" style={{ color: "#9CA3AF" }}>{formatDateTime(r.analysis_time)}</p>
-      </div>
-    </a>
-  );
-}
 
 // ── 메인 ───────────────────────────────────────────────────────────────────
 export default function HomePage() {
@@ -80,6 +29,7 @@ export default function HomePage() {
   const [recentReports, setRecentReports] = useState<ReportIndex[]>([]);
   const [queue, setQueue]               = useState<QueueItem[]>([]);
   const [t, setT]                       = useState<Record<string, string>>({});
+  const [speedPerCard, setSpeedPerCard] = useState(10);
 
   // 롤링 텍스트
   const [rollingIdx,  setRollingIdx]  = useState(0);
@@ -106,13 +56,16 @@ export default function HomePage() {
       const [reportsRes, queueRes] = await Promise.all([
         fetch("/api/reports"), fetch("/api/queue"),
       ]);
-      if (reportsRes.ok) setRecentReports((await reportsRes.json()).slice(0, 6));
+      if (reportsRes.ok) setRecentReports((await reportsRes.json()).slice(0, 12));
       if (queueRes.ok)   setQueue(await queueRes.json());
     } catch { /* ignore */ }
   };
 
   useEffect(() => {
     fetch("/api/ui-texts").then(r => r.ok ? r.json() : {}).then(setT).catch(() => {});
+    fetch("/api/config").then(r => r.ok ? r.json() : {})
+      .then(d => { if (d.marqueeSpeedPerCard) setSpeedPerCard(Number(d.marqueeSpeedPerCard)); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -335,32 +288,48 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── 최근 리포트 ────────────────────────────────────────────── */}
-      {recentReports.length > 0 && (
-        <div className="pb-16">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="font-black text-lg" style={{ color: "#1A1A1A" }}>
-              {t.home_recent_title ?? "최근 완료된 리포트"}
-            </h2>
-            <a
-              href="/dashboard"
-              className="neo-button px-4 py-1.5 text-xs"
-              style={{ background: "#F0EFEC", color: "#1A1A1A" }}
+      {/* ── 최근 리포트 마퀴 ──────────────────────────────────────── */}
+      {recentReports.length > 0 && (() => {
+        const MARQUEE_MIN = 5;
+        const padRepeats  = Math.ceil(MARQUEE_MIN / recentReports.length);
+        const padded      = Array.from({ length: padRepeats }, () => recentReports).flat();
+        const marqueeItems = [...padded, ...padded];
+        const duration     = `${Math.max(padded.length * speedPerCard, 10)}s`;
+        return (
+          <div className="pb-16">
+            <div className="flex items-center justify-between mb-5 px-0">
+              <h2 className="font-black text-lg" style={{ color: "#1A1A1A" }}>
+                {t.home_recent_title ?? "최근 완료된 리포트"}
+              </h2>
+              <a
+                href="/dashboard"
+                className="neo-button px-4 py-1.5 text-xs"
+                style={{ background: "#F0EFEC", color: "#1A1A1A" }}
+              >
+                {t.home_view_all ?? "전체 보기 →"}
+              </a>
+            </div>
+            {/* 마퀴 래퍼 — max-w 제한 벗어나야 하므로 -mx-4로 full-bleed */}
+            <div
+              className="overflow-hidden marquee-pause -mx-4"
+              style={{
+                maskImage: "linear-gradient(to right, transparent 0, black 80px, black calc(100% - 80px), transparent 100%)",
+                WebkitMaskImage: "linear-gradient(to right, transparent 0, black 80px, black calc(100% - 80px), transparent 100%)",
+              }}
             >
-              {t.home_view_all ?? "전체 보기 →"}
-            </a>
+              <div className="marquee-track" style={{ animationDuration: duration }}>
+                {marqueeItems.map((r, i) => (
+                  <ItemCard
+                    key={`${r.uuid}-${i}`}
+                    r={r}
+                    rotate={0}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-            {recentReports.map((r, i) => (
-              <ReportCard
-                key={r.uuid}
-                r={r}
-                rotation={CARD_ROTATIONS[i % CARD_ROTATIONS.length]}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── 빈 상태 ────────────────────────────────────────────────── */}
       {recentReports.length === 0 && queue.length === 0 && (
