@@ -10,9 +10,9 @@ interface Props {
 }
 
 const SEGMENTS = [
-  { key: "newbie" as const, icon: "🌱", label: "뉴비", sub: "하위 25%", border: "border-emerald-200", bg: "bg-emerald-50/50", dot: "bg-emerald-500" },
-  { key: "normal" as const, icon: "🚶", label: "일반",  sub: "중위 50%", border: "border-blue-200",   bg: "bg-blue-50/50",   dot: "bg-blue-500"   },
-  { key: "core"   as const, icon: "💀", label: "코어",  sub: "상위 25%", border: "border-violet-200", bg: "bg-violet-50/50", dot: "bg-violet-500" },
+  { key: "newbie" as const, icon: "🌱", label: "뉴비", sub: "하위 25%", border: "border-emerald-200", bg: "bg-emerald-50/50", dot: "bg-emerald-500", barColor: "#10b981" },
+  { key: "normal" as const, icon: "🚶", label: "일반",  sub: "중위 50%", border: "border-blue-200",   bg: "bg-blue-50/50",   dot: "bg-blue-500",   barColor: "#3b82f6" },
+  { key: "core"   as const, icon: "💀", label: "코어",  sub: "상위 25%", border: "border-violet-200", bg: "bg-violet-50/50", dot: "bg-violet-500", barColor: "#8b5cf6" },
 ];
 
 export default function PlaytimeTab({ insights, storeStats }: Props) {
@@ -27,6 +27,9 @@ export default function PlaytimeTab({ insights, storeStats }: Props) {
     core:   { total: storeStats.core_total,   avg: storeStats.core_avg,   desc: storeStats.core_desc,   summary: pt.core_summary,   title: pt.core_title   },
   };
 
+  // Proposal B — 평균 플레이타임 비교 차트
+  const maxAvg = Math.max(storeStats.newbie_avg, storeStats.norm_avg, storeStats.core_avg);
+
   return (
     <div className="space-y-5">
       {/* Sample size note */}
@@ -35,6 +38,38 @@ export default function PlaytimeTab({ insights, storeStats }: Props) {
         <span>
           플레이타임 전용 표본 <strong className="text-slate-600">{sampleTotal.toLocaleString()}개</strong> 리뷰를 플레이타임순 정렬 후 하위 25% / 중위 50% / 상위 25%로 분할 분석
         </span>
+      </div>
+
+      {/* 평균 플레이타임 비교 차트 (Proposal B) */}
+      <div className="card p-5">
+        <p className="section-label">⏱ 유저 유형별 평균 플레이타임 비교</p>
+        <div className="space-y-3 mt-1">
+          {SEGMENTS.map((seg) => {
+            const data = segData[seg.key];
+            const barW = maxAvg > 0 ? (data.avg / maxAvg) * 100 : 0;
+            const samplePct = sampleTotal > 0 ? ((data.total / sampleTotal) * 100).toFixed(0) : "0";
+            return (
+              <div key={seg.key} className="flex items-center gap-3">
+                <span className="w-16 text-xs text-slate-600 font-medium flex-shrink-0">
+                  {seg.icon} {seg.label}
+                </span>
+                <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">
+                  <div
+                    className="h-full rounded-lg transition-all duration-500"
+                    style={{ width: `${barW}%`, backgroundColor: seg.barColor }}
+                  />
+                </div>
+                <span className="text-sm font-bold text-slate-700 w-14 text-right flex-shrink-0">
+                  {data.avg}h
+                </span>
+                <span className="text-xs text-slate-400 w-14 flex-shrink-0">
+                  표본 {samplePct}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-xs text-slate-400 mt-3">* 막대 길이는 세 유형 중 최대값 대비 상대 비율입니다.</p>
       </div>
 
       {/* Cross comparison insights */}

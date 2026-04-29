@@ -109,7 +109,18 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
           <div className="space-y-2">
             {posCategories.length > 0 && (
               <Collapsible
-                title={<span className="text-sm font-medium text-emerald-700">✅ 긍정 항목 ({posCategories.length}개)</span>}
+                title={
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-emerald-700">✅ 긍정 항목 ({posCategories.length}개)</span>
+                    <div className="flex flex-wrap gap-1">
+                      {posCategories.map((cat, i) => (
+                        <span key={i} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                          {cleanCat(cat.category)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                }
                 defaultOpen={false}
               >
                 <div className="space-y-3 pt-2">
@@ -127,7 +138,18 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
             )}
             {negCategories.length > 0 && (
               <Collapsible
-                title={<span className="text-sm font-medium text-red-600">⚠️ 부정 항목 ({negCategories.length}개)</span>}
+                title={
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-red-600">⚠️ 부정 항목 ({negCategories.length}개)</span>
+                    <div className="flex flex-wrap gap-1">
+                      {negCategories.map((cat, i) => (
+                        <span key={i} className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full">
+                          {cleanCat(cat.category)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                }
                 defaultOpen={false}
               >
                 <div className="space-y-3 pt-2">
@@ -145,7 +167,18 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
             )}
             {etcCategories.length > 0 && (
               <Collapsible
-                title={<span className="text-sm font-medium text-slate-500">📌 기타 ({etcCategories.length}개)</span>}
+                title={
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-slate-500">📌 기타 ({etcCategories.length}개)</span>
+                    <div className="flex flex-wrap gap-1">
+                      {etcCategories.map((cat, i) => (
+                        <span key={i} className="text-xs bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full">
+                          {cleanCat(cat.category)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                }
                 defaultOpen={false}
               >
                 <div className="space-y-3 pt-2">
