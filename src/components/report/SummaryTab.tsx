@@ -28,7 +28,7 @@ function MetricCard({ label, sub, value, count }: {
       style={{ background: bg, border: "2px solid #1A1A1A", borderRadius: 14 }}
     >
       <p className="text-xs font-bold" style={{ color: "#1A1A1A", opacity: 0.6 }}>{label}</p>
-      <p className="font-black text-base leading-tight" style={{ color }}>{value}</p>
+      <p className="font-black text-base leading-tight" style={{ color, fontFamily: "'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif" }}>{value}</p>
       {count != null && (
         <p className="text-xs font-bold" style={{ color, opacity: 0.55 }}>{count.toLocaleString()}개</p>
       )}

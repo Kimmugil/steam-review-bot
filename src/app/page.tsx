@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { extractAppId, formatDate } from "@/lib/utils";
+import { extractAppId, formatDate, formatDateTime } from "@/lib/utils";
 import type { ReportIndex } from "@/lib/types";
 import { Search } from "lucide-react";
 import ItemCard from "@/components/ItemCard";
