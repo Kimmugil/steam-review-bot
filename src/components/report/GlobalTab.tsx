@@ -24,7 +24,129 @@ function regionCardClass(trend: string): string {
   return "bg-slate-50 border-slate-200 text-slate-700";
 }
 
-// 가로 스택 바 차트 — eval 뱃지 고정폭으로 막대 정렬 통일
+// 도넛 차트 색상 팔레트
+const PALETTE = [
+  "#6366f1", "#10b981", "#f59e0b", "#3b82f6", "#ef4444",
+  "#8b5cf6", "#06b6d4", "#f97316", "#84cc16", "#ec4899",
+  "#94a3b8", // 기타용 (슬레이트)
+];
+
+// ── 도넛 차트 ─────────────────────────────────────────────────────────────────
+function DonutChart({ storeStats }: { storeStats: StoreStats }) {
+  const [view, setView] = useState<"region" | "lang">("region");
+
+  const rawRows = view === "region"
+    ? storeStats.table_data_region
+    : storeStats.table_data_all;
+
+  // 권역은 전체 표시, 언어는 TOP 10 + 기타
+  const TOP_N = view === "region" ? rawRows.length : 10;
+  const topRows = rawRows.slice(0, TOP_N);
+  const restRows = rawRows.slice(TOP_N);
+  const restRatio = restRows.reduce((sum, r) => sum + parsePercent(r.ratio), 0);
+  const restCount = restRows.reduce((sum, r) => sum + r.count, 0);
+
+  const segments = [
+    ...topRows.map((row, i) => ({
+      label: view === "region"
+        ? (row as RegionTableRow).region
+        : (row as TableRow).lang_with_flag,
+      ratio: parsePercent(row.ratio),
+      count: row.count,
+      eval: row.eval,
+      color: PALETTE[i % (PALETTE.length - 1)],
+    })),
+    ...(restRatio > 0.05
+      ? [{ label: `기타 ${restRows.length}개 언어`, ratio: restRatio, count: restCount, eval: "", color: PALETTE[PALETTE.length - 1] }]
+      : []),
+  ];
+
+  const R = 52, CX = 68, CY = 68;
+  const CIRC = 2 * Math.PI * R;
+  let cumArc = 0;
+
+  return (
+    <div className="card p-5">
+      {/* 헤더 + 토글 */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <p className="section-label mb-0">🌏 리뷰 비중 분포</p>
+          <p className="text-xs text-slate-400 mt-0.5">어느 지역에서 가장 많이 작성했는지 확인하세요.</p>
+        </div>
+        <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium flex-shrink-0">
+          <button
+            onClick={() => setView("region")}
+            className={`px-3 py-1.5 transition-colors ${view === "region" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-50"}`}
+          >🗺️ 권역별</button>
+          <button
+            onClick={() => setView("lang")}
+            className={`px-3 py-1.5 transition-colors border-l border-slate-200 ${view === "lang" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-50"}`}
+          >🌍 언어별</button>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-center gap-6">
+        {/* SVG 도넛 차트 */}
+        <div className="flex-shrink-0">
+          <svg width="136" height="136" viewBox="0 0 136 136">
+            {/* 배경 트랙 */}
+            <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="22" />
+            {/* 각 세그먼트 */}
+            {segments.map((seg, i) => {
+              const arc = (seg.ratio / 100) * CIRC;
+              const dashOffset = CIRC / 4 - cumArc;
+              cumArc += arc;
+              return (
+                <circle
+                  key={i}
+                  cx={CX} cy={CY} r={R}
+                  fill="none"
+                  stroke={seg.color}
+                  strokeWidth="22"
+                  strokeLinecap="butt"
+                  strokeDasharray={`${Math.max(arc - 2.5, 0)} ${CIRC}`}
+                  strokeDashoffset={dashOffset}
+                />
+              );
+            })}
+            {/* 중앙 텍스트 */}
+            <text x={CX} y={CY - 7} textAnchor="middle" fill="#94a3b8" fontSize="8.5" fontWeight="500">
+              {view === "region" ? "권역 수" : "언어 수"}
+            </text>
+            <text x={CX} y={CY + 9} textAnchor="middle" fill="#1e293b" fontSize="17" fontWeight="700">
+              {view === "region"
+                ? `${storeStats.table_data_region.length}개`
+                : `${storeStats.table_data_all.length}개`}
+            </text>
+          </svg>
+        </div>
+
+        {/* 범례 */}
+        <div className="flex-1 w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4">
+            {segments.map((seg, i) => (
+              <div key={i} className="flex items-center gap-2 min-w-0">
+                <span
+                  className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                  style={{ backgroundColor: seg.color }}
+                />
+                <span className="text-xs text-slate-600 truncate flex-1">{seg.label}</span>
+                <span className="text-xs font-bold text-slate-800 flex-shrink-0 ml-1">
+                  {seg.ratio.toFixed(1)}%
+                </span>
+                <span className="text-xs text-slate-400 flex-shrink-0 w-16 text-right">
+                  {seg.count.toLocaleString()}개
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 가로 스택 바 차트 ─────────────────────────────────────────────────────────
 function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTableRow)[]; isRegion?: boolean }) {
   return (
     <div className="space-y-2">
@@ -33,35 +155,22 @@ function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTabl
         const negW = parsePercent(row.neg_ratio);
         return (
           <div key={i} className="flex items-center gap-2.5">
-            {/* 순위 */}
             <span className="w-4 text-xs text-slate-300 text-right flex-shrink-0">{row.rank}</span>
-            {/* 언어/권역명 */}
             <span className="w-28 text-xs text-slate-700 font-medium truncate flex-shrink-0">
               {isRegion ? (row as RegionTableRow).region : (row as TableRow).lang_with_flag}
             </span>
-            {/* 긍정(초록) / 부정(빨강) 스택 바 */}
             <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden relative">
-              <div
-                className="absolute inset-y-0 left-0 bg-emerald-400"
-                style={{ width: `${posW}%` }}
-              />
-              <div
-                className="absolute inset-y-0 bg-red-400"
-                style={{ left: `${posW}%`, width: `${negW}%` }}
-              />
+              <div className="absolute inset-y-0 left-0 bg-emerald-400" style={{ width: `${posW}%` }} />
+              <div className="absolute inset-y-0 bg-red-400" style={{ left: `${posW}%`, width: `${negW}%` }} />
             </div>
-            {/* 전체 비중 */}
             <span className="text-xs text-slate-400 w-11 text-right flex-shrink-0">{row.ratio}</span>
-            {/* 리뷰 수 */}
             <span className="text-xs text-slate-500 w-16 text-right flex-shrink-0">{row.count.toLocaleString()}개</span>
-            {/* 평가 뱃지 — w-32 고정폭으로 막대 들쑥날쑥 방지 */}
             <div className="w-32 flex-shrink-0 flex justify-end">
               <span className={sentimentClass(row.eval)}>{row.eval}</span>
             </div>
           </div>
         );
       })}
-      {/* 범례 */}
       <div className="flex items-center gap-4 mt-2 pt-2.5 border-t border-slate-100">
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <span className="w-3 h-2.5 rounded bg-emerald-400 flex-shrink-0 inline-block" />긍정 비율
@@ -77,7 +186,6 @@ function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTabl
   );
 }
 
-// 전체 보기 버튼
 function ExpandButton({ expanded, totalCount, onToggle }: {
   expanded: boolean; totalCount: number; onToggle: () => void;
 }) {
@@ -102,6 +210,9 @@ export default function GlobalTab({ insights, storeStats }: Props) {
 
   return (
     <div className="space-y-6">
+
+      {/* 도넛 차트 — 리뷰 비중 분포 */}
+      <DonutChart storeStats={storeStats} />
 
       {/* 권역별 분석 */}
       <div className="card p-5">
@@ -180,7 +291,6 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                   <span>🚩</span>{country.country}
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* 긍정 카드 */}
                   {posCats.length > 0 && (
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
                       <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
@@ -199,7 +309,6 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                       ))}
                     </div>
                   )}
-                  {/* 부정 카드 */}
                   {negCats.length > 0 && (
                     <div className="rounded-xl border border-red-200 bg-red-50/40 p-4 space-y-3">
                       <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5">

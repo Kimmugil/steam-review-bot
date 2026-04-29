@@ -3,6 +3,19 @@
 import { useState } from "react";
 import type { AnalysisReport } from "@/lib/types";
 import SentimentBadge from "./SentimentBadge";
+
+// 헤더 이미지 위에 올라가는 뱃지 — 어두운 배경에서도 잘 보이도록 솔리드 색상 사용
+function HeaderBadge({ value }: { value: string }) {
+  let cls = "bg-emerald-500 text-white border-emerald-600";
+  if (value.includes("부정")) cls = "bg-red-500 text-white border-red-600";
+  else if (value === "복합적") cls = "bg-amber-500 text-white border-amber-600";
+  else if (!value.includes("긍정")) cls = "bg-slate-500 text-white border-slate-600";
+  return (
+    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border shadow-lg whitespace-nowrap ${cls}`}>
+      {value}
+    </span>
+  );
+}
 import SummaryTab from "./SummaryTab";
 import NewsTab from "./NewsTab";
 import PlaytimeTab from "./PlaytimeTab";
@@ -63,7 +76,7 @@ export default function ReportView({ report, texts = {} }: Props) {
                 </p>
               )}
             </div>
-            <SentimentBadge value={report.store_stats.all_desc} />
+            <HeaderBadge value={report.store_stats.all_desc} />
           </div>
         </div>
 
