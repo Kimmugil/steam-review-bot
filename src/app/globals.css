@@ -6,45 +6,183 @@
 
 @layer base {
   * { box-sizing: border-box; }
-  html { -webkit-font-smoothing: antialiased; }
+  html { -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
   body {
-    @apply bg-slate-50 text-slate-900;
+    background: #FAFAFA;
+    color: #1A1A1A;
     font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  *:focus-visible {
+    outline: 2px solid #FFD600;
+    outline-offset: 2px;
   }
 }
 
 @layer components {
-  .sentiment-pos {
-    @apply text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-0.5 text-xs font-semibold;
-  }
-  .sentiment-neg {
-    @apply text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-0.5 text-xs font-semibold;
-  }
-  .sentiment-mixed {
-    @apply text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5 text-xs font-semibold;
-  }
-  .sentiment-neutral {
-    @apply text-slate-500 bg-slate-100 border border-slate-200 rounded-md px-2 py-0.5 text-xs font-semibold;
-  }
+  /* ── Cards ──────────────────────────────────────────── */
   .card {
-    @apply bg-white rounded-2xl border border-slate-200 shadow-sm;
+    background: #FFFFFF;
+    border: 2px solid #1A1A1A;
+    border-radius: 16px;
   }
   .card-hover {
-    @apply card transition-all hover:shadow-md hover:border-slate-300;
+    background: #FFFFFF;
+    border: 2px solid #1A1A1A;
+    border-radius: 16px;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    transition: box-shadow 0.1s ease, transform 0.1s ease;
+    cursor: pointer;
   }
-  /* Section label */
+  .card-hover:hover {
+    box-shadow: 4px 4px 0px 0px #1A1A1A;
+    transform: translate(-1px, -1px);
+  }
+  .neo-card { background: #FFFFFF; border: 2px solid #1A1A1A; border-radius: 16px; }
+  .neo-card-static { background: #FFFFFF; border: 2px solid #1A1A1A; border-radius: 16px; cursor: default; }
+
+  /* ── Buttons ─────────────────────────────────────────── */
+  .neo-button {
+    border: 2px solid #1A1A1A;
+    font-weight: 800;
+    border-radius: 9999px;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    transition: box-shadow 0.1s ease, transform 0.1s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .neo-button:hover  { transform: translate(1px, 1px);  box-shadow: 1px 1px 0px 0px #1A1A1A; }
+  .neo-button:active { transform: translate(2px, 2px);  box-shadow: none; }
+  .neo-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 2px 2px 0px 0px #1A1A1A !important;
+  }
+
+  /* ── Input wrapper ───────────────────────────────────── */
+  .neo-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background: #FFFFFF;
+    border: 2px solid #1A1A1A;
+    border-radius: 20px;
+    box-shadow: 4px 4px 0px 0px #1A1A1A;
+    transition: box-shadow 0.12s ease, transform 0.12s ease;
+  }
+  .neo-input-wrap:focus-within {
+    box-shadow: 6px 6px 0px 0px #1A1A1A;
+    transform: translate(-1px, -1px);
+  }
+
+  /* ── Sentiment badges ────────────────────────────────── */
+  .sentiment-pos {
+    background-color: #56D0A0;
+    color: #1A1A1A;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+  .sentiment-neg {
+    background-color: #FF6B6B;
+    color: #1A1A1A;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+  .sentiment-mixed {
+    background-color: #FFD600;
+    color: #1A1A1A;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+  .sentiment-neutral {
+    background-color: #F0EFEC;
+    color: #4A4A4A;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+
+  /* ── Section labels ──────────────────────────────────── */
   .section-label {
-    @apply text-xs font-semibold text-slate-400 mb-3;
+    font-size: 11px;
+    font-weight: 800;
+    color: #9CA3AF;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
   }
-  /* Section heading: medium weight, used sparingly */
   .section-heading {
-    @apply text-base font-semibold text-slate-700 mb-3;
+    font-size: 16px;
+    font-weight: 800;
+    color: #1A1A1A;
+    margin-bottom: 12px;
+  }
+
+  /* ── Rolling text ────────────────────────────────────── */
+  .rolling-enter {
+    animation: rolling-in 0.35s ease forwards;
+  }
+  .rolling-exit {
+    animation: rolling-out 0.25s ease forwards;
+  }
+
+  /* ── Skeleton ────────────────────────────────────────── */
+  .skeleton {
+    background-color: #F0EFEC;
+    border: 2px solid #E2E8F0;
+    border-radius: 16px;
+    animation: pulse 1.5s ease-in-out infinite;
   }
 }
 
-html { scroll-behavior: smooth; }
+/* ── Keyframes ───────────────────────────────────────────── */
+@keyframes rolling-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes rolling-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-10px); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { @apply bg-slate-100; }
-::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
-::-webkit-scrollbar-thumb:hover { @apply bg-slate-400; }
+/* ── Scrollbar ───────────────────────────────────────────── */
+* { scrollbar-width: thin; scrollbar-color: #E2E8F0 transparent; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+::-webkit-scrollbar-corner { background: transparent; }
+/* 가로 스크롤바 숨김 */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }

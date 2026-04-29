@@ -1,41 +1,72 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Image from "next/image";
 import { extractAppId, formatDateTime, formatDate, sentimentClass } from "@/lib/utils";
 import type { ReportIndex } from "@/lib/types";
+import { Search } from "lucide-react";
+
+// 카드 회전값 순환
+const CARD_ROTATIONS = [1.2, -1.0, 0.8, -1.5, 1.0, -0.8];
 
 type QueueItem = {
-  appId: string;
-  gameName: string;
-  uuid: string;
-  status: string;
-  timestamp: string;
+  appId: string; gameName: string; uuid: string; status: string; timestamp: string;
 };
-
 type GamePreview = {
-  appId: string;
-  gameName: string;
-  headerImage: string;
-  releaseDate: string;
+  appId: string; gameName: string; headerImage: string; releaseDate: string;
 };
 
-export default function HomePage() {
-  const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+// ── 회전 리포트 카드 ────────────────────────────────────────────────────────
+function ReportCard({ r, rotation }: { r: ReportIndex; rotation: number }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <a
+      href={`/report/${r.uuid}`}
+      className="block p-4 transition-all duration-200"
+      style={{
+        background: "#FFFFFF",
+        border: "2px solid #1A1A1A",
+        borderRadius: 16,
+        boxShadow: hovered ? "4px 4px 0px 0px #1A1A1A" : "2px 2px 0px 0px #1A1A1A",
+        transform: `rotate(${hovered ? 0 : rotation}deg) ${hovered ? "translate(-1px,-1px)" : ""}`,
+        textDecoration: "none",
+        cursor: "pointer",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <p className="font-black text-sm leading-tight line-clamp-2" style={{ color: "#1A1A1A" }}>
+          {r.game_name}
+        </p>
+        <span className={sentimentClass(r.all_desc)}>{r.all_desc}</span>
+      </div>
+      <p className="text-xs" style={{ color: "#9CA3AF" }}>{formatDateTime(r.analysis_time)}</p>
+    </a>
+  );
+}
 
-  const [preview, setPreview] = useState<GamePreview | null>(null);
+// ── 메인 ───────────────────────────────────────────────────────────────────
+export default function HomePage() {
+  const [input,    setInput]    = useState("");
+  const [error,    setError]    = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted,  setSubmitted]  = useState(false);
+
+  const [preview, setPreview]           = useState<GamePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   const [recentReports, setRecentReports] = useState<ReportIndex[]>([]);
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [t, setT] = useState<Record<string, string>>({});
+  const [queue, setQueue]               = useState<QueueItem[]>([]);
+  const [t, setT]                       = useState<Record<string, string>>({});
+
+  // 롤링 텍스트
+  const [rollingIdx,  setRollingIdx]  = useState(0);
+  const [rollingAnim, setRollingAnim] = useState<"enter" | "exit" | "idle">("idle");
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── 큐 스텝 라벨 ───────────────────────────────────────────────────────
   const queueStepLabel = (status: string): string => {
     const map: Record<string, string> = {
       PENDING:       t.queue_step_pending   ?? "대기 중",
@@ -48,17 +79,15 @@ export default function HomePage() {
     return map[status] ?? (t.queue_step_default ?? "처리 중...");
   };
 
+  // ── 데이터 폴링 ────────────────────────────────────────────────────────
   const fetchData = async () => {
     try {
       const [reportsRes, queueRes] = await Promise.all([
-        fetch("/api/reports"),
-        fetch("/api/queue"),
+        fetch("/api/reports"), fetch("/api/queue"),
       ]);
-      if (reportsRes.ok) setRecentReports((await reportsRes.json()).slice(0, 8));
-      if (queueRes.ok) setQueue(await queueRes.json());
-    } catch {
-      // Ignore poll errors
-    }
+      if (reportsRes.ok) setRecentReports((await reportsRes.json()).slice(0, 6));
+      if (queueRes.ok)   setQueue(await queueRes.json());
+    } catch { /* ignore */ }
   };
 
   useEffect(() => {
@@ -71,19 +100,29 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
-  // 입력값 변화 시 게임 프리뷰 debounce 조회
+  // ── 롤링 텍스트 순환 ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (recentReports.length < 2) return;
+    const timer = setInterval(() => {
+      setRollingAnim("exit");
+      setTimeout(() => {
+        setRollingIdx(i => (i + 1) % recentReports.length);
+        setRollingAnim("enter");
+        setTimeout(() => setRollingAnim("idle"), 350);
+      }, 250);
+    }, 3200);
+    return () => clearInterval(timer);
+  }, [recentReports]);
+
+  // ── 게임 프리뷰 debounce ──────────────────────────────────────────────
   useEffect(() => {
     const appId = extractAppId(input);
     if (!appId) {
-      setPreview(null);
-      setPreviewError(null);
-      setPreviewLoading(false);
+      setPreview(null); setPreviewError(null); setPreviewLoading(false);
       if (debounceRef.current) clearTimeout(debounceRef.current);
       return;
     }
-    setPreviewLoading(true);
-    setPreview(null);
-    setPreviewError(null);
+    setPreviewLoading(true); setPreview(null); setPreviewError(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
@@ -93,68 +132,81 @@ export default function HomePage() {
         setPreview(data);
       } catch (e) {
         setPreviewError(e instanceof Error ? e.message : (t.error_game_not_found ?? "게임을 찾을 수 없습니다."));
-      } finally {
-        setPreviewLoading(false);
-      }
+      } finally { setPreviewLoading(false); }
     }, 600);
-  }, [input]);
+  }, [input, t]);
 
+  // ── 분석 시작 ────────────────────────────────────────────────────────
   const startAnalysis = async () => {
     const appId = extractAppId(input);
     if (!appId) {
       setError(t.error_invalid_input ?? "유효한 App ID 또는 스팀 상점 주소를 입력해 주세요.");
       return;
     }
-    setError(null);
-    setSubmitting(true);
+    setError(null); setSubmitting(true);
     try {
-      const res = await fetch("/api/analyze/steam", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res  = await fetch("/api/analyze/steam", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ appId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? (t.error_queue_register_failed ?? "대기열 등록에 실패했습니다."));
-      setInput("");
-      setPreview(null);
-      setSubmitted(true);
+      setInput(""); setPreview(null); setSubmitted(true);
       setTimeout(() => setSubmitted(false), 4000);
       fetchData();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
+  const pendingQueue = queue.filter(q => q.status === "PENDING" || q.status.includes("_START") || q.status === "GAME_INFO" || q.status === "SAVING");
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
+    <div className="max-w-3xl mx-auto px-4">
 
-      {/* Hero — tractor 이미지 + 설명 */}
-      <div className="flex flex-col sm:flex-row items-center gap-8 mb-12">
-        <div className="flex-shrink-0">
-          <Image
-            src="/tractor.png"
-            alt="스팀 리뷰 탈곡기"
-            width={140}
-            height={140}
-            className="rounded-2xl object-contain"
-            priority
-          />
-        </div>
-        <div className="text-center sm:text-left">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            {t.app_title ?? "스팀 리뷰 탈곡기"}
-          </h1>
-          <p className="text-slate-500 text-sm leading-relaxed">
-            {t.home_hero_desc ?? "스팀 상점 주소나 App ID를 입력하면, 유저 리뷰를 탈탈 털어 글로벌 민심을 분석해 드립니다."}
-          </p>
-        </div>
-      </div>
+      {/* ── HERO ──────────────────────────────────────────────────── */}
+      <div className="pt-16 pb-12 text-center">
+        {/* 타이틀 */}
+        <h1
+          className="mb-4 leading-tight"
+          style={{ fontSize: "clamp(2rem, 6vw, 3rem)", fontWeight: 900, color: "#1A1A1A" }}
+        >
+          스팀 리뷰를{" "}
+          <span
+            className="inline-block"
+            style={{ backgroundColor: "#FFD600", padding: "0 6px", borderRadius: 4 }}
+          >
+            탈곡
+          </span>
+          해 드립니다
+        </h1>
 
-      {/* 입력 카드 */}
-      <div className="card p-6 mb-8">
-        <div className="flex gap-3">
+        {/* 롤링 텍스트 */}
+        <div
+          className="relative overflow-hidden mx-auto mb-6"
+          style={{ height: 24, maxWidth: 400 }}
+        >
+          {recentReports.length > 0 ? (
+            <p
+              key={rollingIdx}
+              className={`absolute inset-x-0 text-center text-sm ${
+                rollingAnim === "enter" ? "rolling-enter" :
+                rollingAnim === "exit"  ? "rolling-exit"  : ""
+              }`}
+              style={{ color: "#4A4A4A" }}
+            >
+              최근 분석: <strong style={{ color: "#1A1A1A" }}>{recentReports[rollingIdx]?.game_name}</strong>
+            </p>
+          ) : (
+            <p className="absolute inset-x-0 text-center text-sm" style={{ color: "#9CA3AF" }}>
+              {t.home_hero_desc ?? "스팀 게임 주소를 입력하면 민심을 탈탈 털어 드립니다"}
+            </p>
+          )}
+        </div>
+
+        {/* 입력창 */}
+        <div className="neo-input-wrap max-w-xl mx-auto">
+          <Search className="flex-shrink-0 ml-2" size={18} style={{ color: "#9CA3AF" }} />
           <input
             type="text"
             value={input}
@@ -162,12 +214,14 @@ export default function HomePage() {
             onKeyDown={(e) => e.key === "Enter" && !submitting && startAnalysis()}
             placeholder={t.home_input_placeholder ?? "예: https://store.steampowered.com/app/2215430"}
             disabled={submitting}
-            className="flex-1 border border-slate-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent disabled:bg-slate-100 disabled:text-slate-400 transition"
+            className="flex-1 bg-transparent text-sm focus:outline-none"
+            style={{ color: "#1A1A1A", minWidth: 0 }}
           />
           <button
             onClick={startAnalysis}
             disabled={submitting || !input.trim()}
-            className="px-5 py-3 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition whitespace-nowrap"
+            className="neo-button flex-shrink-0 px-5 py-2 text-sm"
+            style={{ backgroundColor: "#FFD600", color: "#1A1A1A" }}
           >
             {submitting ? (t.home_btn_submitting ?? "등록 중...") : (t.home_analyze_btn ?? "🚜 탈곡 시작")}
           </button>
@@ -175,112 +229,131 @@ export default function HomePage() {
 
         {/* 게임 프리뷰 */}
         {previewLoading && (
-          <div className="mt-4 flex items-center gap-2 text-xs text-slate-400">
-            <span className="inline-block w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+          <div className="mt-4 flex items-center justify-center gap-2 text-xs" style={{ color: "#9CA3AF" }}>
+            <span className="inline-block w-3 h-3 rounded-full border-2 border-t-transparent border-current animate-spin" />
             {t.home_preview_loading ?? "게임 정보 확인 중..."}
           </div>
         )}
         {preview && !previewLoading && (
-          <div className="mt-4 flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div
+            className="mt-4 flex items-center gap-4 p-3 mx-auto max-w-xl"
+            style={{ background: "#FFFDE7", border: "2px solid #1A1A1A", borderRadius: 16 }}
+          >
             {preview.headerImage && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview.headerImage} alt={preview.gameName} className="w-24 h-14 object-cover rounded-lg flex-shrink-0" />
+              <img src={preview.headerImage} alt={preview.gameName}
+                className="w-20 h-12 object-cover flex-shrink-0"
+                style={{ borderRadius: 8, border: "2px solid #1A1A1A" }}
+              />
             )}
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-800 leading-tight">{preview.gameName}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{t.home_preview_release_label ?? "출시일:"} {formatDate(preview.releaseDate)}</p>
-              <p className="text-xs text-emerald-600 mt-1 font-medium">{t.home_preview_confirm ?? "✓ 이 게임이 맞나요?"}</p>
+            <div className="min-w-0 text-left">
+              <p className="font-black text-sm leading-tight" style={{ color: "#1A1A1A" }}>{preview.gameName}</p>
+              <p className="text-xs mt-0.5" style={{ color: "#4A4A4A" }}>
+                {t.home_preview_release_label ?? "출시일:"} {formatDate(preview.releaseDate)}
+              </p>
+              <p className="text-xs mt-1 font-bold" style={{ color: "#10b981" }}>
+                {t.home_preview_confirm ?? "✓ 이 게임이 맞나요?"}
+              </p>
             </div>
           </div>
         )}
         {previewError && !previewLoading && (
-          <p className="mt-3 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          <p className="mt-3 text-xs max-w-xl mx-auto px-4 py-2 rounded-xl"
+            style={{ background: "#FFF5F5", border: "2px solid #FF6B6B", color: "#C0392B" }}>
             ⚠️ {previewError}
           </p>
         )}
         {error && (
-          <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+          <p className="mt-3 text-sm max-w-xl mx-auto px-4 py-2 rounded-xl"
+            style={{ background: "#FFF5F5", border: "2px solid #FF6B6B", color: "#C0392B" }}>
             {error}
           </p>
         )}
         {submitted && (
-          <p className="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
+          <p className="mt-3 text-sm max-w-xl mx-auto px-4 py-2 rounded-xl"
+            style={{ background: "#FFFDE7", border: "2px solid #1A1A1A", color: "#1A1A1A" }}>
             {t.home_queue_submitted ?? "✅ 대기열에 등록됐습니다. 잠시 후 아래 목록에서 진행 상황을 확인하세요."}
           </p>
         )}
+
+        <p className="mt-4 text-xs" style={{ color: "#9CA3AF" }}>
+          분석에 약 1~3분이 소요됩니다
+        </p>
       </div>
 
-      {/* 대기열 */}
-      {queue.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            <h2 className="text-sm font-semibold text-slate-500">
-              {t.home_queue_title ?? "분석 진행 중"}
-            </h2>
-          </div>
-          <div className="space-y-2">
-            {queue.map((q) => {
-              const stepLabel = queueStepLabel(q.status);
-              return (
-                <div key={q.uuid} className="card p-4 bg-amber-50/60 border-amber-200">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-800 text-sm leading-tight truncate">
-                        {q.gameName || `App ID: ${q.appId}`}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">{t.queue_requested_label ?? "요청:"} {formatDateTime(q.timestamp)}</p>
-                    </div>
-                    <div className="flex-shrink-0 text-right">
-                      <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full whitespace-nowrap">
-                        {stepLabel}
-                      </span>
-                      <p className="text-xs text-slate-400 mt-1">{t.home_queue_wait ?? "약 1~3분 소요"}</p>
-                    </div>
-                  </div>
-                  {/* 진행 표시줄 */}
-                  <div className="mt-3 h-1 bg-amber-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-400 rounded-full animate-pulse" style={{ width: "60%" }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {/* ── 진행 중 배너 ───────────────────────────────────────────── */}
+      {pendingQueue.length > 0 && (
+        <div className="mb-10 space-y-3">
+          {pendingQueue.map((q) => (
+            <div
+              key={q.uuid}
+              className="flex items-center gap-4 px-5 py-4"
+              style={{ background: "#FFFDE7", border: "2px solid #1A1A1A", borderRadius: 16 }}
+            >
+              {/* 진행 스피너 */}
+              <span
+                className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0"
+                style={{ borderColor: "#1A1A1A", borderTopColor: "transparent" }}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-black text-sm truncate" style={{ color: "#1A1A1A" }}>
+                  {q.gameName || `App ID: ${q.appId}`}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "#4A4A4A" }}>
+                  {queueStepLabel(q.status)} · {t.queue_requested_label ?? "요청:"} {formatDateTime(q.timestamp)}
+                </p>
+              </div>
+              <span
+                className="text-xs font-bold px-3 py-1 rounded-full flex-shrink-0"
+                style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
+              >
+                {t.home_queue_wait ?? "약 1~3분 소요"}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* 최근 완료 리포트 */}
+      {/* ── 최근 리포트 ────────────────────────────────────────────── */}
       {recentReports.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-slate-500">
+        <div className="pb-16">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-black text-lg" style={{ color: "#1A1A1A" }}>
               {t.home_recent_title ?? "최근 완료된 리포트"}
             </h2>
-            <a href="/dashboard" className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+            <a
+              href="/dashboard"
+              className="neo-button px-4 py-1.5 text-xs"
+              style={{ background: "#F0EFEC", color: "#1A1A1A" }}
+            >
               {t.home_view_all ?? "전체 보기 →"}
             </a>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {recentReports.map((r) => (
-              <a key={r.uuid} href={`/report/${r.uuid}`} className="card-hover p-4 block">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <p className="font-semibold text-slate-800 text-sm leading-tight line-clamp-2">
-                    {r.game_name}
-                  </p>
-                  <span className={sentimentClass(r.all_desc)}>{r.all_desc}</span>
-                </div>
-                <p className="text-xs text-slate-400">{formatDateTime(r.analysis_time)}</p>
-              </a>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+            {recentReports.map((r, i) => (
+              <ReportCard
+                key={r.uuid}
+                r={r}
+                rotation={CARD_ROTATIONS[i % CARD_ROTATIONS.length]}
+              />
             ))}
           </div>
         </div>
       )}
 
-      {/* 리포트도 대기열도 없는 첫 방문 상태 */}
+      {/* ── 빈 상태 ────────────────────────────────────────────────── */}
       {recentReports.length === 0 && queue.length === 0 && (
-        <div className="text-center py-10 text-slate-400">
-          <p className="text-sm">{t.home_empty_state_line1 ?? "아직 분석된 게임이 없습니다."}</p>
-          <p className="text-xs mt-1">{t.home_empty_state_line2 ?? "위에서 스팀 게임 주소를 입력해 첫 탈곡을 시작해 보세요 🌾"}</p>
+        <div
+          className="text-center py-14 mb-16"
+          style={{ border: "2px dashed #E2E8F0", borderRadius: 16 }}
+        >
+          <p className="text-4xl mb-3">🌾</p>
+          <p className="font-black text-base" style={{ color: "#1A1A1A" }}>
+            {t.home_empty_state_line1 ?? "아직 분석된 게임이 없습니다."}
+          </p>
+          <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>
+            {t.home_empty_state_line2 ?? "위에서 스팀 게임 주소를 입력해 첫 탈곡을 시작해 보세요 🌾"}
+          </p>
         </div>
       )}
     </div>

@@ -3,17 +3,8 @@ import "./globals.css";
 import { getUiTexts, getConfig } from "@/lib/sheets";
 import { unstable_cache } from "next/cache";
 
-const getCachedUiTexts = unstable_cache(
-  () => getUiTexts(),
-  ["ui_texts"],
-  { revalidate: 300 }
-);
-
-const getCachedConfig = unstable_cache(
-  () => getConfig(),
-  ["site_config"],
-  { revalidate: 300 }
-);
+const getCachedUiTexts = unstable_cache(() => getUiTexts(), ["ui_texts"], { revalidate: 300 });
+const getCachedConfig  = unstable_cache(() => getConfig(),   ["site_config"], { revalidate: 300 });
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getCachedConfig();
@@ -25,27 +16,58 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const t = await getCachedUiTexts();
-  const appTitle = t.app_title ?? "스팀 리뷰 탈곡기";
-  const dashboardTitle = t.dashboard_title ?? "리포트 대시보드";
+  const appTitle      = t.app_title       ?? "스팀 리뷰 탈곡기";
+  const dashboardTitle = t.dashboard_title ?? "대시보드";
 
   return (
     <html lang="ko">
-      <body className="min-h-screen bg-slate-50">
-        <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-slate-200">
+      <body className="min-h-screen" style={{ background: "#FAFAFA" }}>
+        {/* ── Nav ──────────────────────────────────────────────── */}
+        <nav
+          className="sticky top-0 z-50 bg-white"
+          style={{ borderBottom: "2px solid #1A1A1A" }}
+        >
           <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-            <a href="/" className="flex items-center gap-2 font-bold text-slate-800 hover:text-slate-600 transition-colors">
+            {/* Logo */}
+            <a
+              href="/"
+              className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+              style={{ fontWeight: 900, fontSize: 16, color: "#1A1A1A", textDecoration: "none" }}
+            >
               <span className="text-xl">🌾</span>
               <span>{appTitle}</span>
             </a>
-            <div className="flex items-center gap-4">
-              <a href="/dashboard" className="text-sm text-slate-500 hover:text-slate-800 transition-colors font-medium">
-                {dashboardTitle}
+
+            {/* Nav links */}
+            <div className="flex items-center gap-5">
+              <NavLink href="/dashboard" label={dashboardTitle} />
+              {/* 관리자 — 조용한 텍스트 링크 */}
+              <a
+                href="/admin"
+                style={{ fontSize: 11, color: "#B0B0B0", textDecoration: "none", fontWeight: 500 }}
+                className="hover:opacity-70 transition-opacity"
+              >
+                ⚙ 관리
               </a>
             </div>
           </div>
         </nav>
+
         <main>{children}</main>
       </body>
     </html>
+  );
+}
+
+/* client-side active detection은 server layout에서 불가 — 단순 링크로 */
+function NavLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      className="relative text-sm transition-colors hover:opacity-70"
+      style={{ fontWeight: 700, color: "#1A1A1A", textDecoration: "none" }}
+    >
+      {label}
+    </a>
   );
 }

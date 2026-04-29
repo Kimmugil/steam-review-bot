@@ -2,26 +2,21 @@
 
 import { useState } from "react";
 import type { AnalysisReport } from "@/lib/types";
-import SentimentBadge from "./SentimentBadge";
-
-// 헤더 이미지 위에 올라가는 뱃지 — 어두운 배경에서도 잘 보이도록 솔리드 색상 사용
-function HeaderBadge({ value }: { value: string }) {
-  let cls = "bg-emerald-500 text-white border-emerald-600";
-  if (value.includes("부정")) cls = "bg-red-500 text-white border-red-600";
-  else if (value === "복합적") cls = "bg-amber-500 text-white border-amber-600";
-  else if (!value.includes("긍정")) cls = "bg-slate-500 text-white border-slate-600";
-  return (
-    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border shadow-lg whitespace-nowrap ${cls}`}>
-      {value}
-    </span>
-  );
-}
-import SummaryTab from "./SummaryTab";
-import NewsTab from "./NewsTab";
-import PlaytimeTab from "./PlaytimeTab";
-import GlobalTab from "./GlobalTab";
-import QASection from "./QASection";
+import { sentimentClass } from "@/lib/utils";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import SummaryTab   from "./SummaryTab";
+import NewsTab      from "./NewsTab";
+import PlaytimeTab  from "./PlaytimeTab";
+import GlobalTab    from "./GlobalTab";
+import QASection    from "./QASection";
+
+// 감성 뱃지 배경색 (헤더 이미지 위에 올라가는 solid 뱃지)
+function sentimentSolidBg(val: string): string {
+  if (val.includes("긍정")) return "#56D0A0";
+  if (val.includes("부정")) return "#FF6B6B";
+  if (val === "복합적")    return "#FFD600";
+  return "#F0EFEC";
+}
 
 const TAB_DEFAULTS: Record<string, string> = {
   tab_summary:  "📊 주요 요약",
@@ -39,7 +34,6 @@ interface Props {
 export default function ReportView({ report, texts = {} }: Props) {
   const [activeTab, setActiveTab] = useState("summary");
 
-  // texts 값에 이미 이모지가 포함될 수 있으므로 그대로 사용, 없으면 이모지 포함 기본값 사용
   const TABS = [
     { id: "summary",  label: texts.tab_summary  ?? TAB_DEFAULTS.tab_summary  },
     { id: "news",     label: texts.tab_news     ?? TAB_DEFAULTS.tab_news     },
@@ -48,13 +42,18 @@ export default function ReportView({ report, texts = {} }: Props) {
     { id: "qa",       label: texts.tab_qa       ?? TAB_DEFAULTS.tab_qa       },
   ];
 
+  const badgeBg = sentimentSolidBg(report.store_stats.all_desc);
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
 
-      {/* Game Header Card */}
-      <div className="card overflow-hidden mb-5">
-        {/* 헤더 이미지 — 스팀 원본 비율(460×215, ~2:1)에 맞춰 반응형 높이 적용 */}
-        <div className="relative h-40 sm:h-52 md:h-60">
+      {/* ── 게임 헤더 카드 ──────────────────────────────────────────── */}
+      <div
+        className="overflow-hidden mb-6"
+        style={{ border: "2px solid #1A1A1A", borderRadius: 20, background: "#FFFFFF" }}
+      >
+        {/* 커버 이미지 */}
+        <div className="relative" style={{ height: "clamp(140px, 28vw, 240px)" }}>
           {report.header_image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -63,74 +62,87 @@ export default function ReportView({ report, texts = {} }: Props) {
               className="absolute inset-0 w-full h-full object-cover"
             />
           ) : (
-            <div className="absolute inset-0 bg-slate-200" />
+            <div className="absolute inset-0" style={{ background: "#F0EFEC" }} />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          {/* 그라디언트 오버레이 */}
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)" }}
+          />
+          {/* 게임 이름 + 배지 */}
           <div className="absolute bottom-0 inset-x-0 p-5 flex items-end justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-white text-xl font-bold leading-snug">{report.game_name}</h1>
-              {/* App ID 대신 출시일 표시 */}
+              <h1
+                className="leading-tight"
+                style={{ color: "#FFFFFF", fontWeight: 900, fontSize: "clamp(16px, 4vw, 22px)" }}
+              >
+                {report.game_name}
+              </h1>
               {report.release_date && (
-                <p className="text-white/50 text-xs mt-0.5">
+                <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 12, marginTop: 2 }}>
                   출시: {formatDate(report.release_date)}
                 </p>
               )}
             </div>
-            <HeaderBadge value={report.store_stats.all_desc} />
+            {/* 감성 배지 — solid 배경 */}
+            <span
+              className="flex-shrink-0 font-black text-xs px-3 py-1.5 rounded-full"
+              style={{ background: badgeBg, border: "2px solid #1A1A1A", color: "#1A1A1A" }}
+            >
+              {report.store_stats.all_desc}
+            </span>
           </div>
         </div>
 
-        {/* AI one-liner */}
-        <div className="px-5 py-3.5 border-t border-slate-100 flex items-start gap-3">
+        {/* AI 한줄평 */}
+        <div
+          className="px-5 py-4 flex items-start gap-3"
+          style={{ borderTop: "2px solid #1A1A1A" }}
+        >
           <span className="text-lg flex-shrink-0 leading-none mt-0.5">💬</span>
-          <p className="text-sm text-slate-700 leading-relaxed italic">
+          <p className="text-sm leading-relaxed italic" style={{ color: "#4A4A4A" }}>
             &ldquo;{report.ai_data.critic_one_liner}&rdquo;
           </p>
         </div>
       </div>
 
-      {/* Meta row */}
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-xs text-slate-400">분석 시각: {formatDateTime(report.analysis_time)}</p>
-      </div>
+      {/* ── 메타 정보 ──────────────────────────────────────────────── */}
+      <p className="text-xs mb-4" style={{ color: "#9CA3AF" }}>
+        분석 시각: {formatDateTime(report.analysis_time)}
+      </p>
 
-      {/* Tabs — overflow-x-auto로 모바일 스크롤 대응, 스크롤바 자체는 숨김 */}
-      <div className="flex border-b border-slate-200 mb-6 gap-0.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]">
+      {/* ── 탭 바 ──────────────────────────────────────────────────── */}
+      <div
+        className="flex gap-1 mb-6 overflow-x-auto no-scrollbar"
+        style={{ borderBottom: "2px solid #1A1A1A", paddingBottom: 0 }}
+      >
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px flex-shrink-0 ${
-              activeTab === tab.id
-                ? "border-slate-800 text-slate-900"
-                : "border-transparent text-slate-400 hover:text-slate-600"
-            }`}
+            className="px-4 py-2.5 text-sm font-black whitespace-nowrap flex-shrink-0 transition-colors"
+            style={{
+              borderBottom: activeTab === tab.id ? "3px solid #1A1A1A" : "3px solid transparent",
+              marginBottom: -2,
+              color: activeTab === tab.id ? "#1A1A1A" : "#9CA3AF",
+              background: "none",
+              border: "none",
+              borderBottom: activeTab === tab.id ? "3px solid #1A1A1A" : "3px solid transparent",
+              cursor: "pointer",
+            } as React.CSSProperties}
           >
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
+      {/* ── 탭 콘텐츠 ────────────────────────────────────────────── */}
       <div>
-        {activeTab === "summary" && (
-          <SummaryTab
-            insights={report.ai_data}
-            storeStats={report.store_stats}
-            recentLabel={report.recent_label}
-            smartReason={report.smart_reason}
-          />
-        )}
-        {activeTab === "news" && (
-          <NewsTab insights={report.ai_data} newsData={report.news_data} />
-        )}
-        {activeTab === "playtime" && (
-          <PlaytimeTab insights={report.ai_data} storeStats={report.store_stats} />
-        )}
-        {activeTab === "global" && (
-          <GlobalTab insights={report.ai_data} storeStats={report.store_stats} />
-        )}
-        {activeTab === "qa" && (
+        {activeTab === "summary"  && <SummaryTab insights={report.ai_data} storeStats={report.store_stats} recentLabel={report.recent_label} smartReason={report.smart_reason} />}
+        {activeTab === "news"     && <NewsTab insights={report.ai_data} newsData={report.news_data} />}
+        {activeTab === "playtime" && <PlaytimeTab insights={report.ai_data} storeStats={report.store_stats} />}
+        {activeTab === "global"   && <GlobalTab insights={report.ai_data} storeStats={report.store_stats} />}
+        {activeTab === "qa"       && (
           <QASection
             uuid={report.uuid}
             initialQA={report.qa_history}
