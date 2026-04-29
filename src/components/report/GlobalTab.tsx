@@ -43,21 +43,24 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
   const TOP_N = view === "region" ? rawRows.length : 10;
   const topRows = rawRows.slice(0, TOP_N);
   const restRows = rawRows.slice(TOP_N);
-  const restRatio = restRows.reduce((sum, r) => sum + parsePercent(r.ratio), 0);
   const restCount = restRows.reduce((sum, r) => sum + r.count, 0);
+
+  // ratio는 반올림 값이라 합산이 100%가 안 될 수 있음 → count 기반으로 직접 계산
+  const totalCount = rawRows.reduce((sum, r) => sum + r.count, 0);
+  const toRatio = (count: number) => totalCount > 0 ? (count / totalCount) * 100 : 0;
 
   const segments = [
     ...topRows.map((row, i) => ({
       label: view === "region"
         ? (row as RegionTableRow).region
         : (row as TableRow).lang_with_flag,
-      ratio: parsePercent(row.ratio),
+      ratio: toRatio(row.count),
       count: row.count,
       eval: row.eval,
       color: PALETTE[i % (PALETTE.length - 1)],
     })),
-    ...(restRatio > 0.05
-      ? [{ label: `기타 ${restRows.length}개 언어`, ratio: restRatio, count: restCount, eval: "", color: PALETTE[PALETTE.length - 1] }]
+    ...(restCount > 0
+      ? [{ label: `기타 ${restRows.length}개 언어`, ratio: toRatio(restCount), count: restCount, eval: "", color: PALETTE[PALETTE.length - 1] }]
       : []),
   ];
 
@@ -119,22 +122,22 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
           </svg>
         </div>
 
-        {/* 범례 — 단일 열, 순위 표시 */}
-        <div className="flex-1 w-full space-y-1.5">
+        {/* 범례 — 단일 열, 고정폭 컬럼 정렬 */}
+        <div className="flex-1 space-y-1.5">
           {segments.map((seg, i) => (
-            <div key={i} className="flex items-center gap-2.5">
+            <div key={i} className="flex items-center gap-2 text-xs">
               {/* 순위 */}
-              <span className="text-xs text-slate-300 w-4 text-right flex-shrink-0 font-mono">{i + 1}</span>
+              <span className="w-4 text-right text-slate-300 font-mono flex-shrink-0">{i + 1}</span>
               {/* 색상 칩 */}
               <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: seg.color }} />
-              {/* 이름 */}
-              <span className="text-xs text-slate-700 flex-1 min-w-0">{seg.label}</span>
+              {/* 이름 — 고정폭으로 번호/비율이 붙어 보이게 */}
+              <span className="text-slate-700 w-40 truncate flex-shrink-0">{seg.label}</span>
               {/* 비율 */}
-              <span className="text-xs font-bold text-slate-800 flex-shrink-0 w-12 text-right">
+              <span className="font-bold text-slate-800 w-11 text-right flex-shrink-0">
                 {seg.ratio.toFixed(1)}%
               </span>
               {/* 리뷰 수 */}
-              <span className="text-xs text-slate-400 flex-shrink-0 w-16 text-right">
+              <span className="text-slate-400 w-16 text-right flex-shrink-0">
                 {seg.count.toLocaleString()}개
               </span>
             </div>
