@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getReportFromSheets } from "@/lib/sheets";
+import { getReportFromSheets, appendQAToSheet } from "@/lib/sheets";
 import { askFollowupQuestion } from "@/lib/gemini";
+import { randomUUID } from "crypto";
 
 export const maxDuration = 120;
 
@@ -12,5 +13,12 @@ export async function POST(req: NextRequest) {
   const { answer, error } = await askFollowupQuestion(report.ai_data, question);
   if (error) return NextResponse.json({ error }, { status: 500 });
 
-  return NextResponse.json({ answer });
+  const qaUuid = randomUUID();
+  const askedAt = new Date().toISOString();
+
+  // 시트에 비동기 저장 — 저장 실패가 응답을 막지 않도록 non-blocking
+  appendQAToSheet(qaUuid, uuid, report.app_id, report.game_name, askedAt, question, answer)
+    .catch((err) => console.error("[qa] Failed to save QA to sheets:", err));
+
+  return NextResponse.json({ answer, qa_uuid: qaUuid, asked_at: askedAt });
 }

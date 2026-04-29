@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { QAItem } from "@/lib/types";
 import { Send } from "lucide-react";
+import { formatDateTime } from "@/lib/utils";
 
 interface Props {
   uuid: string;
@@ -38,7 +39,15 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "질문 처리 실패");
-      setHistory((prev) => [...prev, { q: question.trim(), a: data.answer }]);
+      setHistory((prev) => [
+        ...prev,
+        {
+          qa_uuid: data.qa_uuid,
+          q: question.trim(),
+          a: data.answer,
+          asked_at: data.asked_at ?? new Date().toISOString(),
+        },
+      ]);
       setQuestion("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -53,30 +62,9 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
         <h3 className="section-heading">🙋 AI에게 추가 질문하기</h3>
         <p className="text-sm text-slate-500 mb-4">
           현재 작성된 분석 리포트를 기반으로 궁금한 점을 물어보세요.
+          질문과 답변은 모든 방문자가 볼 수 있도록 누적 저장됩니다.
         </p>
       </div>
-
-      {/* Q&A 히스토리 */}
-      {history.length > 0 && (
-        <div className="space-y-4">
-          {history.map((qa, i) => (
-            <div key={i} className="space-y-2">
-              <div className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-slate-800 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">Q</span>
-                <p className="text-sm font-semibold text-slate-800 pt-0.5">{qa.q}</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">AI</span>
-                <div className="card bg-slate-50 p-4 flex-1">
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{qa.a}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-          {/* 새 답변 추가 시 이 위치로 스크롤 */}
-          <div ref={bottomRef} />
-        </div>
-      )}
 
       {/* 입력창 */}
       <div className="card p-4">
@@ -109,6 +97,50 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
           </p>
         )}
       </div>
+
+      {/* Q&A 히스토리 */}
+      {history.length > 0 && (
+        <div className="space-y-1">
+          {/* 헤더 */}
+          <div className="flex items-center gap-2 mb-3">
+            <p className="text-xs font-semibold text-slate-400">💬 질문 히스토리</p>
+            <span className="text-xs text-slate-300 bg-slate-100 rounded-full px-2 py-0.5">{history.length}건</span>
+          </div>
+
+          <div className="space-y-4">
+            {history.map((qa, i) => (
+              <div key={qa.qa_uuid ?? i} className="card p-4 space-y-3">
+                {/* 질문 */}
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-slate-800 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">Q</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 leading-snug">{qa.q}</p>
+                    {qa.asked_at && (
+                      <p className="text-xs text-slate-400 mt-0.5">{formatDateTime(qa.asked_at)}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 구분선 */}
+                <div className="border-t border-slate-100" />
+
+                {/* 답변 */}
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">AI</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{qa.a}</p>
+                    {qa.qa_uuid && (
+                      <p className="text-xs text-slate-300 mt-2 font-mono">#{qa.qa_uuid.slice(0, 8)}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {/* 새 답변 추가 시 이 위치로 스크롤 */}
+            <div ref={bottomRef} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

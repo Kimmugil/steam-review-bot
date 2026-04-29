@@ -1,4 +1,4 @@
-import { getReportFromSheets, getUiTexts } from "@/lib/sheets";
+import { getReportFromSheets, getUiTexts, getQAHistory } from "@/lib/sheets";
 import ReportView from "@/components/report/ReportView";
 import { notFound } from "next/navigation";
 import { unstable_cache } from "next/cache";
@@ -20,7 +20,12 @@ export async function generateMetadata({ params }: Props) {
 }
 
 export default async function ReportPage({ params }: Props) {
-  const [report, t] = await Promise.all([getReportFromSheets(params.uuid), getCachedUiTexts()]);
+  const [report, t, qaHistory] = await Promise.all([
+    getReportFromSheets(params.uuid),
+    getCachedUiTexts(),
+    getQAHistory(params.uuid),
+  ]);
   if (!report) notFound();
+  report.qa_history = qaHistory;
   return <ReportView report={report} texts={t} />;
 }

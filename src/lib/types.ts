@@ -136,8 +136,10 @@ export interface NewsData {
 }
 
 export interface QAItem {
+  qa_uuid?: string;   // 개별 질문 UUID
   q: string;
   a: string;
+  asked_at?: string;  // ISO 8601 timestamp
 }
 
 export interface AnalysisReport {

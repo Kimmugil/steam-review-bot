@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import { getLangName } from "./config";
-import type { AnalysisReport, ReportIndex, RawReview } from "./types";
+import type { AnalysisReport, ReportIndex, RawReview, QAItem } from "./types";
 
 const MASTER_SHEET_ID = process.env.GOOGLE_SHEETS_MASTER_ID ?? "";
 
@@ -356,6 +356,51 @@ async function initUiTexts(sheetsApi: ReturnType<typeof google.sheets>): Promise
     valueInputOption: "RAW",
     requestBody: { values: defaults },
   });
+}
+
+// ── QA History ─────────────────────────────────────────────────────────────
+const QA_HEADER = ["QA_UUID", "리포트UUID", "앱ID", "게임명", "질문시각", "질문", "답변"];
+
+export async function appendQAToSheet(
+  qaUuid: string,
+  reportUuid: string,
+  appId: string,
+  gameName: string,
+  askedAt: string,
+  question: string,
+  answer: string
+): Promise<void> {
+  const sheetsApi = await getSheetsClient();
+  await ensureTabWithHeader(sheetsApi, MASTER_SHEET_ID, "QA 히스토리", QA_HEADER);
+  await sheetsApi.spreadsheets.values.append({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: "QA 히스토리!A:G",
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [[qaUuid, reportUuid, appId, gameName, askedAt, question, answer]] },
+  });
+}
+
+export async function getQAHistory(reportUuid: string): Promise<QAItem[]> {
+  const sheetsApi = await getSheetsClient();
+  try {
+    await ensureTab(sheetsApi, MASTER_SHEET_ID, "QA 히스토리");
+    const rows = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      range: "QA 히스토리!A:G",
+    });
+    const values = rows.data.values ?? [];
+    return values.slice(1)
+      .filter((row) => row[1] === reportUuid)
+      .map((row) => ({
+        qa_uuid: row[0] ?? "",
+        q: row[5] ?? "",
+        a: row[6] ?? "",
+        asked_at: row[4] ?? "",
+      }));
+  } catch {
+    return [];
+  }
 }
 
 // ── Queue Management ────────────────────────────────────────────────────────
