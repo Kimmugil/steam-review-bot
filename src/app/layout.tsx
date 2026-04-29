@@ -1,8 +1,16 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import localFont from "next/font/local";
 import { getUiTexts, getConfig } from "@/lib/sheets";
 import { unstable_cache } from "next/cache";
 import { Home, LayoutDashboard } from "lucide-react";
+
+const pretendard = localFont({
+  src: "./fonts/PretendardVariable.woff2",
+  variable: "--font-pretendard",
+  weight: "100 900",
+  display: "swap",
+});
 
 const getCachedUiTexts = unstable_cache(() => getUiTexts(), ["ui_texts"], { revalidate: 300 });
 const getCachedConfig  = unstable_cache(() => getConfig(),   ["site_config"], { revalidate: 300 });
@@ -21,9 +29,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const dashboardTitle = t.dashboard_title ?? "대시보드";
 
   return (
-    <html lang="ko">
+    <html lang="ko" className={`${pretendard.variable} ${pretendard.className}`}>
       <head />
-      <body className="min-h-screen" style={{ background: "#FAFAFA" }}>
+      <body className="min-h-screen" style={{ background: "#FAFAFA", fontFamily: "var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif)" }}>
         {/* ── Nav ──────────────────────────────────────────────── */}
         <nav
           className="sticky top-0 z-50 bg-white"

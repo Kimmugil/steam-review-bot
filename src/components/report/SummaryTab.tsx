@@ -1,6 +1,7 @@
 "use client";
 
 import type { AiInsights, StoreStats } from "@/lib/types";
+import { sentimentClass } from "@/lib/utils";
 import SentimentLine from "./SentimentLine";
 import Collapsible from "./Collapsible";
 
@@ -11,28 +12,25 @@ interface Props {
   smartReason: string;
 }
 
-function metricBg(evalStr: string): { bg: string; color: string } {
-  if (evalStr.includes("긍정")) return { bg: "#D1FAE5", color: "#065F46" };
-  if (evalStr.includes("부정")) return { bg: "#FEE2E2", color: "#991B1B" };
-  if (evalStr === "복합적")     return { bg: "#FEF9C3", color: "#854D0E" };
-  return { bg: "#F0EFEC", color: "#4A4A4A" };
-}
-
 function MetricCard({ label, sub, value, count }: {
   label: string; sub: string; value: string; count?: number | null;
 }) {
-  const { bg, color } = metricBg(value);
   return (
     <div
       className="p-4 flex flex-col gap-1"
-      style={{ background: bg, border: "2px solid #1A1A1A", borderRadius: 14 }}
+      style={{ background: "#FFFFFF", border: "2px solid #1A1A1A", borderRadius: 14 }}
     >
       <p className="text-xs font-bold" style={{ color: "#1A1A1A", opacity: 0.6 }}>{label}</p>
-      <p className="font-black text-base leading-tight" style={{ color, fontFamily: "'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif" }}>{value}</p>
+      <span
+        className={sentimentClass(value)}
+        style={{ fontFamily: "var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif)", fontSize: 13 }}
+      >
+        {value}
+      </span>
       {count != null && (
-        <p className="text-xs font-bold" style={{ color, opacity: 0.55 }}>{count.toLocaleString()}개</p>
+        <p className="text-xs font-bold" style={{ color: "#9CA3AF" }}>{count.toLocaleString()}개</p>
       )}
-      <p className="text-xs leading-tight line-clamp-2" style={{ color, opacity: 0.5 }} title={sub}>{sub}</p>
+      <p className="text-xs leading-tight line-clamp-2" style={{ color: "#9CA3AF" }} title={sub}>{sub}</p>
     </div>
   );
 }

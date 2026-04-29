@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { ReportIndex } from "@/lib/types";
 import { sentimentClass, formatDateTime } from "@/lib/utils";
 
@@ -9,10 +9,27 @@ interface Props {
   rotate?: number;
 }
 
+const STEAM_THUMB_URLS = (appId: string) => [
+  `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
+  `https://steamcdn-a.akamaihd.net/steam/apps/${appId}/header.jpg`,
+  `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+];
+
 export default function ItemCard({ r, rotate = 0 }: Props) {
   const [hovered, setHovered] = useState(false);
+  const fallbackIdx = useRef(0);
+  const [imgSrc, setImgSrc]     = useState(STEAM_THUMB_URLS(r.app_id)[0]);
+  const [imgHidden, setImgHidden] = useState(false);
 
-  const steamThumb = `https://cdn.akamai.steamstatic.com/steam/apps/${r.app_id}/header.jpg`;
+  const handleImgError = () => {
+    fallbackIdx.current += 1;
+    const urls = STEAM_THUMB_URLS(r.app_id);
+    if (fallbackIdx.current < urls.length) {
+      setImgSrc(urls[fallbackIdx.current]);
+    } else {
+      setImgHidden(true);
+    }
+  };
 
   const stats = [
     { label: "전체 누적", desc: r.all_desc,    count: r.all_total    },
@@ -41,16 +58,18 @@ export default function ItemCard({ r, rotate = 0 }: Props) {
       {/* ① 썸네일 헤더 (160px) */}
       <div style={{ position: "relative", height: 160, background: "#F0EFEC" }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={steamThumb}
-          alt={r.game_name}
-          style={{
-            width: "100%", height: "100%",
-            objectFit: "cover", display: "block",
-            borderRadius: "14px 14px 0 0",
-          }}
-          onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
-        />
+        {!imgHidden && (
+          <img
+            src={imgSrc}
+            alt={r.game_name}
+            style={{
+              width: "100%", height: "100%",
+              objectFit: "cover", display: "block",
+              borderRadius: "14px 14px 0 0",
+            }}
+            onError={handleImgError}
+          />
+        )}
         {/* 그라디언트 오버레이 */}
         <div style={{
           position: "absolute", inset: 0,
@@ -96,19 +115,16 @@ export default function ItemCard({ r, rotate = 0 }: Props) {
             marginBottom: i < stats.length - 1 ? 10 : 0,
           }}>
             <span style={{
-              width: 16, fontWeight: 900, fontSize: 11, flexShrink: 0,
-              color: i === 0 ? "#1A1A1A" : "#C8C8C8",
-            }}>
-              {i + 1}
-            </span>
-            <span style={{
               flex: 1, fontSize: 12, overflow: "hidden",
               whiteSpace: "nowrap", textOverflow: "ellipsis",
               color: i === 0 ? "#1A1A1A" : "#9CA3AF",
             }}>
               {s.label}
             </span>
-            <span className={sentimentClass(s.desc)} style={{ flexShrink: 0 }}>
+            <span
+              className={sentimentClass(s.desc)}
+              style={{ flexShrink: 0, fontFamily: "var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif)" }}
+            >
               {s.desc}
             </span>
             <span style={{
@@ -126,11 +142,6 @@ export default function ItemCard({ r, rotate = 0 }: Props) {
         <p style={{ fontSize: 11, color: "#9CA3AF", margin: 0 }}>
           {formatDateTime(r.analysis_time)}
         </p>
-        {r.collection_period && (
-          <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
-            {r.collection_period}
-          </p>
-        )}
       </div>
     </a>
   );
