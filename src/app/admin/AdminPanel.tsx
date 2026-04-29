@@ -204,12 +204,13 @@ function ReportList({ password }: { password: string }) {
               onClick={() => setFilter(f)}
               className="px-4 py-2 text-sm font-black transition-colors"
               style={{
+                borderTop: "none",
+                borderLeft: "none",
+                borderRight: "none",
                 borderBottom: filter === f ? "3px solid #1A1A1A" : "3px solid transparent",
                 marginBottom: -2,
                 color: filter === f ? "#1A1A1A" : "#9CA3AF",
                 background: "none",
-                border: "none",
-                borderBottom: filter === f ? "3px solid #1A1A1A" : "3px solid transparent",
                 cursor: "pointer",
               } as React.CSSProperties}
             >

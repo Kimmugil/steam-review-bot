@@ -122,12 +122,13 @@ export default function ReportView({ report, texts = {} }: Props) {
             onClick={() => setActiveTab(tab.id)}
             className="px-4 py-2.5 text-sm font-black whitespace-nowrap flex-shrink-0 transition-colors"
             style={{
+              borderTop: "none",
+              borderLeft: "none",
+              borderRight: "none",
               borderBottom: activeTab === tab.id ? "3px solid #1A1A1A" : "3px solid transparent",
               marginBottom: -2,
               color: activeTab === tab.id ? "#1A1A1A" : "#9CA3AF",
               background: "none",
-              border: "none",
-              borderBottom: activeTab === tab.id ? "3px solid #1A1A1A" : "3px solid transparent",
               cursor: "pointer",
             } as React.CSSProperties}
           >
