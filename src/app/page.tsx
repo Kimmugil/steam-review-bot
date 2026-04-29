@@ -140,20 +140,30 @@ export default function HomePage() {
 
       {/* ── HERO ──────────────────────────────────────────────────── */}
       <div className="pt-16 pb-12 text-center">
-        {/* 타이틀 */}
-        <h1
-          className="mb-4 leading-tight"
-          style={{ fontSize: "clamp(2rem, 6vw, 3rem)", fontWeight: 900, color: "#1A1A1A" }}
-        >
-          스팀 리뷰를{" "}
-          <span
-            className="inline-block"
-            style={{ backgroundColor: "#FFD600", padding: "0 6px", borderRadius: 4 }}
-          >
-            탈곡
-          </span>
-          해 드립니다
-        </h1>
+        {/* 타이틀 — 시트 home_hero_title 키에서 읽어옴, "탈곡" 단어는 황색 강조 */}
+        {(() => {
+          const raw = t.home_hero_title ?? "스팀 리뷰를 탈곡해 드립니다";
+          const idx = raw.indexOf("탈곡");
+          return (
+            <h1
+              className="mb-4 leading-tight"
+              style={{ fontSize: "clamp(2rem, 6vw, 3rem)", fontWeight: 900, color: "#1A1A1A" }}
+            >
+              {idx >= 0 ? (
+                <>
+                  {raw.slice(0, idx)}
+                  <span
+                    className="inline-block"
+                    style={{ backgroundColor: "#FFD600", padding: "0 6px", borderRadius: 4 }}
+                  >
+                    탈곡
+                  </span>
+                  {raw.slice(idx + 2)}
+                </>
+              ) : raw}
+            </h1>
+          );
+        })()}
 
         {/* 롤링 텍스트 */}
         <div
@@ -309,12 +319,14 @@ export default function HomePage() {
                 {t.home_view_all ?? "전체 보기 →"}
               </a>
             </div>
-            {/* 마퀴 래퍼 — max-w 제한 벗어나야 하므로 -mx-4로 full-bleed */}
+            {/* 마퀴 래퍼 — 뷰포트 풀블리드 */}
             <div
-              className="overflow-hidden marquee-pause -mx-4"
+              className="overflow-hidden marquee-pause"
               style={{
-                maskImage: "linear-gradient(to right, transparent 0, black 80px, black calc(100% - 80px), transparent 100%)",
-                WebkitMaskImage: "linear-gradient(to right, transparent 0, black 80px, black calc(100% - 80px), transparent 100%)",
+                width: "100vw",
+                marginLeft: "calc(50% - 50vw)",
+                maskImage: "linear-gradient(to right, transparent 0, black 120px, black calc(100% - 120px), transparent 100%)",
+                WebkitMaskImage: "linear-gradient(to right, transparent 0, black 120px, black calc(100% - 120px), transparent 100%)",
               }}
             >
               <div className="marquee-track" style={{ animationDuration: duration }}>

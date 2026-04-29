@@ -22,14 +22,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="ko">
-      <head>
-        {/* Pretendard: 한글 포함 dynamic subset — npm CDN, <link>로 HTML head에 직접 삽입 */}
-        <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-        />
-      </head>
+      <head />
       <body className="min-h-screen" style={{ background: "#FAFAFA" }}>
         {/* ── Nav ──────────────────────────────────────────────── */}
         <nav

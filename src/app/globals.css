@@ -1,3 +1,12 @@
+/* ── Pretendard Variable 로컬 폰트 (CDN 의존 없이 직접 선언) ── */
+@font-face {
+  font-family: 'Pretendard';
+  src: url('/fonts/PretendardVariable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,7 +14,7 @@
 @layer base {
   * {
     box-sizing: border-box;
-    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   }
   html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; scroll-behavior: smooth; }
   body {
@@ -81,7 +90,7 @@
 
   /* ── Sentiment badges ────────────────────────────────── */
   .sentiment-pos {
-    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
     background-color: #D1FAE5;
     color: #065F46;
     border: 2px solid #6EE7B7;
@@ -94,7 +103,7 @@
     display: inline-block;
   }
   .sentiment-neg {
-    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
     background-color: #FEE2E2;
     color: #991B1B;
     border: 2px solid #FCA5A5;
@@ -107,7 +116,7 @@
     display: inline-block;
   }
   .sentiment-mixed {
-    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
     background-color: #FEF9C3;
     color: #854D0E;
     border: 2px solid #FDE047;
@@ -120,7 +129,7 @@
     display: inline-block;
   }
   .sentiment-neutral {
-    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
     background-color: #F0EFEC;
     color: #4A4A4A;
     border: 2px solid #D1D5DB;
