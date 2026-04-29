@@ -111,7 +111,7 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
                 strokeLinecap="butt"
                 strokeDasharray={`${Math.max(seg.arcPx - 2, 0)} ${CIRC}`}
                 strokeDashoffset={CIRC / 4}
-                style={{ transform: `rotate(${seg.startAngle}deg)`, transformOrigin: `${CX}px ${CY}px` }}
+                transform={`rotate(${seg.startAngle}, ${CX}, ${CY})`}
               />
             ))}
             {/* 중앙 텍스트 */}
