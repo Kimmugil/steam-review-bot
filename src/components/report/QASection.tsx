@@ -125,7 +125,7 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
                 <div className="flex items-start gap-3">
                   <span
                     className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5"
-                    style={{ background: "#56D0A0", color: "#1A1A1A", border: "2px solid #1A1A1A" }}
+                    style={{ background: "#D1FAE5", color: "#065F46", border: "2px solid #6EE7B7" }}
                   >AI</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "#1A1A1A" }}>{qa.a}</p>

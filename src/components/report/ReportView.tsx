@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { AnalysisReport } from "@/lib/types";
 import { sentimentClass } from "@/lib/utils";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { ExternalLink } from "lucide-react";
 import SummaryTab   from "./SummaryTab";
 import NewsTab      from "./NewsTab";
 import PlaytimeTab  from "./PlaytimeTab";
@@ -106,10 +107,22 @@ export default function ReportView({ report, texts = {} }: Props) {
         </div>
       </div>
 
-      {/* ── 메타 정보 ──────────────────────────────────────────────── */}
-      <p className="text-xs mb-4" style={{ color: "#9CA3AF" }}>
-        분석 시각: {formatDateTime(report.analysis_time)}
-      </p>
+      {/* ── 메타 정보 + Steam 링크 ─────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <p className="text-xs" style={{ color: "#9CA3AF" }}>
+          분석 시각: {formatDateTime(report.analysis_time)}
+        </p>
+        <a
+          href={`https://store.steampowered.com/app/${report.app_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="neo-button px-3 py-1.5 text-xs flex-shrink-0"
+          style={{ background: "#1B2838", color: "#FFFFFF", borderColor: "#1B2838" }}
+        >
+          <ExternalLink size={12} />
+          Steam 상점 보기
+        </a>
+      </div>
 
       {/* ── 탭 바 ──────────────────────────────────────────────────── */}
       <div

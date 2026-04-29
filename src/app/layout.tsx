@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { getUiTexts, getConfig } from "@/lib/sheets";
 import { unstable_cache } from "next/cache";
+import { Home, LayoutDashboard } from "lucide-react";
 
 const getCachedUiTexts = unstable_cache(() => getUiTexts(), ["ui_texts"], { revalidate: 300 });
 const getCachedConfig  = unstable_cache(() => getConfig(),   ["site_config"], { revalidate: 300 });
@@ -38,8 +39,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <span className="text-xl">🌾</span>
                 <span className="hidden sm:inline">{appTitle}</span>
               </a>
-              <NavLink href="/" label="🏠 홈" />
-              <NavLink href="/dashboard" label="📋 대시보드" />
+              <NavLink href="/" icon={<Home size={14} />} label="홈" />
+              <NavLink href="/dashboard" icon={<LayoutDashboard size={14} />} label="대시보드" />
             </div>
 
             {/* 우측: 관리자 — 조용한 텍스트 링크 */}
@@ -60,13 +61,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 }
 
 /* client-side active detection은 server layout에서 불가 — 단순 링크로 */
-function NavLink({ href, label }: { href: string; label: string }) {
+function NavLink({ href, icon, label }: { href: string; icon?: React.ReactNode; label: string }) {
   return (
     <a
       href={href}
-      className="relative text-sm transition-colors hover:opacity-70"
+      className="flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors hover:bg-[#F5F5F5] rounded-full"
       style={{ fontWeight: 700, color: "#1A1A1A", textDecoration: "none" }}
     >
+      {icon}
       {label}
     </a>
   );

@@ -12,9 +12,9 @@ interface Props {
 }
 
 function metricBg(evalStr: string): { bg: string; color: string } {
-  if (evalStr.includes("긍정")) return { bg: "#56D0A0", color: "#1A1A1A" };
-  if (evalStr.includes("부정")) return { bg: "#FF6B6B", color: "#1A1A1A" };
-  if (evalStr === "복합적")     return { bg: "#FFD600", color: "#1A1A1A" };
+  if (evalStr.includes("긍정")) return { bg: "#D1FAE5", color: "#065F46" };
+  if (evalStr.includes("부정")) return { bg: "#FEE2E2", color: "#991B1B" };
+  if (evalStr === "복합적")     return { bg: "#FEF9C3", color: "#854D0E" };
   return { bg: "#F0EFEC", color: "#4A4A4A" };
 }
 
@@ -99,7 +99,7 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
                     <div className="flex flex-wrap gap-1">
                       {posCategories.map((cat, i) => (
                         <span key={i} className="text-xs font-bold px-2 py-0.5 rounded-full"
-                          style={{ background: "#56D0A0", border: "2px solid #1A1A1A", color: "#1A1A1A" }}>
+                          style={{ background: "#D1FAE5", border: "2px solid #6EE7B7", color: "#065F46" }}>
                           {cleanCat(cat.category)}
                         </span>
                       ))}
@@ -112,7 +112,7 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
                   {posCategories.map((cat, i) => (
                     <div key={i}>
                       <p className="text-xs font-black mb-1 flex items-center gap-1.5" style={{ color: "#059669" }}>
-                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#56D0A0" }} />
+                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#6EE7B7" }} />
                         {cleanCat(cat.category)}
                       </p>
                       <ul>{cat.summary.map((line, j) => <SentimentLine key={j} line={line} />)}</ul>
@@ -129,7 +129,7 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
                     <div className="flex flex-wrap gap-1">
                       {negCategories.map((cat, i) => (
                         <span key={i} className="text-xs font-bold px-2 py-0.5 rounded-full"
-                          style={{ background: "#FF6B6B", border: "2px solid #1A1A1A", color: "#1A1A1A" }}>
+                          style={{ background: "#FEE2E2", border: "2px solid #FCA5A5", color: "#991B1B" }}>
                           {cleanCat(cat.category)}
                         </span>
                       ))}
@@ -142,7 +142,7 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
                   {negCategories.map((cat, i) => (
                     <div key={i}>
                       <p className="text-xs font-black mb-1 flex items-center gap-1.5" style={{ color: "#DC2626" }}>
-                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#FF6B6B" }} />
+                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#FCA5A5" }} />
                         {cleanCat(cat.category)}
                       </p>
                       <ul>{cat.summary.map((line, j) => <SentimentLine key={j} line={line} />)}</ul>

@@ -311,7 +311,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                       style={{ background: "#f0fdf4", border: "2px solid #1A1A1A" }}
                     >
                       <p className="text-xs font-black flex items-center gap-1.5" style={{ color: "#059669" }}>
-                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#56D0A0" }} />긍정 의견
+                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#6EE7B7" }} />긍정 의견
                       </p>
                       {posCats.map((cat, j) => (
                         <div key={j}>
@@ -328,7 +328,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                       style={{ background: "#fff5f5", border: "2px solid #1A1A1A" }}
                     >
                       <p className="text-xs font-black flex items-center gap-1.5" style={{ color: "#DC2626" }}>
-                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#FF6B6B" }} />부정 의견
+                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#FCA5A5" }} />부정 의견
                       </p>
                       {negCats.map((cat, j) => (
                         <div key={j}>
