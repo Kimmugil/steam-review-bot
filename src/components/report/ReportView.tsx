@@ -94,8 +94,8 @@ export default function ReportView({ report, texts = {} }: Props) {
         <p className="text-xs text-slate-400">분석 시각: {formatDateTime(report.analysis_time)}</p>
       </div>
 
-      {/* Tabs — overflow-x-auto로 모바일 스크롤 대응 */}
-      <div className="flex border-b border-slate-200 mb-6 gap-0.5 overflow-x-auto">
+      {/* Tabs — overflow-x-auto로 모바일 스크롤 대응, 스크롤바 자체는 숨김 */}
+      <div className="flex border-b border-slate-200 mb-6 gap-0.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]">
         {TABS.map((tab) => (
           <button
             key={tab.id}

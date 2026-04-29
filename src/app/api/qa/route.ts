@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const askedAt = new Date().toISOString();
 
   // 시트에 비동기 저장 — 저장 실패가 응답을 막지 않도록 non-blocking
-  appendQAToSheet(qaUuid, uuid, report.app_id, report.game_name, askedAt, question, answer)
+  appendQAToSheet(qaUuid, uuid, report.app_id, report.game_name, askedAt, question, answer ?? "")
     .catch((err) => console.error("[qa] Failed to save QA to sheets:", err));
 
   return NextResponse.json({ answer, qa_uuid: qaUuid, asked_at: askedAt });
