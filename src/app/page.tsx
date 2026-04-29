@@ -64,7 +64,7 @@ export default function HomePage() {
   useEffect(() => {
     fetch("/api/ui-texts").then(r => r.ok ? r.json() : {}).then(setT).catch(() => {});
     fetch("/api/config").then(r => r.ok ? r.json() : {})
-      .then(d => { if (d.marqueeSpeedPerCard) setSpeedPerCard(Number(d.marqueeSpeedPerCard)); })
+      .then((d: { marqueeSpeedPerCard?: number }) => { if (d.marqueeSpeedPerCard) setSpeedPerCard(Number(d.marqueeSpeedPerCard)); })
       .catch(() => {});
   }, []);
 
