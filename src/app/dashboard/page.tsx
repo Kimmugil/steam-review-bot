@@ -105,14 +105,12 @@ export default async function DashboardPage() {
                   <a
                     key={r.uuid}
                     href={`/report/${r.uuid}`}
-                    className="flex items-center justify-between px-5 py-3.5 group transition-colors"
+                    className="flex items-center justify-between px-5 py-3.5 group transition-colors hover:bg-[#FAFAFA]"
                     style={{
                       borderTop: idx > 0 ? "1px solid #E2E8F0" : "none",
                       textDecoration: "none",
                       color: "inherit",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#FAFAFA")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     <div className="flex items-center gap-4 min-w-0">
                       <div className="min-w-0">
