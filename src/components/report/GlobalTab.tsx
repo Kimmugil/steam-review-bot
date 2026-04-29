@@ -61,7 +61,7 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
       : []),
   ];
 
-  const R = 52, CX = 68, CY = 68;
+  const R = 68, CX = 88, CY = 88;
   const CIRC = 2 * Math.PI * R;
   let cumArc = 0;
 
@@ -85,10 +85,10 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center gap-6">
-        {/* SVG 도넛 차트 */}
-        <div className="flex-shrink-0">
-          <svg width="136" height="136" viewBox="0 0 136 136">
+      <div className="flex flex-col sm:flex-row items-start gap-8">
+        {/* SVG 도넛 차트 — 크기 확대 */}
+        <div className="flex-shrink-0 mx-auto sm:mx-0">
+          <svg width="176" height="176" viewBox="0 0 176 176">
             {/* 세그먼트 */}
             {segments.map((seg, i) => {
               const arc = (seg.ratio / 100) * CIRC;
@@ -100,7 +100,7 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
                   cx={CX} cy={CY} r={R}
                   fill="none"
                   stroke={seg.color}
-                  strokeWidth="22"
+                  strokeWidth="26"
                   strokeLinecap="butt"
                   strokeDasharray={`${Math.max(arc - 2.5, 0)} ${CIRC}`}
                   strokeDashoffset={dashOffset}
@@ -108,10 +108,10 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
               );
             })}
             {/* 중앙 텍스트 */}
-            <text x={CX} y={CY - 7} textAnchor="middle" fill="#94a3b8" fontSize="8.5" fontWeight="500">
+            <text x={CX} y={CY - 8} textAnchor="middle" fill="#94a3b8" fontSize="10" fontWeight="500">
               {view === "region" ? "권역 수" : "언어 수"}
             </text>
-            <text x={CX} y={CY + 9} textAnchor="middle" fill="#1e293b" fontSize="17" fontWeight="700">
+            <text x={CX} y={CY + 11} textAnchor="middle" fill="#1e293b" fontSize="20" fontWeight="700">
               {view === "region"
                 ? `${storeStats.table_data_region.length}개`
                 : `${storeStats.table_data_all.length}개`}
@@ -119,25 +119,26 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
           </svg>
         </div>
 
-        {/* 범례 */}
-        <div className="flex-1 w-full">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4">
-            {segments.map((seg, i) => (
-              <div key={i} className="flex items-center gap-2 min-w-0">
-                <span
-                  className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-                  style={{ backgroundColor: seg.color }}
-                />
-                <span className="text-xs text-slate-600 truncate flex-1">{seg.label}</span>
-                <span className="text-xs font-bold text-slate-800 flex-shrink-0 ml-1">
-                  {seg.ratio.toFixed(1)}%
-                </span>
-                <span className="text-xs text-slate-400 flex-shrink-0 w-16 text-right">
-                  {seg.count.toLocaleString()}개
-                </span>
-              </div>
-            ))}
-          </div>
+        {/* 범례 — 단일 열, 순위 표시 */}
+        <div className="flex-1 w-full space-y-1.5">
+          {segments.map((seg, i) => (
+            <div key={i} className="flex items-center gap-2.5">
+              {/* 순위 */}
+              <span className="text-xs text-slate-300 w-4 text-right flex-shrink-0 font-mono">{i + 1}</span>
+              {/* 색상 칩 */}
+              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: seg.color }} />
+              {/* 이름 */}
+              <span className="text-xs text-slate-700 flex-1 min-w-0">{seg.label}</span>
+              {/* 비율 */}
+              <span className="text-xs font-bold text-slate-800 flex-shrink-0 w-12 text-right">
+                {seg.ratio.toFixed(1)}%
+              </span>
+              {/* 리뷰 수 */}
+              <span className="text-xs text-slate-400 flex-shrink-0 w-16 text-right">
+                {seg.count.toLocaleString()}개
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
