@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    box-sizing: border-box;
-    font-family: var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif);
-  }
+  /* body에 pretendard.style.fontFamily 직접 지정 → 모든 자식은 inherit */
+  *, *::before, *::after { box-sizing: border-box; font-family: inherit; }
+  /* button, input 등은 기본적으로 inherit 안 하는 브라우저 있어서 명시 */
+  button, input, textarea, select { font-family: inherit; }
   html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; scroll-behavior: smooth; }
   body {
     background: #FAFAFA;
@@ -81,7 +81,7 @@
 
   /* ── Sentiment badges ────────────────────────────────── */
   .sentiment-pos {
-    font-family: var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif) !important;
+    font-family: inherit !important;
     background-color: #D1FAE5;
     color: #065F46;
     border: 2px solid #6EE7B7;
@@ -94,7 +94,7 @@
     display: inline-block;
   }
   .sentiment-neg {
-    font-family: var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif) !important;
+    font-family: inherit !important;
     background-color: #FEE2E2;
     color: #991B1B;
     border: 2px solid #FCA5A5;
@@ -107,7 +107,7 @@
     display: inline-block;
   }
   .sentiment-mixed {
-    font-family: var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif) !important;
+    font-family: inherit !important;
     background-color: #FEF9C3;
     color: #854D0E;
     border: 2px solid #FDE047;
@@ -120,7 +120,7 @@
     display: inline-block;
   }
   .sentiment-neutral {
-    font-family: var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif) !important;
+    font-family: inherit !important;
     background-color: #F0EFEC;
     color: #4A4A4A;
     border: 2px solid #D1D5DB;

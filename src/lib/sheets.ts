@@ -129,7 +129,7 @@ export async function saveAnalysisToSheets(
   // 4) Append to master reports_index (A-O: 15 columns, O = one_liner)
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId: MASTER_SHEET_ID,
-    range: "reports_index!A:O",
+    range: "reports_index!A:P",
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
@@ -141,6 +141,7 @@ export async function saveAnalysisToSheets(
         gameSheetId, `[${report.app_id}] ${report.game_name.slice(0, 50)}`,
         "", "", "",  // L, M, N — N 은 hidden 플래그(기본 빈값=공개)
         report.ai_data.critic_one_liner ?? "",  // O (index 14) — AI 한줄평
+        report.header_image ?? "",              // P (index 15) — 헤더 이미지 URL
       ]],
     },
   });
@@ -287,6 +288,8 @@ function parseIndexRow(row: string[]): ReportIndex {
     hidden: row[13]?.toString() === "Y",
     // Column O (index 14) = AI 한줄평
     one_liner: row[14]?.toString() ?? "",
+    // Column P (index 15) = 헤더 이미지 URL
+    header_image: row[15]?.toString() ?? "",
   };
 }
 
@@ -295,7 +298,7 @@ export async function getAllReports(): Promise<ReportIndex[]> {
   try {
     const rows = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: MASTER_SHEET_ID,
-      range: "reports_index!A:O",
+      range: "reports_index!A:P",
     });
     const values = rows.data.values ?? [];
     if (values.length <= 1) return [];
@@ -313,7 +316,7 @@ export async function getAllReportsAdmin(): Promise<ReportIndex[]> {
   try {
     const rows = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: MASTER_SHEET_ID,
-      range: "reports_index!A:O",
+      range: "reports_index!A:P",
     });
     const values = rows.data.values ?? [];
     if (values.length <= 1) return [];
@@ -500,6 +503,50 @@ async function initUiTexts(sheetsApi: ReturnType<typeof google.sheets>): Promise
   });
 }
 
+// ── Backfill header_image into reports_index column P ──────────────────────
+export async function backfillHeaderImage(): Promise<{ updated: number; skipped: number }> {
+  const sheetsApi = await getSheetsClient();
+  const indexRows = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: "reports_index!A:P",
+  });
+  const rows = indexRows.data.values ?? [];
+  if (rows.length <= 1) return { updated: 0, skipped: 0 };
+
+  let updated = 0, skipped = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (row[15]?.toString()) { skipped++; continue; }
+
+    const v9  = row[9]?.toString()  ?? "";
+    const v11 = row[11]?.toString() ?? "";
+    const gameSheetId = v9.length > 10 && v9 !== "false" ? v9 : (v11.length > 10 ? v11 : null);
+    if (!gameSheetId) { skipped++; continue; }
+
+    const uuid = row[0]?.toString() ?? "";
+    try {
+      const detailRows = await sheetsApi.spreadsheets.values.get({
+        spreadsheetId: gameSheetId,
+        range: "분석 상세!A:H",
+      });
+      const dv = detailRows.data.values ?? [];
+      let headerImage = "";
+      for (let j = 1; j < dv.length; j++) {
+        if (dv[j][0] === uuid) { headerImage = dv[j][7]?.toString() ?? ""; break; }
+      }
+      if (!headerImage) { skipped++; continue; }
+      await sheetsApi.spreadsheets.values.update({
+        spreadsheetId: MASTER_SHEET_ID,
+        range: `reports_index!P${i + 1}`,
+        valueInputOption: "RAW",
+        requestBody: { values: [[headerImage]] },
+      });
+      updated++;
+    } catch { skipped++; }
+  }
+  return { updated, skipped };
+}
+
 // ── Backfill one_liner into reports_index column O ─────────────────────────
 export async function backfillOneLiner(): Promise<{ updated: number; skipped: number }> {
   const sheetsApi = await getSheetsClient();
@@ -507,7 +554,7 @@ export async function backfillOneLiner(): Promise<{ updated: number; skipped: nu
   // 1) Read all reports_index rows
   const indexRows = await sheetsApi.spreadsheets.values.get({
     spreadsheetId: MASTER_SHEET_ID,
-    range: "reports_index!A:O",
+    range: "reports_index!A:P",
   });
   const rows = indexRows.data.values ?? [];
   if (rows.length <= 1) return { updated: 0, skipped: 0 };

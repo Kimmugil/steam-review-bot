@@ -23,7 +23,7 @@ function MetricCard({ label, sub, value, count }: {
       <p className="text-xs font-bold" style={{ color: "#1A1A1A", opacity: 0.6 }}>{label}</p>
       <span
         className={sentimentClass(value)}
-        style={{ fontFamily: "var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif)", fontSize: 13 }}
+        style={{ fontSize: 13 }}
       >
         {value}
       </span>

@@ -31,7 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ko" className={`${pretendard.variable} ${pretendard.className}`}>
       <head />
-      <body className="min-h-screen" style={{ background: "#FAFAFA", fontFamily: "var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif)" }}>
+      <body className="min-h-screen" style={{ background: "#FAFAFA", fontFamily: pretendard.style.fontFamily }}>
         {/* ── Nav ──────────────────────────────────────────────── */}
         <nav
           className="sticky top-0 z-50 bg-white"

@@ -18,12 +18,16 @@ const STEAM_THUMB_URLS = (appId: string) => [
 export default function ItemCard({ r, rotate = 0 }: Props) {
   const [hovered, setHovered] = useState(false);
   const fallbackIdx = useRef(0);
-  const [imgSrc, setImgSrc]     = useState(STEAM_THUMB_URLS(r.app_id)[0]);
+
+  // header_image가 있으면 그걸 우선 사용, 없으면 Steam CDN 구성
+  const initialSrc = r.header_image || STEAM_THUMB_URLS(r.app_id)[0];
+  const [imgSrc, setImgSrc]       = useState(initialSrc);
   const [imgHidden, setImgHidden] = useState(false);
 
   const handleImgError = () => {
-    fallbackIdx.current += 1;
+    // header_image가 있었는데 실패 → CDN fallback 시도
     const urls = STEAM_THUMB_URLS(r.app_id);
+    fallbackIdx.current += 1;
     if (fallbackIdx.current < urls.length) {
       setImgSrc(urls[fallbackIdx.current]);
     } else {
@@ -83,9 +87,14 @@ export default function ItemCard({ r, rotate = 0 }: Props) {
             {r.game_name}
           </p>
         </div>
-        {/* 감성 배지 (우상단) */}
+        {/* 감성 배지 (우상단) — 이미지 위에 올라가므로 불투명하게 */}
         <div style={{ position: "absolute", top: 10, right: 10 }}>
-          <span className={sentimentClass(r.all_desc)}>{r.all_desc}</span>
+          <span
+            className={sentimentClass(r.all_desc)}
+            style={{ opacity: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.25)" }}
+          >
+            {r.all_desc}
+          </span>
         </div>
       </div>
 
@@ -123,7 +132,7 @@ export default function ItemCard({ r, rotate = 0 }: Props) {
             </span>
             <span
               className={sentimentClass(s.desc)}
-              style={{ flexShrink: 0, fontFamily: "var(--font-pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif)" }}
+              style={{ flexShrink: 0 }}
             >
               {s.desc}
             </span>
