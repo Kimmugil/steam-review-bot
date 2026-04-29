@@ -500,6 +500,64 @@ async function initUiTexts(sheetsApi: ReturnType<typeof google.sheets>): Promise
   });
 }
 
+// ── Backfill one_liner into reports_index column O ─────────────────────────
+export async function backfillOneLiner(): Promise<{ updated: number; skipped: number }> {
+  const sheetsApi = await getSheetsClient();
+
+  // 1) Read all reports_index rows
+  const indexRows = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: "reports_index!A:O",
+  });
+  const rows = indexRows.data.values ?? [];
+  if (rows.length <= 1) return { updated: 0, skipped: 0 };
+
+  let updated = 0;
+  let skipped = 0;
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const existing = row[14]?.toString() ?? "";
+    if (existing) { skipped++; continue; }  // O열 이미 있음
+
+    // gameSheetId: J(9) or L(11) fallback
+    const v9  = row[9]?.toString()  ?? "";
+    const v11 = row[11]?.toString() ?? "";
+    const gameSheetId = v9.length > 10 && v9 !== "false" ? v9 : (v11.length > 10 ? v11 : null);
+    if (!gameSheetId) { skipped++; continue; }
+
+    const uuid = row[0]?.toString() ?? "";
+    try {
+      // 2) Read 분석 목록 from per-game sheet (V열 = AI한줄평, index 21)
+      const listRows = await sheetsApi.spreadsheets.values.get({
+        spreadsheetId: gameSheetId,
+        range: "분석 목록!A:V",
+      });
+      const listData = listRows.data.values ?? [];
+      let oneLiner = "";
+      for (let j = 1; j < listData.length; j++) {
+        if (listData[j][0] === uuid) {
+          oneLiner = listData[j][21]?.toString() ?? "";
+          break;
+        }
+      }
+      if (!oneLiner) { skipped++; continue; }
+
+      // 3) Update reports_index O column (row i+1, 1-indexed)
+      await sheetsApi.spreadsheets.values.update({
+        spreadsheetId: MASTER_SHEET_ID,
+        range: `reports_index!O${i + 1}`,
+        valueInputOption: "RAW",
+        requestBody: { values: [[oneLiner]] },
+      });
+      updated++;
+    } catch {
+      skipped++;
+    }
+  }
+  return { updated, skipped };
+}
+
 // ── QA History ─────────────────────────────────────────────────────────────
 const QA_HEADER = ["QA_UUID", "리포트UUID", "앱ID", "게임명", "질문시각", "질문", "답변"];
 

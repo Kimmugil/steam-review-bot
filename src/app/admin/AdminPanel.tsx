@@ -117,6 +117,8 @@ function ReportList({ password }: { password: string }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminReport | null>(null);
   const [filter,       setFilter]       = useState<"all" | "visible" | "hidden">("all");
+  const [backfilling,  setBackfilling]  = useState(false);
+  const [backfillMsg,  setBackfillMsg]  = useState<string | null>(null);
 
   const fetchReports = useCallback(async () => {
     setLoading(true); setError(null);
@@ -142,6 +144,24 @@ function ReportList({ password }: { password: string }) {
       setReports(prev => prev.map(r => r.uuid === report.uuid ? { ...r, hidden: !r.hidden } : r));
     } catch { alert("처리 중 오류가 발생했습니다."); }
     finally { setActionLoading(null); }
+  };
+
+  const runBackfill = async () => {
+    if (backfilling) return;
+    setBackfilling(true); setBackfillMsg(null);
+    try {
+      const res = await fetch("/api/admin/backfill-oneliner", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "실패");
+      setBackfillMsg(`✅ 완료! 업데이트: ${d.updated}건, 스킵: ${d.skipped}건`);
+      fetchReports(); // 목록 새로고침
+    } catch (e) {
+      setBackfillMsg(`❌ ${e instanceof Error ? e.message : "오류"}`);
+    } finally { setBackfilling(false); }
   };
 
   const deleteReport = async (report: AdminReport) => {
@@ -172,11 +192,26 @@ function ReportList({ password }: { password: string }) {
           <h1 className="font-black" style={{ fontSize: 24, color: "#1A1A1A" }}>🛠️ 관리자 패널</h1>
           <p className="text-sm mt-1" style={{ color: "#4A4A4A" }}>리포트 공개 여부를 관리합니다</p>
         </div>
-        <button
-          onClick={fetchReports}
-          className="neo-button px-4 py-2 text-sm"
-          style={{ background: "#F0EFEC", color: "#1A1A1A" }}
-        >🔄 새로고침</button>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex gap-2">
+            <button
+              onClick={runBackfill}
+              disabled={backfilling}
+              className="neo-button px-4 py-2 text-sm"
+              style={{ background: "#FFD600", color: "#1A1A1A" }}
+            >{backfilling ? "처리 중..." : "✍️ 한줄평 채우기"}</button>
+            <button
+              onClick={fetchReports}
+              className="neo-button px-4 py-2 text-sm"
+              style={{ background: "#F0EFEC", color: "#1A1A1A" }}
+            >🔄 새로고침</button>
+          </div>
+          {backfillMsg && (
+            <p className="text-xs font-bold" style={{ color: backfillMsg.startsWith("✅") ? "#059669" : "#DC2626" }}>
+              {backfillMsg}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* 통계 카드 3열 */}
