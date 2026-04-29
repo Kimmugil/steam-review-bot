@@ -26,12 +26,13 @@ interface Props {
 export default function ReportView({ report, texts = {} }: Props) {
   const [activeTab, setActiveTab] = useState("summary");
 
+  // texts 값에 이미 이모지가 포함될 수 있으므로 그대로 사용, 없으면 이모지 포함 기본값 사용
   const TABS = [
-    { id: "summary",  label: texts.tab_summary  ? `📊 ${texts.tab_summary}`  : TAB_DEFAULTS.tab_summary  },
-    { id: "news",     label: texts.tab_news     ? `📰 ${texts.tab_news}`     : TAB_DEFAULTS.tab_news     },
-    { id: "playtime", label: texts.tab_playtime ? `⏱ ${texts.tab_playtime}` : TAB_DEFAULTS.tab_playtime },
-    { id: "global",   label: texts.tab_global   ? `🌍 ${texts.tab_global}`   : TAB_DEFAULTS.tab_global   },
-    { id: "qa",       label: texts.tab_qa       ? `🙋 ${texts.tab_qa}`       : TAB_DEFAULTS.tab_qa       },
+    { id: "summary",  label: texts.tab_summary  ?? TAB_DEFAULTS.tab_summary  },
+    { id: "news",     label: texts.tab_news     ?? TAB_DEFAULTS.tab_news     },
+    { id: "playtime", label: texts.tab_playtime ?? TAB_DEFAULTS.tab_playtime },
+    { id: "global",   label: texts.tab_global   ?? TAB_DEFAULTS.tab_global   },
+    { id: "qa",       label: texts.tab_qa       ?? TAB_DEFAULTS.tab_qa       },
   ];
 
   return (
