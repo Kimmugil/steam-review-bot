@@ -66,7 +66,16 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
 
   const R = 68, CX = 88, CY = 88;
   const CIRC = 2 * Math.PI * R;
-  let cumArc = 0;
+
+  // 회전 transform 방식으로 세그먼트 사전 계산 — dashOffset 음수값 문제 완전 제거
+  // strokeDashoffset은 항상 CIRC/4(=12시 방향 시작)로 고정, 각도(rotate)로만 위치 결정
+  const totalRatio = segments.reduce((sum, s) => sum + s.ratio, 0); // ≈ 100
+  const geoSegs = segments.map((seg, i) => {
+    const prevRatio = segments.slice(0, i).reduce((sum, s) => sum + s.ratio, 0);
+    const startAngle = (prevRatio / totalRatio) * 360;   // degrees from 12 o'clock
+    const arcPx = (seg.ratio / totalRatio) * CIRC;       // px arc length
+    return { ...seg, startAngle, arcPx };
+  });
 
   return (
     <div className="card p-5">
@@ -88,28 +97,23 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-start gap-8">
-        {/* SVG 도넛 차트 — 크기 확대 */}
-        <div className="flex-shrink-0 mx-auto sm:mx-0">
+      <div className="flex flex-col sm:flex-row items-center gap-8">
+        {/* SVG 도넛 차트 */}
+        <div className="flex-shrink-0">
           <svg width="176" height="176" viewBox="0 0 176 176">
-            {/* 세그먼트 */}
-            {segments.map((seg, i) => {
-              const arc = (seg.ratio / 100) * CIRC;
-              const dashOffset = CIRC / 4 - cumArc;
-              cumArc += arc;
-              return (
-                <circle
-                  key={i}
-                  cx={CX} cy={CY} r={R}
-                  fill="none"
-                  stroke={seg.color}
-                  strokeWidth="26"
-                  strokeLinecap="butt"
-                  strokeDasharray={`${Math.max(arc - 2.5, 0)} ${CIRC}`}
-                  strokeDashoffset={dashOffset}
-                />
-              );
-            })}
+            {geoSegs.map((seg, i) => (
+              <circle
+                key={i}
+                cx={CX} cy={CY} r={R}
+                fill="none"
+                stroke={seg.color}
+                strokeWidth="26"
+                strokeLinecap="butt"
+                strokeDasharray={`${Math.max(seg.arcPx - 2, 0)} ${CIRC}`}
+                strokeDashoffset={CIRC / 4}
+                style={{ transform: `rotate(${seg.startAngle}deg)`, transformOrigin: `${CX}px ${CY}px` }}
+              />
+            ))}
             {/* 중앙 텍스트 */}
             <text x={CX} y={CY - 8} textAnchor="middle" fill="#94a3b8" fontSize="10" fontWeight="500">
               {view === "region" ? "권역 수" : "언어 수"}
@@ -122,8 +126,8 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
           </svg>
         </div>
 
-        {/* 범례 — 단일 열, 고정폭 컬럼 정렬 */}
-        <div className="flex-1 space-y-1.5">
+        {/* 범례 — 단일 열, 자연 너비 (flex-1 제거로 좌쏠림 해소) */}
+        <div className="space-y-1.5">
           {segments.map((seg, i) => (
             <div key={i} className="flex items-center gap-2 text-xs">
               {/* 순위 */}
