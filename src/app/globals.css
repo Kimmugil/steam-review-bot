@@ -87,7 +87,7 @@
     border-radius: 9999px;
     padding: 2px 10px;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 900;
     white-space: nowrap;
     flex-shrink: 0;
     display: inline-block;
@@ -99,7 +99,7 @@
     border-radius: 9999px;
     padding: 2px 10px;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 900;
     white-space: nowrap;
     flex-shrink: 0;
     display: inline-block;
@@ -111,7 +111,7 @@
     border-radius: 9999px;
     padding: 2px 10px;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 900;
     white-space: nowrap;
     flex-shrink: 0;
     display: inline-block;
@@ -123,7 +123,7 @@
     border-radius: 9999px;
     padding: 2px 10px;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 900;
     white-space: nowrap;
     flex-shrink: 0;
     display: inline-block;
@@ -132,7 +132,7 @@
   /* ── Section labels ──────────────────────────────────── */
   .section-label {
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 900;
     color: #9CA3AF;
     text-transform: uppercase;
     letter-spacing: 0.06em;
