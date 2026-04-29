@@ -5,7 +5,7 @@
 @layer base {
   * {
     box-sizing: border-box;
-    font-family: var(--font-pretendard), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-family: var(--font-pretendard, -apple-system), BlinkMacSystemFont, system-ui, sans-serif;
   }
   html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; scroll-behavior: smooth; }
   body {
