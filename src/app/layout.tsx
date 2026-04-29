@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { getUiTexts } from "@/lib/sheets";
+import { getUiTexts, getConfig } from "@/lib/sheets";
 import { unstable_cache } from "next/cache";
 
 const getCachedUiTexts = unstable_cache(
@@ -9,11 +9,17 @@ const getCachedUiTexts = unstable_cache(
   { revalidate: 300 }
 );
 
+const getCachedConfig = unstable_cache(
+  () => getConfig(),
+  ["site_config"],
+  { revalidate: 300 }
+);
+
 export async function generateMetadata(): Promise<Metadata> {
-  const t = await getCachedUiTexts();
+  const config = await getCachedConfig();
   return {
-    title: t.app_title ?? "스팀 리뷰 탈곡기",
-    description: t.app_desc ?? "스팀 유저 리뷰 글로벌 민심 분석 도구",
+    title: config.site_title ?? "스팀 리뷰 탈곡기",
+    description: config.site_description ?? "스팀 유저 리뷰 글로벌 민심 분석 도구",
   };
 }
 

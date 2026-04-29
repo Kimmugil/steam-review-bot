@@ -168,6 +168,7 @@ export interface ReportIndex {
   recent_desc: string;
   recent_total: number;
   game_sheet_id: string | null;
+  hidden?: boolean;
 }
 
 export type AnalysisStep =

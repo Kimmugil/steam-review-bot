@@ -20,15 +20,6 @@ type GamePreview = {
   releaseDate: string;
 };
 
-const QUEUE_STEP_LABELS: Record<string, string> = {
-  PENDING:        "대기 중",
-  GAME_INFO:      "게임 정보 확인 중...",
-  STATS_START:    "통계 수집 중...",
-  REVIEWS_START:  "리뷰 수집 중...",
-  AI_START:       "AI 분석 중...",
-  SAVING:         "리포트 저장 중...",
-};
-
 export default function HomePage() {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +35,18 @@ export default function HomePage() {
   const [t, setT] = useState<Record<string, string>>({});
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const queueStepLabel = (status: string): string => {
+    const map: Record<string, string> = {
+      PENDING:       t.queue_step_pending   ?? "대기 중",
+      GAME_INFO:     t.queue_step_game_info ?? "게임 정보 확인 중...",
+      STATS_START:   t.queue_step_stats     ?? "통계 수집 중...",
+      REVIEWS_START: t.queue_step_reviews   ?? "리뷰 수집 중...",
+      AI_START:      t.queue_step_ai        ?? "AI 분석 중...",
+      SAVING:        t.queue_step_saving    ?? "리포트 저장 중...",
+    };
+    return map[status] ?? (t.queue_step_default ?? "처리 중...");
+  };
 
   const fetchData = async () => {
     try {
@@ -86,10 +89,10 @@ export default function HomePage() {
       try {
         const res = await fetch(`/api/preview?appId=${appId}`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "게임을 찾을 수 없습니다.");
+        if (!res.ok) throw new Error(data.error ?? (t.error_game_not_found ?? "게임을 찾을 수 없습니다."));
         setPreview(data);
       } catch (e) {
-        setPreviewError(e instanceof Error ? e.message : "게임을 찾을 수 없습니다.");
+        setPreviewError(e instanceof Error ? e.message : (t.error_game_not_found ?? "게임을 찾을 수 없습니다."));
       } finally {
         setPreviewLoading(false);
       }
@@ -99,7 +102,7 @@ export default function HomePage() {
   const startAnalysis = async () => {
     const appId = extractAppId(input);
     if (!appId) {
-      setError("유효한 App ID 또는 스팀 상점 주소를 입력해 주세요.");
+      setError(t.error_invalid_input ?? "유효한 App ID 또는 스팀 상점 주소를 입력해 주세요.");
       return;
     }
     setError(null);
@@ -111,7 +114,7 @@ export default function HomePage() {
         body: JSON.stringify({ appId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "대기열 등록에 실패했습니다.");
+      if (!res.ok) throw new Error(data.error ?? (t.error_queue_register_failed ?? "대기열 등록에 실패했습니다."));
       setInput("");
       setPreview(null);
       setSubmitted(true);
@@ -166,7 +169,7 @@ export default function HomePage() {
             disabled={submitting || !input.trim()}
             className="px-5 py-3 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition whitespace-nowrap"
           >
-            {submitting ? "등록 중..." : (t.home_analyze_btn ?? "🚜 탈곡 시작")}
+            {submitting ? (t.home_btn_submitting ?? "등록 중...") : (t.home_analyze_btn ?? "🚜 탈곡 시작")}
           </button>
         </div>
 
@@ -174,7 +177,7 @@ export default function HomePage() {
         {previewLoading && (
           <div className="mt-4 flex items-center gap-2 text-xs text-slate-400">
             <span className="inline-block w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-            게임 정보 확인 중...
+            {t.home_preview_loading ?? "게임 정보 확인 중..."}
           </div>
         )}
         {preview && !previewLoading && (
@@ -185,8 +188,8 @@ export default function HomePage() {
             )}
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-800 leading-tight">{preview.gameName}</p>
-              <p className="text-xs text-slate-400 mt-0.5">출시일: {formatDate(preview.releaseDate)}</p>
-              <p className="text-xs text-emerald-600 mt-1 font-medium">✓ 이 게임이 맞나요?</p>
+              <p className="text-xs text-slate-400 mt-0.5">{t.home_preview_release_label ?? "출시일:"} {formatDate(preview.releaseDate)}</p>
+              <p className="text-xs text-emerald-600 mt-1 font-medium">{t.home_preview_confirm ?? "✓ 이 게임이 맞나요?"}</p>
             </div>
           </div>
         )}
@@ -202,7 +205,7 @@ export default function HomePage() {
         )}
         {submitted && (
           <p className="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
-            ✅ 대기열에 등록됐습니다. 잠시 후 아래 목록에서 진행 상황을 확인하세요.
+            {t.home_queue_submitted ?? "✅ 대기열에 등록됐습니다. 잠시 후 아래 목록에서 진행 상황을 확인하세요."}
           </p>
         )}
       </div>
@@ -218,7 +221,7 @@ export default function HomePage() {
           </div>
           <div className="space-y-2">
             {queue.map((q) => {
-              const stepLabel = QUEUE_STEP_LABELS[q.status] ?? "처리 중...";
+              const stepLabel = queueStepLabel(q.status);
               return (
                 <div key={q.uuid} className="card p-4 bg-amber-50/60 border-amber-200">
                   <div className="flex items-center justify-between gap-3">
@@ -226,7 +229,7 @@ export default function HomePage() {
                       <p className="font-semibold text-slate-800 text-sm leading-tight truncate">
                         {q.gameName || `App ID: ${q.appId}`}
                       </p>
-                      <p className="text-xs text-slate-400 mt-0.5">요청: {formatDateTime(q.timestamp)}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{t.queue_requested_label ?? "요청:"} {formatDateTime(q.timestamp)}</p>
                     </div>
                     <div className="flex-shrink-0 text-right">
                       <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full whitespace-nowrap">
@@ -276,8 +279,8 @@ export default function HomePage() {
       {/* 리포트도 대기열도 없는 첫 방문 상태 */}
       {recentReports.length === 0 && queue.length === 0 && (
         <div className="text-center py-10 text-slate-400">
-          <p className="text-sm">아직 분석된 게임이 없습니다.</p>
-          <p className="text-xs mt-1">위에서 스팀 게임 주소를 입력해 첫 탈곡을 시작해 보세요 🌾</p>
+          <p className="text-sm">{t.home_empty_state_line1 ?? "아직 분석된 게임이 없습니다."}</p>
+          <p className="text-xs mt-1">{t.home_empty_state_line2 ?? "위에서 스팀 게임 주소를 입력해 첫 탈곡을 시작해 보세요 🌾"}</p>
         </div>
       )}
     </div>

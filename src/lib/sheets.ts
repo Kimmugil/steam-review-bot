@@ -266,35 +266,154 @@ export async function getReportFromSheets(uuid: string): Promise<AnalysisReport 
 }
 
 // ── Get all reports index ───────────────────────────────────────────────────
+function parseIndexRow(row: string[]): ReportIndex {
+  const v9 = row[9]?.toString() ?? "";
+  const v11 = row[11]?.toString() ?? "";
+  const gameSheetId = v9.length > 10 && v9 !== "false" ? v9 : (v11.length > 10 ? v11 : null);
+  return {
+    uuid: row[0] ?? "",
+    app_id: row[1] ?? "",
+    game_name: row[2] ?? "",
+    analysis_time: row[3] ?? "",
+    collection_period: row[4] ?? "",
+    all_desc: row[5] ?? "",
+    all_total: Number(row[6] ?? 0),
+    recent_desc: row[7] ?? "",
+    recent_total: Number(row[8] ?? 0),
+    game_sheet_id: gameSheetId,
+    // Column N (index 13) = hidden flag
+    hidden: row[13]?.toString() === "Y",
+  };
+}
+
 export async function getAllReports(): Promise<ReportIndex[]> {
   const sheetsApi = await getSheetsClient();
   try {
     const rows = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: MASTER_SHEET_ID,
-      range: "reports_index!A:M",
+      range: "reports_index!A:N",
     });
     const values = rows.data.values ?? [];
     if (values.length <= 1) return [];
-    return values.slice(1).reverse().map((row) => {
-      const v9 = row[9]?.toString() ?? "";
-      const v11 = row[11]?.toString() ?? "";
-      const gameSheetId = v9.length > 10 && v9 !== "false" ? v9 : (v11.length > 10 ? v11 : null);
-      return {
-        uuid: row[0] ?? "",
-        app_id: row[1] ?? "",
-        game_name: row[2] ?? "",
-        analysis_time: row[3] ?? "",
-        collection_period: row[4] ?? "",
-        all_desc: row[5] ?? "",
-        all_total: Number(row[6] ?? 0),
-        recent_desc: row[7] ?? "",
-        recent_total: Number(row[8] ?? 0),
-        game_sheet_id: gameSheetId,
-      };
-    });
+    return values.slice(1).reverse()
+      .map(parseIndexRow)
+      .filter((r) => !r.hidden);
   } catch {
     return [];
   }
+}
+
+// ── Admin: all reports (including hidden) ───────────────────────────────────
+export async function getAllReportsAdmin(): Promise<ReportIndex[]> {
+  const sheetsApi = await getSheetsClient();
+  try {
+    const rows = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      range: "reports_index!A:N",
+    });
+    const values = rows.data.values ?? [];
+    if (values.length <= 1) return [];
+    return values.slice(1).reverse().map(parseIndexRow);
+  } catch {
+    return [];
+  }
+}
+
+// ── Admin: hide / show a report ─────────────────────────────────────────────
+export async function setReportHidden(uuid: string, hidden: boolean): Promise<boolean> {
+  const sheetsApi = await getSheetsClient();
+  const rows = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: "reports_index!A:A",
+  });
+  const values = rows.data.values ?? [];
+  let rowIndex = -1;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0]?.toString().trim() === uuid) { rowIndex = i + 1; break; } // 1-indexed sheet row
+  }
+  if (rowIndex === -1) return false;
+  await sheetsApi.spreadsheets.values.update({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: `reports_index!N${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[hidden ? "Y" : "N"]] },
+  });
+  return true;
+}
+
+// ── Admin: delete a report row from index ───────────────────────────────────
+export async function deleteReportFromIndex(uuid: string): Promise<boolean> {
+  const sheetsApi = await getSheetsClient();
+  const rows = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: "reports_index!A:A",
+  });
+  const values = rows.data.values ?? [];
+  let rowIndex = -1;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0]?.toString().trim() === uuid) { rowIndex = i; break; } // 0-indexed
+  }
+  if (rowIndex === -1) return false;
+
+  const meta = await sheetsApi.spreadsheets.get({ spreadsheetId: MASTER_SHEET_ID });
+  const sheet = meta.data.sheets?.find((s) => s.properties?.title === "reports_index");
+  if (sheet?.properties?.sheetId === undefined || sheet?.properties?.sheetId === null) return false;
+
+  await sheetsApi.spreadsheets.batchUpdate({
+    spreadsheetId: MASTER_SHEET_ID,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: sheet!.properties!.sheetId!,
+            dimension: "ROWS",
+            startIndex: rowIndex,
+            endIndex: rowIndex + 1,
+          },
+        },
+      }],
+    },
+  });
+  return true;
+}
+
+// ── Config tab (site metadata + admin password) ─────────────────────────────
+export async function getConfig(): Promise<Record<string, string>> {
+  const sheetsApi = await getSheetsClient();
+  try {
+    await ensureTab(sheetsApi, MASTER_SHEET_ID, "config");
+    const rows = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      range: "config!A:B",
+    });
+    const values = rows.data.values ?? [];
+    const config: Record<string, string> = {};
+    const start = values.length > 0 && values[0][0] === "key" ? 1 : 0;
+    for (let i = start; i < values.length; i++) {
+      const [key, value] = values[i];
+      if (key && value !== undefined) config[key] = value;
+    }
+    if (Object.keys(config).length === 0) await initConfig(sheetsApi);
+    return config;
+  } catch {
+    return {};
+  }
+}
+
+async function initConfig(sheetsApi: ReturnType<typeof google.sheets>): Promise<void> {
+  await sheetsApi.spreadsheets.values.update({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: "config!A1",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [
+        ["key", "value", "설명"],
+        ["site_title", "스팀 리뷰 탈곡기", "브라우저 탭 & 네비게이션 타이틀"],
+        ["site_description", "스팀 유저 리뷰 글로벌 민심 분석 도구", "메타 디스크립션"],
+        ["admin_password", "admin1234", "관리자 패널 비밀번호 (반드시 변경하세요)"],
+      ],
+    },
+  });
 }
 
 // ── Get UI texts from master sheet ─────────────────────────────────────────
@@ -349,6 +468,24 @@ async function initUiTexts(sheetsApi: ReturnType<typeof google.sheets>): Promise
     ["dashboard_title", "리포트 대시보드", "대시보드 제목"],
     ["dashboard_all_tab", "전체", "대시보드 전체 탭"],
     ["footer_version", "v3.0.0", "버전"],
+    ["home_btn_submitting", "등록 중...", "분석 버튼 로딩 상태"],
+    ["home_preview_loading", "게임 정보 확인 중...", "프리뷰 로딩 텍스트"],
+    ["home_preview_release_label", "출시일:", "프리뷰 출시일 라벨"],
+    ["home_preview_confirm", "✓ 이 게임이 맞나요?", "프리뷰 확인 문구"],
+    ["home_queue_submitted", "✅ 대기열에 등록됐습니다. 잠시 후 아래 목록에서 진행 상황을 확인하세요.", "등록 완료 메시지"],
+    ["home_empty_state_line1", "아직 분석된 게임이 없습니다.", "빈 상태 첫 줄"],
+    ["home_empty_state_line2", "위에서 스팀 게임 주소를 입력해 첫 탈곡을 시작해 보세요 🌾", "빈 상태 둘째 줄"],
+    ["error_invalid_input", "유효한 App ID 또는 스팀 상점 주소를 입력해 주세요.", "입력 오류"],
+    ["error_game_not_found", "게임을 찾을 수 없습니다.", "게임 미발견 오류"],
+    ["error_queue_register_failed", "대기열 등록에 실패했습니다.", "대기열 등록 실패"],
+    ["queue_step_pending", "대기 중", "큐 단계: 대기"],
+    ["queue_step_game_info", "게임 정보 확인 중...", "큐 단계: 게임 정보"],
+    ["queue_step_stats", "통계 수집 중...", "큐 단계: 통계"],
+    ["queue_step_reviews", "리뷰 수집 중...", "큐 단계: 리뷰"],
+    ["queue_step_ai", "AI 분석 중...", "큐 단계: AI"],
+    ["queue_step_saving", "리포트 저장 중...", "큐 단계: 저장"],
+    ["queue_step_default", "처리 중...", "큐 단계: 기본값"],
+    ["queue_requested_label", "요청:", "대기열 요청 시각 라벨"],
   ];
   await sheetsApi.spreadsheets.values.update({
     spreadsheetId: MASTER_SHEET_ID,
