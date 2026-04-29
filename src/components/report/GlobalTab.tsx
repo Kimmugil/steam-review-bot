@@ -24,7 +24,7 @@ function regionCardClass(trend: string): string {
   return "bg-slate-50 border-slate-200 text-slate-700";
 }
 
-// 가로 스택 바 차트 — StatTable 대체 (Proposal A)
+// 가로 스택 바 차트 — eval 뱃지 고정폭으로 막대 정렬 통일
 function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTableRow)[]; isRegion?: boolean }) {
   return (
     <div className="space-y-2">
@@ -33,7 +33,9 @@ function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTabl
         const negW = parsePercent(row.neg_ratio);
         return (
           <div key={i} className="flex items-center gap-2.5">
+            {/* 순위 */}
             <span className="w-4 text-xs text-slate-300 text-right flex-shrink-0">{row.rank}</span>
+            {/* 언어/권역명 */}
             <span className="w-28 text-xs text-slate-700 font-medium truncate flex-shrink-0">
               {isRegion ? (row as RegionTableRow).region : (row as TableRow).lang_with_flag}
             </span>
@@ -52,8 +54,10 @@ function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTabl
             <span className="text-xs text-slate-400 w-11 text-right flex-shrink-0">{row.ratio}</span>
             {/* 리뷰 수 */}
             <span className="text-xs text-slate-500 w-16 text-right flex-shrink-0">{row.count.toLocaleString()}개</span>
-            {/* 평가 뱃지 */}
-            <span className={`flex-shrink-0 ${sentimentClass(row.eval)}`}>{row.eval}</span>
+            {/* 평가 뱃지 — w-32 고정폭으로 막대 들쑥날쑥 방지 */}
+            <div className="w-32 flex-shrink-0 flex justify-end">
+              <span className={sentimentClass(row.eval)}>{row.eval}</span>
+            </div>
           </div>
         );
       })}
@@ -103,7 +107,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
       <div className="card p-5">
         <p className="section-label">🗺️ 권역별 세부 평가</p>
 
-        {/* 권역 요약 그리드 (Proposal C) — 한눈에 전체 권역 분위기 파악 */}
+        {/* 권역 요약 그리드 */}
         {regData?.regions?.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
             {regData.regions.map((reg, i) => (
@@ -162,44 +166,66 @@ export default function GlobalTab({ insights, storeStats }: Props) {
         </div>
       </div>
 
-      {/* 국가별 분석 */}
+      {/* 국가별 분석 — 긍정/부정 2열 카드 레이아웃 */}
       <div className="card p-5">
         <p className="section-label">🌍 언어(국가)별 분석</p>
         <p className="text-xs text-slate-400 mb-4">누적 리뷰 작성 언어 상위 3개국 + 한국어 리뷰의 핵심 의견과 유저 원문입니다.</p>
-        <div className="space-y-5">
-          {insights.country_analysis?.map((country, i) => (
-            <div key={i}>
-              <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                <span>🚩</span>{country.country}
-              </h4>
-              <div className="space-y-3 pl-4 border-l-2 border-slate-100">
-                {[...country.categories].sort((a, b) =>
-                  (a.name.includes("[긍정") ? 0 : 1) - (b.name.includes("[긍정") ? 0 : 1)
-                ).map((cat, j) => (
-                  <div key={j}>
-                    <p className={`text-xs font-semibold mb-1 flex items-center gap-1.5 ${
-                      cat.name.includes("[긍정") ? "text-emerald-600" : cat.name.includes("[부정") ? "text-red-500" : "text-slate-500"
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        cat.name.includes("[긍정") ? "bg-emerald-500" : cat.name.includes("[부정") ? "bg-red-400" : "bg-slate-400"
-                      }`} />
-                      {cleanCat(cat.name)}
-                    </p>
-                    <ul className="mb-1.5">
-                      {cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}
-                    </ul>
-                    {cat.quote?.original && (
-                      <QuoteBlock original={cat.quote.original} korean={cat.quote.korean} />
-                    )}
-                  </div>
-                ))}
+        <div className="space-y-6">
+          {insights.country_analysis?.map((country, i) => {
+            const posCats = country.categories.filter(c => c.name.includes("[긍정"));
+            const negCats = country.categories.filter(c => c.name.includes("[부정"));
+            return (
+              <div key={i}>
+                <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <span>🚩</span>{country.country}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* 긍정 카드 */}
+                  {posCats.length > 0 && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                      <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />긍정 의견
+                      </p>
+                      {posCats.map((cat, j) => (
+                        <div key={j}>
+                          <p className="text-xs font-semibold text-emerald-700 mb-1">{cleanCat(cat.name)}</p>
+                          <ul className="mb-1.5">
+                            {cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}
+                          </ul>
+                          {cat.quote?.original && (
+                            <QuoteBlock original={cat.quote.original} korean={cat.quote.korean} />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* 부정 카드 */}
+                  {negCats.length > 0 && (
+                    <div className="rounded-xl border border-red-200 bg-red-50/40 p-4 space-y-3">
+                      <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />부정 의견
+                      </p>
+                      {negCats.map((cat, j) => (
+                        <div key={j}>
+                          <p className="text-xs font-semibold text-red-600 mb-1">{cleanCat(cat.name)}</p>
+                          <ul className="mb-1.5">
+                            {cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}
+                          </ul>
+                          {cat.quote?.original && (
+                            <QuoteBlock original={cat.quote.original} korean={cat.quote.korean} />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {/* 글로벌 통계 차트 (Proposal A) */}
+      {/* 글로벌 통계 차트 */}
       <div className="card p-5">
         <p className="section-label">📊 글로벌 통계 차트</p>
         <p className="text-xs text-slate-400 mb-4">리뷰 작성 언어 기준으로 분류됩니다 (실제 국적과 다를 수 있음). 바 색상은 해당 언어 내 긍정/부정 비율을 나타냅니다.</p>
@@ -254,7 +280,7 @@ function QuoteBlock({ original, korean }: { original: string; korean?: string })
         {open ? "▲ 접기" : "💬 원문 보기"}
       </button>
       {open && (
-        <div className="mt-2 text-xs text-slate-600 bg-slate-50 rounded-lg p-3 border-l-2 border-slate-200 space-y-2">
+        <div className="mt-2 text-xs text-slate-600 bg-white rounded-lg p-3 border border-slate-200 space-y-2">
           <p className="text-slate-500 leading-relaxed">{original}</p>
           {korean && <p className="text-slate-700 leading-relaxed border-t border-slate-200 pt-2">{korean}</p>}
         </div>
