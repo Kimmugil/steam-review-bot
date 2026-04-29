@@ -12,9 +12,9 @@ import QASection    from "./QASection";
 
 // 감성 뱃지 배경색 (헤더 이미지 위에 올라가는 solid 뱃지)
 function sentimentSolidBg(val: string): string {
-  if (val.includes("긍정")) return "#56D0A0";
-  if (val.includes("부정")) return "#FF6B6B";
-  if (val === "복합적")    return "#FFD600";
+  if (val.includes("긍정")) return "#D1FAE5";
+  if (val.includes("부정")) return "#FEE2E2";
+  if (val === "복합적")    return "#FEF9C3";
   return "#F0EFEC";
 }
 

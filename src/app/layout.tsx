@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const t = await getCachedUiTexts();
-  const appTitle      = t.app_title       ?? "스팀 리뷰 탈곡기";
+  const appTitle       = t.app_title       ?? "스팀 리뷰 탈곡기";
   const dashboardTitle = t.dashboard_title ?? "대시보드";
 
   return (
@@ -28,28 +28,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           style={{ borderBottom: "2px solid #1A1A1A" }}
         >
           <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-            {/* Logo */}
-            <a
-              href="/"
-              className="flex items-center gap-2 hover:opacity-70 transition-opacity"
-              style={{ fontWeight: 900, fontSize: 16, color: "#1A1A1A", textDecoration: "none" }}
-            >
-              <span className="text-xl">🌾</span>
-              <span>{appTitle}</span>
-            </a>
-
-            {/* Nav links */}
-            <div className="flex items-center gap-5">
-              <NavLink href="/dashboard" label={dashboardTitle} />
-              {/* 관리자 — 조용한 텍스트 링크 */}
+            {/* 좌측: 로고 + 메뉴 */}
+            <div className="flex items-center gap-1">
               <a
-                href="/admin"
-                style={{ fontSize: 11, color: "#B0B0B0", textDecoration: "none", fontWeight: 500 }}
-                className="hover:opacity-70 transition-opacity"
+                href="/"
+                className="flex items-center gap-1.5 hover:opacity-70 transition-opacity mr-3"
+                style={{ fontWeight: 900, fontSize: 16, color: "#1A1A1A", textDecoration: "none" }}
               >
-                ⚙ 관리
+                <span className="text-xl">🌾</span>
+                <span className="hidden sm:inline">{appTitle}</span>
               </a>
+              <NavLink href="/" label="🏠 홈" />
+              <NavLink href="/dashboard" label="📋 대시보드" />
             </div>
+
+            {/* 우측: 관리자 — 조용한 텍스트 링크 */}
+            <a
+              href="/admin"
+              style={{ fontSize: 11, color: "#B0B0B0", textDecoration: "none", fontWeight: 500 }}
+              className="hover:opacity-70 transition-opacity flex-shrink-0"
+            >
+              ⚙ 관리자
+            </a>
           </div>
         </nav>
 

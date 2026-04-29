@@ -126,10 +126,10 @@ export async function saveAnalysisToSheets(
   await ensureTabWithHeader(sheetsApi, gameSheetId, "분석 상세", DETAIL_HEADER);
   await ensureTabWithHeader(sheetsApi, gameSheetId, "리뷰 원문", RAW_HEADER);
 
-  // 4) Append to master reports_index
+  // 4) Append to master reports_index (A-O: 15 columns, O = one_liner)
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId: MASTER_SHEET_ID,
-    range: "reports_index!A:K",
+    range: "reports_index!A:O",
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
@@ -139,6 +139,8 @@ export async function saveAnalysisToSheets(
         report.store_stats.all_desc, report.store_stats.all_total,
         report.store_stats.recent_desc, report.store_stats.recent_total,
         gameSheetId, `[${report.app_id}] ${report.game_name.slice(0, 50)}`,
+        "", "", "",  // L, M, N — N 은 hidden 플래그(기본 빈값=공개)
+        report.ai_data.critic_one_liner ?? "",  // O (index 14) — AI 한줄평
       ]],
     },
   });
@@ -283,6 +285,8 @@ function parseIndexRow(row: string[]): ReportIndex {
     game_sheet_id: gameSheetId,
     // Column N (index 13) = hidden flag
     hidden: row[13]?.toString() === "Y",
+    // Column O (index 14) = AI 한줄평
+    one_liner: row[14]?.toString() ?? "",
   };
 }
 
@@ -291,7 +295,7 @@ export async function getAllReports(): Promise<ReportIndex[]> {
   try {
     const rows = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: MASTER_SHEET_ID,
-      range: "reports_index!A:N",
+      range: "reports_index!A:O",
     });
     const values = rows.data.values ?? [];
     if (values.length <= 1) return [];
@@ -309,7 +313,7 @@ export async function getAllReportsAdmin(): Promise<ReportIndex[]> {
   try {
     const rows = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: MASTER_SHEET_ID,
-      range: "reports_index!A:N",
+      range: "reports_index!A:O",
     });
     const values = rows.data.values ?? [];
     if (values.length <= 1) return [];

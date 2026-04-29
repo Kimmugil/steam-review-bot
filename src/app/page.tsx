@@ -15,13 +15,18 @@ type GamePreview = {
   appId: string; gameName: string; headerImage: string; releaseDate: string;
 };
 
+// Steam CDN 썸네일 URL
+function steamThumb(appId: string) {
+  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
+}
+
 // ── 회전 리포트 카드 ────────────────────────────────────────────────────────
 function ReportCard({ r, rotation }: { r: ReportIndex; rotation: number }) {
   const [hovered, setHovered] = useState(false);
   return (
     <a
       href={`/report/${r.uuid}`}
-      className="block p-4 transition-all duration-200"
+      className="block overflow-hidden transition-all duration-200"
       style={{
         background: "#FFFFFF",
         border: "2px solid #1A1A1A",
@@ -34,13 +39,29 @@ function ReportCard({ r, rotation }: { r: ReportIndex; rotation: number }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="font-black text-sm leading-tight line-clamp-2" style={{ color: "#1A1A1A" }}>
+      {/* 썸네일 */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={steamThumb(r.app_id)}
+        alt={r.game_name}
+        className="w-full object-cover"
+        style={{ height: 90, borderBottom: "2px solid #1A1A1A", display: "block" }}
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+      />
+      <div className="p-3">
+        {/* 게임명 + 배지 */}
+        <p className="font-black text-sm leading-tight line-clamp-2 mb-1.5" style={{ color: "#1A1A1A" }}>
           {r.game_name}
         </p>
         <span className={sentimentClass(r.all_desc)}>{r.all_desc}</span>
+        {/* AI 한줄평 */}
+        {r.one_liner && (
+          <p className="text-xs mt-2 leading-snug line-clamp-2 italic" style={{ color: "#4A4A4A" }}>
+            &ldquo;{r.one_liner}&rdquo;
+          </p>
+        )}
+        <p className="text-xs mt-2" style={{ color: "#9CA3AF" }}>{formatDateTime(r.analysis_time)}</p>
       </div>
-      <p className="text-xs" style={{ color: "#9CA3AF" }}>{formatDateTime(r.analysis_time)}</p>
     </a>
   );
 }

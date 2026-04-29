@@ -67,7 +67,7 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && askQuestion()}
           placeholder={placeholder ?? "예: 그래픽 관련 부정적인 여론이 있어?"}
           disabled={loading}
-          className="flex-1 bg-transparent text-sm focus:outline-none"
+          className="flex-1 bg-transparent text-sm focus:outline-none px-3"
           style={{ color: "#1A1A1A", minWidth: 0 }}
         />
         <button

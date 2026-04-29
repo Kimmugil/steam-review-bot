@@ -169,6 +169,7 @@ export interface ReportIndex {
   recent_total: number;
   game_sheet_id: string | null;
   hidden?: boolean;
+  one_liner?: string;   // AI 한줄평 (column O, index 14)
 }
 
 export type AnalysisStep =

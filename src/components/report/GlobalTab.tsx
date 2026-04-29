@@ -18,9 +18,9 @@ function parsePercent(str: string): number {
 
 // 권역 트렌드 색상
 function regionBg(trend: string): { bg: string; border: string } {
-  if (trend.includes("긍정")) return { bg: "#56D0A0", border: "#1A1A1A" };
-  if (trend.includes("부정")) return { bg: "#FF6B6B", border: "#1A1A1A" };
-  if (trend === "복합적")     return { bg: "#FFD600", border: "#1A1A1A" };
+  if (trend.includes("긍정")) return { bg: "#D1FAE5", border: "#6EE7B7" };
+  if (trend.includes("부정")) return { bg: "#FEE2E2", border: "#FCA5A5" };
+  if (trend === "복합적")     return { bg: "#FEF9C3", border: "#FDE047" };
   return { bg: "#F0EFEC", border: "#1A1A1A" };
 }
 
@@ -127,7 +127,7 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
         <div className="space-y-1.5">
           {segments.map((seg, i) => (
             <div key={i} className="flex items-center gap-2 text-xs">
-              <span className="w-4 text-right font-bold flex-shrink-0" style={{ color: "#9CA3AF" }}>{i + 1}</span>
+              <span className="text-right font-bold flex-shrink-0" style={{ color: "#9CA3AF", minWidth: "1.5rem" }}>{i + 1}</span>
               <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: seg.color, border: "1px solid #1A1A1A" }} />
               <span className="w-36 truncate flex-shrink-0 font-bold" style={{ color: "#1A1A1A" }}>{seg.label}</span>
               <span className="font-black w-11 text-right flex-shrink-0" style={{ color: "#1A1A1A" }}>{seg.ratio.toFixed(1)}%</span>
@@ -149,7 +149,7 @@ function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTabl
         const negW = parsePercent(row.neg_ratio);
         return (
           <div key={i} className="flex items-center gap-2.5">
-            <span className="w-4 text-xs text-right flex-shrink-0 font-bold" style={{ color: "#9CA3AF" }}>{row.rank}</span>
+            <span className="text-xs text-right flex-shrink-0 font-bold" style={{ color: "#9CA3AF", minWidth: "2rem" }}>{row.rank}</span>
             <span className="w-28 text-xs font-black truncate flex-shrink-0" style={{ color: "#1A1A1A" }}>
               {isRegion ? (row as RegionTableRow).region : (row as TableRow).lang_with_flag}
             </span>
@@ -157,8 +157,8 @@ function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTabl
               className="flex-1 h-5 rounded-full overflow-hidden relative"
               style={{ background: "#F0EFEC", border: "1px solid #E2E8F0" }}
             >
-              <div className="absolute inset-y-0 left-0 rounded-l-full" style={{ width: `${posW}%`, background: "#56D0A0" }} />
-              <div className="absolute inset-y-0" style={{ left: `${posW}%`, width: `${negW}%`, background: "#FF6B6B" }} />
+              <div className="absolute inset-y-0 left-0 rounded-l-full" style={{ width: `${posW}%`, background: "#6EE7B7" }} />
+              <div className="absolute inset-y-0" style={{ left: `${posW}%`, width: `${negW}%`, background: "#FCA5A5" }} />
             </div>
             <span className="text-xs w-11 text-right flex-shrink-0 font-bold" style={{ color: "#4A4A4A" }}>{row.ratio}</span>
             <span className="text-xs w-16 text-right flex-shrink-0" style={{ color: "#9CA3AF" }}>{row.count.toLocaleString()}개</span>
@@ -169,7 +169,7 @@ function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTabl
         );
       })}
       <div className="flex items-center gap-4 mt-1 pt-2.5" style={{ borderTop: "1px solid #E2E8F0" }}>
-        {[["#56D0A0", "긍정 비율"], ["#FF6B6B", "부정 비율"], ["#F0EFEC", "중립"]].map(([color, label]) => (
+        {[["#6EE7B7", "긍정 비율"], ["#FCA5A5", "부정 비율"], ["#F0EFEC", "중립"]].map(([color, label]) => (
           <div key={label} className="flex items-center gap-1.5 text-xs" style={{ color: "#9CA3AF" }}>
             <span className="w-3 h-2.5 rounded inline-block flex-shrink-0" style={{ background: color, border: "1px solid #E2E8F0" }} />
             {label}

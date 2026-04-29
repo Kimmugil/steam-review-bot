@@ -8,12 +8,8 @@ export const revalidate = 60;
 
 const getCachedUiTexts = unstable_cache(() => getUiTexts(), ["ui_texts"], { revalidate: 300 });
 
-// 감성에 따른 헤더 배경색
-function sentimentBg(evalStr: string): string {
-  if (evalStr.includes("긍정")) return "#56D0A0";
-  if (evalStr.includes("부정")) return "#FF6B6B";
-  if (evalStr === "복합적")    return "#FFD600";
-  return "#F0EFEC";
+function steamThumb(appId: string) {
+  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
 }
 
 export default async function DashboardPage() {
@@ -32,7 +28,7 @@ export default async function DashboardPage() {
   }).sort((a, b) => b.latest.analysis_time.localeCompare(a.latest.analysis_time));
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10">
+    <div className="max-w-4xl mx-auto px-4 py-10">
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-8">
@@ -73,64 +69,75 @@ export default async function DashboardPage() {
           </a>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {games.map(({ appId, gameName, reports: gameReports, latest }) => (
             <div
               key={appId}
               className="overflow-hidden"
-              style={{ border: "2px solid #1A1A1A", borderRadius: 16, background: "#FFFFFF" }}
+              style={{ border: "2px solid #1A1A1A", borderRadius: 20, background: "#FFFFFF" }}
             >
-              {/* 게임 헤더 */}
-              <div
-                className="px-5 py-4 flex items-center justify-between gap-3"
-                style={{
-                  borderBottom: "2px solid #1A1A1A",
-                  backgroundColor: sentimentBg(latest.all_desc),
-                }}
-              >
-                <div>
-                  <h3 className="font-black text-base leading-tight" style={{ color: "#1A1A1A" }}>
-                    {gameName}
-                  </h3>
-                  <p className="text-xs mt-0.5" style={{ color: "#4A4A4A" }}>
+              {/* ── 게임 헤더 (썸네일 + 기본 정보) ── */}
+              <div className="flex gap-0" style={{ borderBottom: "2px solid #1A1A1A" }}>
+                {/* 썸네일 */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={steamThumb(appId)}
+                  alt={gameName}
+                  className="object-cover flex-shrink-0"
+                  style={{ width: 140, height: 90, borderRight: "2px solid #1A1A1A", display: "block" }}
+                  // 이미지 로드 실패 시 숨기기는 클라이언트에서만 가능 — Server Component이므로 fallback 없이 진행
+                />
+                {/* 정보 */}
+                <div className="flex-1 px-4 py-3 min-w-0 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-black text-base leading-tight" style={{ color: "#1A1A1A" }}>
+                        {gameName}
+                      </h3>
+                      <span className={`${sentimentClass(latest.all_desc)} flex-shrink-0`}>
+                        {latest.all_desc}
+                      </span>
+                    </div>
+                    {latest.one_liner && (
+                      <p className="text-xs mt-1 leading-snug line-clamp-2 italic" style={{ color: "#4A4A4A" }}>
+                        &ldquo;{latest.one_liner}&rdquo;
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-xs mt-1.5" style={{ color: "#9CA3AF" }}>
                     App ID: {appId} · 총 {gameReports.length}회 분석
                   </p>
                 </div>
-                <span className={sentimentClass(latest.all_desc)}>{latest.all_desc}</span>
               </div>
 
-              {/* 분석 기록 리스트 */}
+              {/* ── 분석 기록 리스트 ── */}
               <div>
                 {gameReports.map((r, idx) => (
                   <a
                     key={r.uuid}
                     href={`/report/${r.uuid}`}
-                    className="flex items-center justify-between px-5 py-3.5 group transition-colors hover:bg-[#FAFAFA]"
+                    className="flex items-center justify-between px-4 py-3 group transition-colors hover:bg-[#FAFAFA]"
                     style={{
                       borderTop: idx > 0 ? "1px solid #E2E8F0" : "none",
                       textDecoration: "none",
                       color: "inherit",
                     }}
                   >
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
-                          {formatDateTime(r.analysis_time)}
-                        </p>
-                        <p className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
-                          수집 기간: {r.collection_period}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={sentimentClass(r.recent_desc)}>{r.recent_desc}</span>
-                        <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                          최근 {r.recent_total.toLocaleString()}개
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-3 min-w-0 flex-wrap">
+                      <p className="text-xs font-bold flex-shrink-0" style={{ color: "#1A1A1A" }}>
+                        {formatDateTime(r.analysis_time)}
+                      </p>
+                      <span className={sentimentClass(r.recent_desc)}>{r.recent_desc}</span>
+                      <span className="text-xs flex-shrink-0" style={{ color: "#9CA3AF" }}>
+                        최근 {r.recent_total.toLocaleString()}개
+                      </span>
+                      <span className="text-xs flex-shrink-0" style={{ color: "#9CA3AF" }}>
+                        · {r.collection_period}
+                      </span>
                     </div>
                     <ChevronRight
                       size={16}
-                      className="flex-shrink-0 transition-transform group-hover:translate-x-1"
+                      className="flex-shrink-0 transition-transform group-hover:translate-x-1 ml-2"
                       style={{ color: "#9CA3AF" }}
                     />
                   </a>
