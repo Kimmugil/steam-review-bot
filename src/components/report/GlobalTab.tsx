@@ -89,9 +89,7 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
         {/* SVG 도넛 차트 */}
         <div className="flex-shrink-0">
           <svg width="136" height="136" viewBox="0 0 136 136">
-            {/* 배경 트랙 */}
-            <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="22" />
-            {/* 각 세그먼트 */}
+            {/* 세그먼트 */}
             {segments.map((seg, i) => {
               const arc = (seg.ratio / 100) * CIRC;
               const dashOffset = CIRC / 4 - cumArc;
