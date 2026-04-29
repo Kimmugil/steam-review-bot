@@ -3,7 +3,6 @@
 import type { AiInsights, StoreStats } from "@/lib/types";
 import SentimentLine from "./SentimentLine";
 import Collapsible from "./Collapsible";
-import { sentimentBg } from "@/lib/utils";
 
 interface Props {
   insights: AiInsights;
@@ -12,13 +11,26 @@ interface Props {
   smartReason: string;
 }
 
-function MetricCard({ label, sub, value, count }: { label: string; sub: string; value: string; count?: number | null }) {
+// border 미포함 — 이미 border를 가진 카드 컨텍스트에서 사용
+function metricCardBg(evalStr: string): string {
+  if (evalStr.includes("긍정")) return "bg-emerald-50 text-emerald-800";
+  if (evalStr.includes("부정")) return "bg-red-50 text-red-800";
+  if (evalStr === "복합적") return "bg-amber-50 text-amber-800";
+  return "bg-slate-50 text-slate-700";
+}
+
+function MetricCard({
+  label, sub, value, count,
+}: {
+  label: string; sub: string; value: string; count?: number | null;
+}) {
   return (
-    <div className={`rounded-xl p-4 border ${sentimentBg(value)}`}>
+    <div className={`rounded-xl p-4 border border-slate-200 ${metricCardBg(value)}`}>
       <p className="text-xs font-medium opacity-60 mb-1">{label}</p>
       <p className="text-sm font-bold leading-snug">{value}</p>
       {count != null && <p className="text-xs opacity-50 mt-1">{count.toLocaleString()}개</p>}
-      <p className="text-xs opacity-40 mt-0.5 leading-tight">{sub}</p>
+      {/* 전체 텍스트를 title로 제공해 hover 시 확인 가능 */}
+      <p className="text-xs opacity-40 mt-0.5 leading-tight line-clamp-2" title={sub}>{sub}</p>
     </div>
   );
 }
@@ -30,7 +42,9 @@ function cleanCat(name: string) {
 export default function SummaryTab({ insights, storeStats, recentLabel, smartReason }: Props) {
   const posCategories = insights.global_category_summary?.filter((c) => c.category.includes("[긍정")) ?? [];
   const negCategories = insights.global_category_summary?.filter((c) => c.category.includes("[부정")) ?? [];
-  const etcCategories = insights.global_category_summary?.filter((c) => !c.category.includes("[긍정") && !c.category.includes("[부정")) ?? [];
+  const etcCategories = insights.global_category_summary?.filter(
+    (c) => !c.category.includes("[긍정") && !c.category.includes("[부정")
+  ) ?? [];
 
   const sortedAll = [...(insights.final_summary_all ?? [])].sort(
     (a, b) => (a.startsWith("[긍정]") ? 0 : 1) - (b.startsWith("[긍정]") ? 0 : 1)
@@ -41,20 +55,35 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
 
   return (
     <div className="space-y-5">
-      {/* Rating metrics */}
-      <div className="grid grid-cols-3 gap-3">
-        <MetricCard label="스팀 공식 평점" sub="직접 구매 기준" value={storeStats.official_desc} />
-        <MetricCard label="전체 누적 평점" sub="모든 유저 포함" value={storeStats.all_desc} count={storeStats.all_total} />
-        <MetricCard label={recentLabel} sub={smartReason.slice(0, 28) + "…"} value={storeStats.recent_desc} count={storeStats.recent_total} />
+
+      {/* 평점 메트릭 — 모바일(1열) → sm 이상(3열) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <MetricCard
+          label="스팀 공식 평점"
+          sub="직접 구매 유저 기준"
+          value={storeStats.official_desc}
+        />
+        <MetricCard
+          label="전체 누적 평점"
+          sub="모든 유저 포함"
+          value={storeStats.all_desc}
+          count={storeStats.all_total}
+        />
+        <MetricCard
+          label={recentLabel}
+          sub={smartReason}
+          value={storeStats.recent_desc}
+          count={storeStats.recent_total}
+        />
       </div>
 
-      {/* Sentiment briefing */}
+      {/* 종합 여론 브리핑 */}
       <div className="card p-5">
         <p className="section-label">🎯 종합 여론 브리핑</p>
         <p className="text-sm text-slate-700 leading-relaxed">{insights.sentiment_analysis}</p>
       </div>
 
-      {/* Summary columns */}
+      {/* 여론 동향 2열 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="card p-5">
           <p className="section-label">📈 누적 여론</p>
@@ -64,14 +93,16 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
         </div>
         <div className="card p-5">
           <p className="section-label">🔥 {recentLabel} 동향</p>
-          <p className="text-xs text-slate-400 mb-2">{storeStats.collection_period}</p>
+          {storeStats.collection_period && (
+            <p className="text-xs text-slate-400 mb-2">{storeStats.collection_period}</p>
+          )}
           <ul className="space-y-0">
             {sortedRecent.map((line, i) => <SentimentLine key={i} line={line} />)}
           </ul>
         </div>
       </div>
 
-      {/* Category breakdown */}
+      {/* 카테고리별 평가 — Collapsible defaultOpen=false로 첫 로드 스크롤 최소화 */}
       {insights.global_category_summary?.length > 0 && (
         <div className="card p-5">
           <p className="section-label">📁 카테고리별 평가</p>
@@ -79,7 +110,7 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
             {posCategories.length > 0 && (
               <Collapsible
                 title={<span className="text-sm font-medium text-emerald-700">✅ 긍정 항목 ({posCategories.length}개)</span>}
-                defaultOpen={true}
+                defaultOpen={false}
               >
                 <div className="space-y-3 pt-2">
                   {posCategories.map((cat, i) => (
@@ -97,7 +128,7 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
             {negCategories.length > 0 && (
               <Collapsible
                 title={<span className="text-sm font-medium text-red-600">⚠️ 부정 항목 ({negCategories.length}개)</span>}
-                defaultOpen={true}
+                defaultOpen={false}
               >
                 <div className="space-y-3 pt-2">
                   {negCategories.map((cat, i) => (
@@ -113,7 +144,10 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
               </Collapsible>
             )}
             {etcCategories.length > 0 && (
-              <Collapsible title={<span className="text-sm font-medium text-slate-500">📌 기타 ({etcCategories.length}개)</span>}>
+              <Collapsible
+                title={<span className="text-sm font-medium text-slate-500">📌 기타 ({etcCategories.length}개)</span>}
+                defaultOpen={false}
+              >
                 <div className="space-y-3 pt-2">
                   {etcCategories.map((cat, i) => (
                     <div key={i}>

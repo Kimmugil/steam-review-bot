@@ -1,5 +1,5 @@
 import { getAllReports, getUiTexts } from "@/lib/sheets";
-import { formatDateTime, sentimentClass, sentimentBg } from "@/lib/utils";
+import { formatDateTime, sentimentClass, sentimentHeaderBg } from "@/lib/utils";
 import type { ReportIndex } from "@/lib/types";
 import { unstable_cache } from "next/cache";
 
@@ -46,7 +46,7 @@ export default async function DashboardPage() {
         <div className="space-y-4">
           {games.map(({ appId, gameName, reports: gameReports, latest }) => (
             <div key={appId} className="card overflow-hidden">
-              <div className={`px-5 py-4 border-b border-slate-100 flex items-center justify-between ${sentimentBg(latest.all_desc)}`}>
+              <div className={`px-5 py-4 border-b border-slate-100 flex items-center justify-between ${sentimentHeaderBg(latest.all_desc)}`}>
                 <div>
                   <h3 className="font-bold text-base leading-tight">{gameName}</h3>
                   <p className="text-xs opacity-60 mt-0.5">App ID: {appId} · 총 {gameReports.length}회 분석</p>

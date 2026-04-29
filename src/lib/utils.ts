@@ -38,6 +38,14 @@ export function sentimentBg(evalStr: string): string {
   return "bg-slate-50 border-slate-200 text-slate-700";
 }
 
+// 배경색·텍스트색만 반환 (border 미포함) — 이미 border를 가진 컨테이너에 적용할 때 사용
+export function sentimentHeaderBg(evalStr: string): string {
+  if (evalStr.includes("긍정")) return "bg-emerald-50 text-emerald-800";
+  if (evalStr.includes("부정")) return "bg-red-50 text-red-800";
+  if (evalStr === "복합적") return "bg-amber-50 text-amber-800";
+  return "bg-slate-50 text-slate-700";
+}
+
 export function sentimentDot(evalStr: string): string {
   if (evalStr.includes("긍정")) return "bg-emerald-500";
   if (evalStr.includes("부정")) return "bg-red-500";

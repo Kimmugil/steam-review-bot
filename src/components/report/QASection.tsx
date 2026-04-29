@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { QAItem } from "@/lib/types";
 import { Send } from "lucide-react";
 
@@ -17,6 +17,15 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 새 답변이 추가될 때 해당 위치로 자동 스크롤
+  useEffect(() => {
+    if (history.length > 0) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [history]);
+
   const askQuestion = async () => {
     if (!question.trim() || loading) return;
     setLoading(true);
@@ -29,7 +38,7 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "질문 처리 실패");
-      setHistory([...history, { q: question.trim(), a: data.answer }]);
+      setHistory((prev) => [...prev, { q: question.trim(), a: data.answer }]);
       setQuestion("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -41,22 +50,22 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="section-heading">🙋‍♀️ AI에게 추가 질문하기</h3>
+        <h3 className="section-heading">🙋 AI에게 추가 질문하기</h3>
         <p className="text-sm text-slate-500 mb-4">
           현재 작성된 분석 리포트를 기반으로 궁금한 점을 물어보세요.
         </p>
       </div>
 
-      {/* Q&A History */}
+      {/* Q&A 히스토리 */}
       {history.length > 0 && (
-        <div className="space-y-4 mb-5">
+        <div className="space-y-4">
           {history.map((qa, i) => (
             <div key={i} className="space-y-2">
               <div className="flex items-start gap-3">
                 <span className="w-6 h-6 rounded-full bg-slate-800 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">Q</span>
                 <p className="text-sm font-semibold text-slate-800 pt-0.5">{qa.q}</p>
               </div>
-              <div className="flex items-start gap-3 ml-0">
+              <div className="flex items-start gap-3">
                 <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">AI</span>
                 <div className="card bg-slate-50 p-4 flex-1">
                   <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{qa.a}</p>
@@ -64,10 +73,12 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
               </div>
             </div>
           ))}
+          {/* 새 답변 추가 시 이 위치로 스크롤 */}
+          <div ref={bottomRef} />
         </div>
       )}
 
-      {/* Input */}
+      {/* 입력창 */}
       <div className="card p-4">
         <div className="flex gap-2">
           <input
@@ -92,7 +103,11 @@ export default function QASection({ uuid, initialQA = [], placeholder, btnLabel 
             {loading ? "분석 중..." : (btnLabel ?? "질문하기")}
           </button>
         </div>
-        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+        {error && (
+          <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );
