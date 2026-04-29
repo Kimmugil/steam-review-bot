@@ -9,6 +9,10 @@ interface Props {
   rotate?: number;
 }
 
+// ReportView 헤더 배지와 동일한 solid 배경색 (검정 테두리/텍스트 + 파스텔 배경)
+const solidBg = (v: string) =>
+  v.includes("긍정") ? "#D1FAE5" : v.includes("부정") ? "#FEE2E2" : v === "복합적" ? "#FEF9C3" : "#F0EFEC";
+
 const STEAM_THUMB_URLS = (appId: string) => [
   `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
   `https://steamcdn-a.akamaihd.net/steam/apps/${appId}/header.jpg`,
@@ -87,11 +91,20 @@ export default function ItemCard({ r, rotate = 0 }: Props) {
             {r.game_name}
           </p>
         </div>
-        {/* 감성 배지 (우상단) — 이미지 위에 올라가므로 불투명하게 */}
+        {/* 감성 배지 (우상단) — ReportView 헤더 배지와 동일 스타일 */}
         <div style={{ position: "absolute", top: 10, right: 10 }}>
           <span
-            className={sentimentClass(r.all_desc)}
-            style={{ opacity: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.25)" }}
+            style={{
+              background: solidBg(r.all_desc),
+              border: "2px solid #1A1A1A",
+              color: "#1A1A1A",
+              borderRadius: 9999,
+              padding: "4px 12px",
+              fontSize: 12,
+              fontWeight: 900,
+              display: "inline-block",
+              whiteSpace: "nowrap",
+            }}
           >
             {r.all_desc}
           </span>
