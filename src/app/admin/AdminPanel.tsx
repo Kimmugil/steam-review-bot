@@ -123,6 +123,7 @@ function ReportList({ password }: { password: string }) {
   const [dailyLoading, setDailyLoading] = useState(false);
   const [dailyMsg,     setDailyMsg]     = useState<string | null>(null);
   const [newLimit,     setNewLimit]     = useState("");
+  const [showLimitPreview, setShowLimitPreview] = useState(false);
 
   const fetchReports = useCallback(async () => {
     setLoading(true); setError(null);
@@ -282,6 +283,11 @@ function ReportList({ password }: { password: string }) {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <button
+                onClick={() => setShowLimitPreview(true)}
+                className="neo-button px-3 py-1.5 text-xs"
+                style={{ background: "#E0E7FF", color: "#1A1A1A" }}
+              >👁 팝업 미리보기</button>
+              <button
                 onClick={resetDaily}
                 disabled={dailyLoading}
                 className="neo-button px-3 py-1.5 text-xs"
@@ -422,6 +428,49 @@ function ReportList({ password }: { password: string }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 한도 초과 팝업 미리보기 */}
+      {showLimitPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)" }}
+          onClick={() => setShowLimitPreview(false)}
+        >
+          <div
+            className="relative w-full max-w-sm text-center"
+            style={{
+              background: "#FFFFFF",
+              border: "2px solid #1A1A1A",
+              borderRadius: 20,
+              boxShadow: "4px 4px 0px 0px #1A1A1A",
+              padding: "36px 32px 28px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="absolute top-2 right-3 text-xs font-black px-2 py-0.5 rounded-full"
+              style={{ background: "#E0E7FF", border: "2px solid #1A1A1A", color: "#3730A3" }}
+            >
+              미리보기
+            </div>
+            <p style={{ fontSize: 40, marginBottom: 12 }}>🌾</p>
+            <p className="font-black mb-3" style={{ fontSize: 17, color: "#1A1A1A", lineHeight: 1.4 }}>
+              오늘의 탈곡 횟수를 모두 소진했습니다
+            </p>
+            <p className="text-sm mb-6 leading-relaxed" style={{ color: "#4A4A4A" }}>
+              오늘 분석 가능한 횟수를 모두 사용했습니다.<br />
+              내일 자정(KST) 이후 다시 시도해 주세요.
+            </p>
+            <button
+              onClick={() => setShowLimitPreview(false)}
+              className="neo-button px-8 py-2.5 text-sm font-black"
+              style={{ backgroundColor: "#FFD600", color: "#1A1A1A" }}
+            >
+              확인
+            </button>
+          </div>
         </div>
       )}
 
