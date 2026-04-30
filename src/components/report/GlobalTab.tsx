@@ -104,7 +104,7 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center gap-8">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
         {/* 도넛 */}
         <div className="flex-shrink-0 relative" style={{ width: 176, height: 176 }}>
           <div className="rounded-full absolute inset-0" style={{ background: conicGradient, border: "2px solid #1A1A1A" }} />
@@ -278,7 +278,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sentimentDot(isPos ? "긍정" : isNeg ? "부정" : "")}`} />
                           {cleanCat(cat.name)}
                         </p>
-                        <ul>{cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
+                        <ul style={{ paddingLeft: "1.25rem" }}>{cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
                       </div>
                     );
                   })}
@@ -316,7 +316,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                       {posCats.map((cat, j) => (
                         <div key={j}>
                           <p className="text-xs font-black mb-1" style={{ color: "#059669" }}>{cleanCat(cat.name)}</p>
-                          <ul className="mb-1.5">{cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
+                          <ul className="mb-1.5" style={{ paddingLeft: "1.25rem" }}>{cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
                           {cat.quote?.original && <QuoteBlock original={cat.quote.original} korean={cat.quote.korean} />}
                         </div>
                       ))}
@@ -333,7 +333,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                       {negCats.map((cat, j) => (
                         <div key={j}>
                           <p className="text-xs font-black mb-1" style={{ color: "#DC2626" }}>{cleanCat(cat.name)}</p>
-                          <ul className="mb-1.5">{cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
+                          <ul className="mb-1.5" style={{ paddingLeft: "1.25rem" }}>{cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
                           {cat.quote?.original && <QuoteBlock original={cat.quote.original} korean={cat.quote.korean} />}
                         </div>
                       ))}

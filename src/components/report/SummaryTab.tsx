@@ -113,7 +113,7 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
                         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#6EE7B7" }} />
                         {cleanCat(cat.category)}
                       </p>
-                      <ul>{cat.summary.map((line, j) => <SentimentLine key={j} line={line} />)}</ul>
+                      <ul style={{ paddingLeft: "1.25rem" }}>{cat.summary.map((line, j) => <SentimentLine key={j} line={line} />)}</ul>
                     </div>
                   ))}
                 </div>
@@ -143,7 +143,7 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
                         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#FCA5A5" }} />
                         {cleanCat(cat.category)}
                       </p>
-                      <ul>{cat.summary.map((line, j) => <SentimentLine key={j} line={line} />)}</ul>
+                      <ul style={{ paddingLeft: "1.25rem" }}>{cat.summary.map((line, j) => <SentimentLine key={j} line={line} />)}</ul>
                     </div>
                   ))}
                 </div>
@@ -170,7 +170,7 @@ export default function SummaryTab({ insights, storeStats, recentLabel, smartRea
                   {etcCategories.map((cat, i) => (
                     <div key={i}>
                       <p className="text-xs font-black mb-1" style={{ color: "#4A4A4A" }}>{cleanCat(cat.category)}</p>
-                      <ul>{cat.summary.map((line, j) => <SentimentLine key={j} line={line} />)}</ul>
+                      <ul style={{ paddingLeft: "1.25rem" }}>{cat.summary.map((line, j) => <SentimentLine key={j} line={line} />)}</ul>
                     </div>
                   ))}
                 </div>
