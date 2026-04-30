@@ -119,6 +119,10 @@ function ReportList({ password }: { password: string }) {
   const [filter,       setFilter]       = useState<"all" | "visible" | "hidden">("all");
   const [backfilling,  setBackfilling]  = useState(false);
   const [backfillMsg,  setBackfillMsg]  = useState<string | null>(null);
+  const [dailyData,    setDailyData]    = useState<{ date: string; used: number; limit: number } | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [dailyMsg,     setDailyMsg]     = useState<string | null>(null);
+  const [newLimit,     setNewLimit]     = useState("");
 
   const fetchReports = useCallback(async () => {
     setLoading(true); setError(null);
@@ -130,7 +134,46 @@ function ReportList({ password }: { password: string }) {
     finally { setLoading(false); }
   }, [password]);
 
+  const fetchDailyUsage = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/daily-usage", { headers: authHeader(password) });
+      if (res.ok) setDailyData(await res.json());
+    } catch { /* ignore */ }
+  }, [password]);
+
   useEffect(() => { fetchReports(); }, [fetchReports]);
+  useEffect(() => { fetchDailyUsage(); }, [fetchDailyUsage]);
+
+  const resetDaily = async () => {
+    setDailyLoading(true); setDailyMsg(null);
+    const res = await fetch("/api/admin/daily-usage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeader(password) },
+      body: JSON.stringify({ action: "reset" }),
+    });
+    const d = await res.json();
+    setDailyMsg(res.ok ? "✅ 초기화 완료" : `❌ ${d.error}`);
+    setDailyLoading(false);
+    fetchDailyUsage();
+  };
+
+  const saveLimit = async () => {
+    const v = Number(newLimit);
+    if (!v || v < 1) return;
+    setDailyLoading(true); setDailyMsg(null);
+    // config 탭의 daily_limit은 sheets에서 직접 수정해야 함 (또는 별도 API)
+    // 여기서는 today's count를 v로 set하는 대신, 직접 count 조정
+    const res = await fetch("/api/admin/daily-usage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeader(password) },
+      body: JSON.stringify({ action: "set_count", value: v }),
+    });
+    const d = await res.json();
+    setDailyMsg(res.ok ? "✅ 저장 완료" : `❌ ${d.error}`);
+    setDailyLoading(false);
+    setNewLimit("");
+    fetchDailyUsage();
+  };
 
   const toggleHidden = async (report: AdminReport) => {
     setActionLoading(report.uuid);
@@ -213,6 +256,59 @@ function ReportList({ password }: { password: string }) {
           )}
         </div>
       </div>
+
+      {/* Daily Limit 현황 */}
+      {dailyData && (
+        <div className="p-4" style={{ background: "#FFFDE7", border: "2px solid #1A1A1A", borderRadius: 16 }}>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-black text-sm" style={{ color: "#1A1A1A" }}>
+                📅 오늘 분석 현황 <span className="font-normal text-xs ml-1" style={{ color: "#9CA3AF" }}>{dailyData.date} (KST)</span>
+              </p>
+              <div className="flex items-center gap-2 mt-1.5">
+                <div className="h-2 rounded-full overflow-hidden" style={{ width: 140, background: "#E2E8F0", border: "1px solid #1A1A1A" }}>
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min((dailyData.used / dailyData.limit) * 100, 100)}%`,
+                      background: dailyData.used >= dailyData.limit ? "#EF4444" : "#FFD600",
+                    }}
+                  />
+                </div>
+                <span className="font-black text-sm" style={{ color: dailyData.used >= dailyData.limit ? "#DC2626" : "#1A1A1A" }}>
+                  {dailyData.used} / {dailyData.limit}회
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={resetDaily}
+                disabled={dailyLoading}
+                className="neo-button px-3 py-1.5 text-xs"
+                style={{ background: "#F0EFEC", color: "#1A1A1A" }}
+              >🔄 오늘 초기화</button>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={newLimit}
+                  onChange={(e) => setNewLimit(e.target.value)}
+                  placeholder={`현재 사용 횟수 설정`}
+                  className="text-xs px-2 py-1.5 rounded-xl"
+                  style={{ border: "2px solid #1A1A1A", width: 140, background: "#FFFFFF" }}
+                  min={0}
+                />
+                <button
+                  onClick={saveLimit}
+                  disabled={dailyLoading || !newLimit}
+                  className="neo-button px-3 py-1.5 text-xs"
+                  style={{ background: "#1A1A1A", color: "#FFFFFF" }}
+                >저장</button>
+              </div>
+            </div>
+          </div>
+          {dailyMsg && <p className="text-xs mt-2 font-bold" style={{ color: dailyMsg.startsWith("✅") ? "#059669" : "#DC2626" }}>{dailyMsg}</p>}
+        </div>
+      )}
 
       {/* 통계 카드 3열 */}
       <div className="grid grid-cols-3 gap-3">

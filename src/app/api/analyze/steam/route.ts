@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSteamGameInfo } from "@/lib/steam";
-import { addAnalysisToQueue } from "@/lib/sheets";
+import { addAnalysisToQueue, getDailyUsage, incrementDailyUsage, getConfig } from "@/lib/sheets";
 import { v4 as uuidv4 } from "uuid";
 
 export const maxDuration = 60;
@@ -8,6 +8,16 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const { appId } = await req.json() as { appId: string };
+
+    // 일일 한도 체크
+    const [limitConfig, usage] = await Promise.all([getConfig(), getDailyUsage()]);
+    const dailyLimit = Number(limitConfig["daily_limit"] ?? 30);
+    if (usage.count >= dailyLimit) {
+      return NextResponse.json(
+        { error: `오늘의 분석 가능 횟수(${dailyLimit}회)를 모두 사용했습니다. 자정(KST)에 자동으로 초기화됩니다.` },
+        { status: 429 }
+      );
+    }
 
     // 1) 게임 기본 정보 확인
     const gameInfo = await getSteamGameInfo(appId);
@@ -21,6 +31,7 @@ export async function POST(req: NextRequest) {
     // 2) 큐에 추가
     const uuid = uuidv4();
     await addAnalysisToQueue(appId, gameInfo.gameName, uuid);
+    await incrementDailyUsage();
 
     // 3) GitHub Action 트리거
     const PAT = process.env.GITHUB_PAT;

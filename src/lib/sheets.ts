@@ -419,6 +419,7 @@ async function initConfig(sheetsApi: ReturnType<typeof google.sheets>): Promise<
         ["site_description", "스팀 유저 리뷰 글로벌 민심 분석 도구", "메타 디스크립션"],
         ["admin_password", "admin1234", "관리자 패널 비밀번호 (반드시 변경하세요)"],
         ["marquee.speed_per_card", "10", "마퀴 카드당 스크롤 속도(초) — 낮을수록 빠름"],
+        ["daily_limit", "30", "일 최대 분석 횟수 (매일 00시 KST 리셋)"],
       ],
     },
   });
@@ -648,6 +649,99 @@ export async function getQAHistory(reportUuid: string): Promise<QAItem[]> {
   } catch {
     return [];
   }
+}
+
+// ── Daily Usage ─────────────────────────────────────────────────────────────
+export function getTodayKST(): string {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+export async function getDailyUsage(): Promise<{ date: string; count: number }> {
+  const sheetsApi = await getSheetsClient();
+  const today = getTodayKST();
+  try {
+    await ensureTab(sheetsApi, MASTER_SHEET_ID, "daily_usage");
+    const rows = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      range: "daily_usage!A:B",
+    });
+    const values = rows.data.values ?? [];
+    for (const row of values) {
+      if (row[0] === today) return { date: today, count: Number(row[1] ?? 0) };
+    }
+    return { date: today, count: 0 };
+  } catch {
+    return { date: today, count: 0 };
+  }
+}
+
+export async function incrementDailyUsage(): Promise<number> {
+  const sheetsApi = await getSheetsClient();
+  const today = getTodayKST();
+  try {
+    await ensureTab(sheetsApi, MASTER_SHEET_ID, "daily_usage");
+    const rows = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      range: "daily_usage!A:B",
+    });
+    const values = rows.data.values ?? [];
+    let rowIndex = -1;
+    for (let i = 0; i < values.length; i++) {
+      if (values[i][0] === today) { rowIndex = i; break; }
+    }
+    if (rowIndex === -1) {
+      await sheetsApi.spreadsheets.values.append({
+        spreadsheetId: MASTER_SHEET_ID,
+        range: "daily_usage!A:B",
+        valueInputOption: "RAW",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: { values: [[today, 1]] },
+      });
+      return 1;
+    } else {
+      const newCount = Number(values[rowIndex][1] ?? 0) + 1;
+      await sheetsApi.spreadsheets.values.update({
+        spreadsheetId: MASTER_SHEET_ID,
+        range: `daily_usage!B${rowIndex + 1}`,
+        valueInputOption: "RAW",
+        requestBody: { values: [[newCount]] },
+      });
+      return newCount;
+    }
+  } catch { return 0; }
+}
+
+export async function setDailyUsageCount(date: string, count: number): Promise<void> {
+  const sheetsApi = await getSheetsClient();
+  try {
+    await ensureTab(sheetsApi, MASTER_SHEET_ID, "daily_usage");
+    const rows = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      range: "daily_usage!A:B",
+    });
+    const values = rows.data.values ?? [];
+    let rowIndex = -1;
+    for (let i = 0; i < values.length; i++) {
+      if (values[i][0] === date) { rowIndex = i; break; }
+    }
+    if (rowIndex === -1) {
+      await sheetsApi.spreadsheets.values.append({
+        spreadsheetId: MASTER_SHEET_ID,
+        range: "daily_usage!A:B",
+        valueInputOption: "RAW",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: { values: [[date, count]] },
+      });
+    } else {
+      await sheetsApi.spreadsheets.values.update({
+        spreadsheetId: MASTER_SHEET_ID,
+        range: `daily_usage!B${rowIndex + 1}`,
+        valueInputOption: "RAW",
+        requestBody: { values: [[count]] },
+      });
+    }
+  } catch { /* ignore */ }
 }
 
 // ── Queue Management ────────────────────────────────────────────────────────

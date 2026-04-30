@@ -7,8 +7,6 @@ export const revalidate = 60;
 
 const getCachedUiTexts = unstable_cache(() => getUiTexts(), ["ui_texts"], { revalidate: 300 });
 
-const ROTATIONS = [1.2, -1.0, 0.8, -1.5, 1.0, -0.8];
-
 export default async function DashboardPage() {
   const [reports, t] = await Promise.all([getAllReports(), getCachedUiTexts()]);
 
@@ -73,7 +71,7 @@ export default async function DashboardPage() {
         >
           {games.map(({ latest, count }, i) => (
             <div key={latest.app_id} className="relative">
-              <ItemCard r={latest} rotate={ROTATIONS[i % ROTATIONS.length]} />
+              <ItemCard r={latest} rotate={0} />
               {/* 분석 횟수 뱃지 */}
               {count > 1 && (
                 <a
