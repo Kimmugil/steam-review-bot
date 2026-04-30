@@ -21,6 +21,7 @@ export default function HomePage() {
   const [error,    setError]    = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted,  setSubmitted]  = useState(false);
+  const [limitModal, setLimitModal] = useState(false);
 
   const [preview, setPreview]           = useState<GamePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -124,6 +125,7 @@ export default function HomePage() {
         body: JSON.stringify({ appId }),
       });
       const data = await res.json();
+      if (res.status === 429) { setLimitModal(true); return; }
       if (!res.ok) throw new Error(data.error ?? (t.error_queue_register_failed ?? "대기열 등록에 실패했습니다."));
       setInput(""); setPreview(null); setSubmitted(true);
       setTimeout(() => setSubmitted(false), 4000);
@@ -137,6 +139,48 @@ export default function HomePage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4">
+
+      {/* ── 일일 한도 초과 모달 ──────────────────────────────────────── */}
+      {limitModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)" }}
+          onClick={() => setLimitModal(false)}
+        >
+          <div
+            className="relative w-full max-w-sm text-center"
+            style={{
+              background: "#FFFFFF",
+              border: "2px solid #1A1A1A",
+              borderRadius: 20,
+              boxShadow: "4px 4px 0px 0px #1A1A1A",
+              padding: "36px 32px 28px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p style={{ fontSize: 40, marginBottom: 12 }}>🌾</p>
+            <p
+              className="font-black mb-3"
+              style={{ fontSize: 17, color: "#1A1A1A", lineHeight: 1.4 }}
+            >
+              {t.limit_modal_title ?? "오늘의 탈곡 횟수를 모두 소진했습니다"}
+            </p>
+            <p
+              className="text-sm mb-6 leading-relaxed"
+              style={{ color: "#4A4A4A" }}
+            >
+              {t.limit_modal_body ?? "오늘 분석 가능한 횟수를 모두 사용했습니다.\n내일 자정(KST) 이후 다시 시도해 주세요."}
+            </p>
+            <button
+              onClick={() => setLimitModal(false)}
+              className="neo-button px-8 py-2.5 text-sm font-black"
+              style={{ backgroundColor: "#FFD600", color: "#1A1A1A" }}
+            >
+              {t.limit_modal_close ?? "확인"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── HERO ──────────────────────────────────────────────────── */}
       <div className="pt-16 pb-12 text-center">
