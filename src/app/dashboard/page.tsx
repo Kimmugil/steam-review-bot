@@ -69,25 +69,9 @@ export default async function DashboardPage() {
           className="grid gap-6 items-start"
           style={{ gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))" }}
         >
-          {games.map(({ latest, count }, i) => (
-            <div key={latest.app_id} className="relative">
+          {games.map(({ latest }) => (
+            <div key={latest.app_id}>
               <ItemCard r={latest} rotate={0} />
-              {/* 분석 횟수 뱃지 */}
-              {count > 1 && (
-                <a
-                  href={`/dashboard/${latest.app_id}`}
-                  className="absolute top-2 left-2 text-xs font-black px-2 py-0.5 rounded-full"
-                  style={{
-                    background: "#1A1A1A", color: "#FFFFFF",
-                    border: "2px solid #1A1A1A",
-                    textDecoration: "none",
-                    zIndex: 10,
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  총 {count}회 분석
-                </a>
-              )}
             </div>
           ))}
         </div>

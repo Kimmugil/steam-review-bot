@@ -278,7 +278,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sentimentDot(isPos ? "긍정" : isNeg ? "부정" : "")}`} />
                           {cleanCat(cat.name)}
                         </p>
-                        <ul style={{ paddingLeft: "1.25rem" }}>{cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
+                        <ul style={{ paddingLeft: "1.25rem" }}>{(cat.summary ?? []).map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
                       </div>
                     );
                   })}
@@ -297,8 +297,9 @@ export default function GlobalTab({ insights, storeStats }: Props) {
         </p>
         <div className="space-y-6">
           {insights.country_analysis?.map((country, i) => {
-            const posCats = country.categories.filter(c => c.name.includes("[긍정"));
-            const negCats = country.categories.filter(c => c.name.includes("[부정"));
+            const cats    = country.categories ?? [];
+            const posCats = cats.filter(c => c.name?.includes("[긍정"));
+            const negCats = cats.filter(c => c.name?.includes("[부정"));
             return (
               <div key={i}>
                 <h4 className="font-black text-sm mb-3 flex items-center gap-2" style={{ color: "#1A1A1A" }}>
@@ -316,7 +317,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                       {posCats.map((cat, j) => (
                         <div key={j}>
                           <p className="text-xs font-black mb-1" style={{ color: "#059669" }}>{cleanCat(cat.name)}</p>
-                          <ul className="mb-1.5" style={{ paddingLeft: "1.25rem" }}>{cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
+                          <ul className="mb-1.5" style={{ paddingLeft: "1.25rem" }}>{(cat.summary ?? []).map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
                           {cat.quote?.original && <QuoteBlock original={cat.quote.original} korean={cat.quote.korean} />}
                         </div>
                       ))}
@@ -333,7 +334,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                       {negCats.map((cat, j) => (
                         <div key={j}>
                           <p className="text-xs font-black mb-1" style={{ color: "#DC2626" }}>{cleanCat(cat.name)}</p>
-                          <ul className="mb-1.5" style={{ paddingLeft: "1.25rem" }}>{cat.summary.map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
+                          <ul className="mb-1.5" style={{ paddingLeft: "1.25rem" }}>{(cat.summary ?? []).map((line, k) => <SentimentLine key={k} line={line} />)}</ul>
                           {cat.quote?.original && <QuoteBlock original={cat.quote.original} korean={cat.quote.korean} />}
                         </div>
                       ))}
