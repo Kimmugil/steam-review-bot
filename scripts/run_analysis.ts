@@ -50,7 +50,7 @@ async function main() {
       game_name: gameInfo.gameName,
       release_date: gameInfo.releaseDate.toISOString().slice(0, 10),
       header_image: gameInfo.headerImage,
-      recent_label: actualRecentLabel ?? label,
+      recent_label: label,
       smart_reason: reason,
       store_stats: storeStats,
       news_data: newsData,
