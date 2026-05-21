@@ -9,7 +9,6 @@ import SummaryTab   from "./SummaryTab";
 import NewsTab      from "./NewsTab";
 import PlaytimeTab  from "./PlaytimeTab";
 import GlobalTab    from "./GlobalTab";
-import QASection    from "./QASection";
 
 // 감성 뱃지 배경색 (헤더 이미지 위에 올라가는 solid 뱃지)
 function sentimentSolidBg(val: string): string {
@@ -40,7 +39,6 @@ export default function ReportView({ report, texts = {} }: Props) {
     { id: "news",     label: texts.tab_news     ?? TAB_DEFAULTS.tab_news     },
     { id: "playtime", label: texts.tab_playtime ?? TAB_DEFAULTS.tab_playtime },
     { id: "global",   label: texts.tab_global   ?? TAB_DEFAULTS.tab_global   },
-    { id: "qa",       label: texts.tab_qa       ?? TAB_DEFAULTS.tab_qa       },
   ];
 
   const badgeBg = sentimentSolidBg(report.store_stats.all_desc);
@@ -156,14 +154,6 @@ export default function ReportView({ report, texts = {} }: Props) {
         {activeTab === "news"     && <NewsTab insights={report.ai_data} newsData={report.news_data} />}
         {activeTab === "playtime" && <PlaytimeTab insights={report.ai_data} storeStats={report.store_stats} />}
         {activeTab === "global"   && <GlobalTab insights={report.ai_data} storeStats={report.store_stats} />}
-        {activeTab === "qa"       && (
-          <QASection
-            uuid={report.uuid}
-            initialQA={report.qa_history}
-            placeholder={texts.report_qa_placeholder}
-            btnLabel={texts.report_qa_btn}
-          />
-        )}
       </div>
     </div>
   );

@@ -17,7 +17,8 @@ function parsePercent(str: string): number {
 }
 
 // 권역 트렌드 색상
-function regionBg(trend: string): { bg: string; border: string } {
+function regionBg(trend: string | null | undefined): { bg: string; border: string } {
+  if (!trend) return { bg: "#F0EFEC", border: "#1A1A1A" };
   if (trend.includes("긍정")) return { bg: "#D1FAE5", border: "#6EE7B7" };
   if (trend.includes("부정")) return { bg: "#FEE2E2", border: "#FCA5A5" };
   if (trend === "복합적")     return { bg: "#FEF9C3", border: "#FDE047" };
@@ -131,7 +132,7 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
               <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: seg.color, border: "1px solid #1A1A1A" }} />
               <span className="w-36 truncate flex-shrink-0 font-bold" style={{ color: "#1A1A1A" }}>{seg.label}</span>
               <span className="font-black w-11 text-right flex-shrink-0" style={{ color: "#1A1A1A" }}>{seg.ratio.toFixed(1)}%</span>
-              <span className="w-16 text-right flex-shrink-0" style={{ color: "#9CA3AF" }}>{seg.count.toLocaleString()}개</span>
+              <span className="w-16 text-right flex-shrink-0" style={{ color: "#9CA3AF" }}>{(seg.count ?? 0).toLocaleString()}개</span>
             </div>
           ))}
         </div>
@@ -161,7 +162,7 @@ function StatBarChart({ rows, isRegion = false }: { rows: (TableRow | RegionTabl
               <div className="absolute inset-y-0" style={{ left: `${posW}%`, width: `${negW}%`, background: "#FCA5A5" }} />
             </div>
             <span className="text-xs w-11 text-right flex-shrink-0 font-bold" style={{ color: "#4A4A4A" }}>{row.ratio}</span>
-            <span className="text-xs w-16 text-right flex-shrink-0" style={{ color: "#9CA3AF" }}>{row.count.toLocaleString()}개</span>
+            <span className="text-xs w-16 text-right flex-shrink-0" style={{ color: "#9CA3AF" }}>{(row.count ?? 0).toLocaleString()}개</span>
             <div className="w-32 flex-shrink-0 flex justify-end">
               <span className={sentimentClass(row.eval)}>{row.eval}</span>
             </div>
