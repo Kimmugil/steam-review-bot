@@ -35,7 +35,7 @@ const PALETTE = [
 function DonutChart({ storeStats }: { storeStats: StoreStats }) {
   const [view, setView] = useState<"region" | "lang">("region");
 
-  const rawRows = view === "region" ? storeStats.table_data_region : storeStats.table_data_all;
+  const rawRows = (view === "region" ? storeStats.table_data_region : storeStats.table_data_all) ?? [];
   const TOP_N   = view === "region" ? rawRows.length : 10;
   const topRows = rawRows.slice(0, TOP_N);
   const restRows = rawRows.slice(TOP_N);
@@ -117,8 +117,8 @@ function DonutChart({ storeStats }: { storeStats: StoreStats }) {
             </span>
             <span style={{ fontSize: 22, fontWeight: 900, color: "#1A1A1A", lineHeight: 1.2 }}>
               {view === "region"
-                ? `${storeStats.table_data_region.length}개`
-                : `${storeStats.table_data_all.length}개`}
+                ? `${(storeStats.table_data_region ?? []).length}개`
+                : `${(storeStats.table_data_all ?? []).length}개`}
             </span>
           </div>
         </div>
@@ -201,7 +201,7 @@ function cleanCat(name: string) {
 export default function GlobalTab({ insights, storeStats }: Props) {
   const [showAllLang, setShowAllLang] = useState(false);
   const [showAll30,   setShowAll30]   = useState(false);
-  const regData = insights.region_analysis;
+  const regData = insights.region_analysis ?? { divergence_insight: "", regions: [] };
 
   return (
     <div className="space-y-6">
@@ -266,7 +266,7 @@ export default function GlobalTab({ insights, storeStats }: Props) {
                   </div>
                 )}
                 <div className="space-y-2.5">
-                  {[...reg.categories].sort((a, b) =>
+                  {[...(reg.categories ?? [])].sort((a, b) =>
                     (a.name.includes("[긍정") ? 0 : 1) - (b.name.includes("[긍정") ? 0 : 1)
                   ).map((cat, j) => {
                     const isPos = cat.name.includes("[긍정");
@@ -353,29 +353,33 @@ export default function GlobalTab({ insights, storeStats }: Props) {
           리뷰 작성 언어 기준으로 분류됩니다 (실제 국적과 다를 수 있음). 바 색상은 긍정/부정 비율을 나타냅니다.
         </p>
         <div className="space-y-6">
-          <div>
-            <p className="text-xs font-black mb-3" style={{ color: "#4A4A4A" }}>🗺️ 권역별 누적 리뷰 비중</p>
-            <StatBarChart rows={storeStats.table_data_region} isRegion />
-          </div>
-          <div>
-            <p className="text-xs font-black mb-3" style={{ color: "#4A4A4A" }}>🥇 언어별 누적 리뷰 TOP 10</p>
-            <StatBarChart rows={storeStats.table_data_all.slice(0, 10)} />
-            {storeStats.table_data_all.length > 10 && (
-              <ExpandButton expanded={showAllLang} totalCount={storeStats.table_data_all.length} onToggle={() => setShowAllLang(!showAllLang)} />
-            )}
-            {showAllLang && <div className="mt-3"><StatBarChart rows={storeStats.table_data_all} /></div>}
-          </div>
-          {storeStats.days_since_release >= 30 && storeStats.table_data_30?.length > 0 && (
+          {(storeStats.table_data_region ?? []).length > 0 && (
+            <div>
+              <p className="text-xs font-black mb-3" style={{ color: "#4A4A4A" }}>🗺️ 권역별 누적 리뷰 비중</p>
+              <StatBarChart rows={storeStats.table_data_region ?? []} isRegion />
+            </div>
+          )}
+          {(storeStats.table_data_all ?? []).length > 0 && (
+            <div>
+              <p className="text-xs font-black mb-3" style={{ color: "#4A4A4A" }}>🥇 언어별 누적 리뷰 TOP 10</p>
+              <StatBarChart rows={(storeStats.table_data_all ?? []).slice(0, 10)} />
+              {(storeStats.table_data_all ?? []).length > 10 && (
+                <ExpandButton expanded={showAllLang} totalCount={(storeStats.table_data_all ?? []).length} onToggle={() => setShowAllLang(!showAllLang)} />
+              )}
+              {showAllLang && <div className="mt-3"><StatBarChart rows={storeStats.table_data_all ?? []} /></div>}
+            </div>
+          )}
+          {storeStats.days_since_release >= 30 && (storeStats.table_data_30?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs font-black mb-3" style={{ color: "#4A4A4A" }}>🔥 최근 기간 언어별 비중 TOP 10</p>
               {storeStats.collection_period && (
                 <p className="text-xs mb-2" style={{ color: "#9CA3AF" }}>{storeStats.collection_period}</p>
               )}
-              <StatBarChart rows={storeStats.table_data_30.slice(0, 10)} />
-              {storeStats.table_data_30.length > 10 && (
-                <ExpandButton expanded={showAll30} totalCount={storeStats.table_data_30.length} onToggle={() => setShowAll30(!showAll30)} />
+              <StatBarChart rows={(storeStats.table_data_30 ?? []).slice(0, 10)} />
+              {(storeStats.table_data_30 ?? []).length > 10 && (
+                <ExpandButton expanded={showAll30} totalCount={(storeStats.table_data_30 ?? []).length} onToggle={() => setShowAll30(!showAll30)} />
               )}
-              {showAll30 && <div className="mt-3"><StatBarChart rows={storeStats.table_data_30} /></div>}
+              {showAll30 && <div className="mt-3"><StatBarChart rows={storeStats.table_data_30 ?? []} /></div>}
             </div>
           )}
         </div>
