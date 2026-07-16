@@ -57,7 +57,12 @@ export default function HomePage() {
       const [reportsRes, queueRes] = await Promise.all([
         fetch("/api/reports"), fetch("/api/queue"),
       ]);
-      if (reportsRes.ok) setRecentReports((await reportsRes.json()).slice(0, 12));
+      if (reportsRes.ok) {
+        const all: ReportIndex[] = await reportsRes.json();
+        const seen = new Set<string>();
+        const deduped = all.filter(r => { if (seen.has(r.app_id)) return false; seen.add(r.app_id); return true; });
+        setRecentReports(deduped.slice(0, 12));
+      }
       if (queueRes.ok)   setQueue(await queueRes.json());
     } catch { /* ignore */ }
   };
