@@ -16,10 +16,29 @@ export type LangRow = {
 
 export type GroupRow = { group: string; languages: string[]; all: Rate; share: number };
 
-export type SegmentRow = {
-  key: SegmentKey; label: string; range: string;
+/** 플레이타임 구간 정의: 그 게임 리뷰어의 사분위로 정한 시간 경계. 구간은 (min, max] */
+export type SegmentDef = { key: SegmentKey; label: string; range: string; min: number | null; max: number | null };
+
+export type SegmentRow = SegmentDef & {
   all: Rate;                 // 전체 기간 중 이 구간 리뷰
   window: Rate;              // 분석 기간 중 이 구간 리뷰
+  share_all: number;         // 전체 기간 리뷰어 중 이 구간 비중(%) — 사분위라 약 25%
+  share_window: number;      // 분석 기간 리뷰어 중 이 구간 비중(%) — 전체와 다르면 리뷰어 구성이 바뀌었다는 신호
+};
+
+/** 코드가 이 게임 자체의 데이터로 알아낸 상황. 분석 기준(기간·구간·변화 판정)의 근거입니다. */
+export type GameProfile = {
+  history_days: number;                 // 리뷰가 쌓인 기간(나이). 출시일이 아니라 리뷰 기록으로 잼
+  release_days: number | null;          // 스토어 출시일로부터 일수 (재출시·1.0 등은 history 와 다를 수 있음)
+  genres: string[]; is_free: boolean; early_access: boolean;
+  volume: { d7: number; d30: number; d90: number };
+  size_class: "tiny" | "small" | "medium" | "large";   // 최근 30일 리뷰량 기준
+  volume_ratio: number | null;          // 분석 기간 리뷰 수 ÷ 직전 기간 리뷰 수
+  volume_vs_typical: number | null;     // 분석 기간 리뷰 수 ÷ 과거 기간들의 중앙값 (평소 대비). 과거 기간 3개 미만이면 null
+  previous_vs_typical: number | null;   // 직전 기간 리뷰 수 ÷ 중앙값 — 직전 기간이 평소와 달랐는지(몰린 때인지)
+  noise_points: number | null;          // 이 게임이 평소 기간마다 흔들리는 긍정률 폭(%p). 과거 기간이 부족하면 null
+  baseline_windows: number;             // 변동 폭을 계산에 쓴 과거 기간 수
+  playtime: { bounds: [number, number, number]; raw: [number, number, number]; reviewers: number };  // 사분위 경계(시간)
 };
 
 export type WindowInfo = {
@@ -29,6 +48,7 @@ export type WindowInfo = {
   label: string;             // '최근 30일'
   reason: string;            // 왜 이 길이를 골랐는지
   has_previous: boolean;
+  reviews: number;           // 분석 기간 리뷰 수
 };
 
 export type SampleInfo = {
@@ -44,10 +64,11 @@ export type Stats = {
   official: Rate & { steam_desc_en: string | null; steam_label: string | null };  // 스팀 구매, 전 언어, 전 기간 = 스토어의 '모든 평가'와 같은 기준
   all: Rate;                                           // 스팀 외 구매(키 등) 포함
   window: WindowInfo;
+  profile: GameProfile;
   recent: Rate;                                        // 분석 기간
   previous: Rate | null;                               // 직전 기간
   delta_points: number | null;                         // 분석 기간 − 직전 기간 (퍼센트포인트)
-  delta_significant: boolean;                          // 우연으로 설명되지 않는 변화인가
+  delta_notable: boolean;                              // 통계적으로 뚜렷하고, 이 게임의 평소 변동 폭보다 큰 변화인가
   languages: LangRow[];
   groups: GroupRow[];
   segments: SegmentRow[];

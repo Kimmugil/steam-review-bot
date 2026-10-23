@@ -3,7 +3,7 @@ import { clientKey } from "@/lib/auth";
 import { dispatchAnalysis } from "@/lib/github";
 import { limited } from "@/lib/ratelimit";
 import { createRequest, lookupGame, markFailed, reapStuck, refundSlotFor, usageToday } from "@/lib/repo";
-import { getGameInfo, parseAppId } from "@/lib/steam";
+import { getGameInfo, notAnalyzableReason, parseAppId } from "@/lib/steam";
 
 export const maxDuration = 30;
 
@@ -23,7 +23,8 @@ export async function POST(req: NextRequest) {
   await reapStuck().catch(() => 0);
   const info = await getGameInfo(appId).catch(() => null);
   if (!info) return NextResponse.json({ error: "스팀에서 이 게임을 찾지 못했습니다. App ID를 다시 확인해 주세요." }, { status: 400 });
-  if (info.comingSoon) return NextResponse.json({ error: "아직 출시 전인 게임이라 분석할 리뷰가 없습니다." }, { status: 400 });
+  const why = notAnalyzableReason(info);
+  if (why) return NextResponse.json({ error: why }, { status: 400 });
 
   const { active, latest } = await lookupGame(appId);
   if (active) return NextResponse.json({ status: "active", analysis: active });

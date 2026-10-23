@@ -35,3 +35,8 @@ export const STEP_ORDER = ["game_info", "stats", "segments", "news", "reviews", 
 
 /** 문구 안의 {이름} 자리를 값으로 채움 */
 export const fill = (s: string, vars: Record<string, string>) => s.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m);
+
+export const SIZE_LABEL = { tiny: "리뷰가 매우 적은 게임", small: "리뷰가 적은 게임", medium: "리뷰가 보통인 게임", large: "리뷰가 아주 많은 게임" } as const;
+
+/** 리뷰가 쌓인 기간을 읽기 쉽게 (예: 약 1.5년, 40일) */
+export const ageKo = (days: number) => (days >= 365 ? `약 ${(days / 365).toFixed(1)}년` : `${days}일`);

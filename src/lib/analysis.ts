@@ -1,8 +1,8 @@
 import { GeminiError, MODEL, interpret } from "./gemini";
-import { buildPrompt, finalizeAi } from "./interpret";
+import { buildPrompt, finalizeAi, mayInterpretChange } from "./interpret";
 import { collectSample } from "./sample";
 import { collectStats } from "./stats";
-import { SteamError, getGameInfo, getOfficialNews } from "./steam";
+import { SteamError, getGameInfo, getOfficialNews, notAnalyzableReason } from "./steam";
 import { aiCallsThisMonth, getAnalysis, markFailed, markRunning, recordAi, refundSlotFor, saveDone, setStep, upsertGame } from "./repo";
 import type { NewsItem, Stats } from "./types";
 
@@ -25,21 +25,26 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
     // 1) 게임 정보
     const info = await getGameInfo(row.app_id);
     if (!info) throw new UserFacing("스팀에서 이 App ID의 게임을 찾을 수 없습니다.");
-    if (info.comingSoon) throw new UserFacing("아직 출시 전인 게임이라 분석할 리뷰가 없습니다.");
+    const why = notAnalyzableReason(info);
+    if (why) throw new UserFacing(why);
     const releaseIso = info.releaseDate ? info.releaseDate.toISOString().slice(0, 10) : null;
     await upsertGame(info.appId, info.name, info.headerImage, releaseIso);
     lap(`게임 정보: ${info.name} (출시 ${releaseIso ?? "알 수 없음"})`);
 
     // 2) 숫자 (스팀에서 정확한 건수를 받아 코드가 계산)
-    const { stats, plan } = await collectStats(row.app_id, info.releaseDate, (s) => setStep(id, s));
+    const { stats, plan } = await collectStats(row.app_id, info, (s) => setStep(id, s));
     if (stats.all.total === 0) throw new UserFacing("이 게임에는 아직 유저 리뷰가 없습니다.");
     lap(`숫자 수집 완료: 전체 ${stats.all.total}건, ${stats.window.label} ${stats.recent.total}건`);
 
     // 3) 소식 (실패해도 분석은 계속, 안내만 남김)
     await setStep(id, "news");
     let news: NewsItem[] = [];
-    try { news = await getOfficialNews(row.app_id); } catch (e) { stats.data_notes.push(`공식 소식을 가져오지 못했습니다: ${e instanceof SteamError ? e.message : "오류"}`); }
-    if (!news.length) stats.data_notes.push("최근 120일 안에 개발사가 직접 올린 공지가 없어 소식 분석은 하지 않았습니다.");
+    // 소식은 분석 기간과 그 직전 기간에 올라온 것 위주로 (변화와 맞춰 볼 수 있게). 없으면 최근 1년 안의 최신 2건.
+    try {
+      news = await getOfficialNews(row.app_id, 4, plan.days * 2 + 7);
+      if (!news.length) news = await getOfficialNews(row.app_id, 2, 365);
+    } catch (e) { stats.data_notes.push(`공식 소식을 가져오지 못했습니다: ${e instanceof SteamError ? e.message : "오류"}`); }
+    if (!news.length) stats.data_notes.push("최근 1년 안에 개발사가 직접 올린 공지가 없어 소식 분석은 하지 않았습니다.");
 
     // 4) 리뷰 표본
     await setStep(id, "reviews");
@@ -62,7 +67,7 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
       await setStep(id, "ai");
       const { raw, usage } = await interpret(buildPrompt(info.name, stats, news, reviews));
       await recordAi(id, "analysis", usage.input, usage.output);
-      ai = finalizeAi(raw, reviews, MODEL);
+      ai = finalizeAi(raw, reviews, MODEL, stats.segments, { allowChangeNotes: mayInterpretChange(stats) });
       lap(`AI 해석 완료 (주제 ${ai.themes.length}개, 걸러낸 근거 번호 ${ai.dropped.unknown_ids}개)`);
     }
 

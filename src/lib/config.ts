@@ -51,15 +51,22 @@ export function langName(code: string): string {
   return LANG_MAP[code] ?? `🏳️ ${code}`;
 }
 
-/** 플레이타임 구간 — 게임마다 달라지는 '상대 순위'가 아니라, 모든 게임에 같은 절대 시간 기준.
- *  구간은 (하한, 상한] 입니다. 기준은 '리뷰를 쓴 시점의 플레이타임'. */
-export const SEGMENTS = [
-  { key: "intro", label: "입문", range: "2시간 이하", min: null, max: 2 },
-  { key: "early", label: "초반", range: "2~10시간", min: 2, max: 10 },
-  { key: "mid", label: "중반", range: "10~50시간", min: 10, max: 50 },
-  { key: "core", label: "코어", range: "50시간 초과", min: 50, max: null },
-] as const;
-export type SegmentKey = (typeof SEGMENTS)[number]["key"];
+/** 플레이타임 구간 이름. 구간의 시간 경계는 게임마다 그 게임 리뷰어의 분포(사분위)로 정합니다. (고정 시간 기준 없음) */
+export const SEGMENT_KEYS = ["q1", "q2", "q3", "q4"] as const;
+export type SegmentKey = (typeof SEGMENT_KEYS)[number];
+export const SEGMENT_LABELS: Record<SegmentKey, string> = { q1: "플레이 짧은 편", q2: "중간 아래", q3: "중간 위", q4: "플레이 긴 편" };
+
+/** 리뷰량 곡선을 재는 기간(일). 게임의 '리뷰 기록 나이'와 기간별 리뷰량을 한꺼번에 알아냅니다. */
+export const VOLUME_DAYS = [7, 14, 30, 60, 90, 180, 365, 730, 1095, 1460, 1825, 2190];
+/** 플레이타임 분포를 재는 시간 눈금(시간) — 이 눈금별 누적 리뷰 수로 사분위를 계산합니다. */
+export const HOURS_LADDER = [1, 2, 3, 5, 8, 12, 20, 30, 50, 80, 120, 200, 300, 500, 800, 1200, 2000];
+
+/** 분석 기간: 후보 중 '목표 리뷰 수'를 처음 채우는 가장 짧은 기간. 리뷰가 적은 게임은 길게, 많은 게임은 짧게. */
+export const WINDOW = { target: 1000, candidates: [14, 30, 60, 90, 180], minDays: 7, baselineWindows: 6 } as const;
+
+/** 한 글자에 담기는 뜻이 많은 언어는 짧은 글도 해석할 수 있어서 최소 글자 수를 낮춥니다. */
+export const CJK_LANGS = new Set(["schinese", "tchinese", "japanese", "koreana", "thai"]);
+export const minChars = (lang: string) => (CJK_LANGS.has(lang) ? 8 : 20);
 
 /** 분석 방법 버전. 1 = 예전(구글 시트) 방식, 2 = 이번 개편. */
 export const METHOD_VERSION = 2;

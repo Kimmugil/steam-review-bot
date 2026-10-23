@@ -67,11 +67,29 @@ export function deltaPoints(now: Rate | null, before: Rate | null): number | nul
   return now.rate - before.rate;
 }
 
-/** 두 비율의 차이가 우연으로 설명되는 정도인지 (두 표본 비율 z 검정, |z|<1.96 이면 '뚜렷한 변화 아님') */
+/** 두 표본 비율의 z 값 (|z| ≥ 1.96 이면 표본 크기만으로는 우연이라 보기 어려움) */
+export function twoPropZ(a: { pos: number; total: number }, b: { pos: number; total: number }): number {
+  if (a.total <= 0 || b.total <= 0) return 0;
+  const p1 = a.pos / a.total, p2 = b.pos / b.total, p = (a.pos + b.pos) / (a.total + b.total);
+  const se = Math.sqrt(p * (1 - p) * (1 / a.total + 1 / b.total));
+  return se > 0 ? (p1 - p2) / se : 0;
+}
+
 export function significantChange(now: Rate | null, before: Rate | null): boolean {
   if (!now || !before || now.total < 30 || before.total < 30) return false;
-  const p1 = now.pos / now.total, p2 = before.pos / before.total;
-  const p = (now.pos + before.pos) / (now.total + before.total);
-  const se = Math.sqrt(p * (1 - p) * (1 / now.total + 1 / before.total));
-  return se > 0 && Math.abs(p1 - p2) / se >= 1.96;
+  return Math.abs(twoPropZ(now, before)) >= 1.96;
+}
+
+export const mean = (v: number[]) => (v.length ? v.reduce((s, x) => s + x, 0) / v.length : 0);
+export const sd = (v: number[]) => { const m = mean(v); return Math.sqrt(mean(v.map((x) => (x - m) ** 2))); };
+
+/**
+ * '의미 있는 변화'인가: 표본 크기로도 우연이 아니고(통계), 그 게임이 평소 흔들리는 폭(noise)의 2배 이상일 것(실질).
+ * 표본이 아주 많으면 0.7%p 차이도 통계적으로는 '유의'하지만, 평소 주간 변동이 7%p인 게임에서는 아무 일도 아닙니다.
+ * noise 를 모르면(과거 기간이 부족) 최소 3%p 이상일 때만 인정합니다.
+ */
+export function notableChange(now: Rate | null, before: Rate | null, noisePoints: number | null): boolean {
+  if (!significantChange(now, before)) return false;
+  const diff = Math.abs((now!.rate ?? 0) - (before!.rate ?? 0));
+  return diff >= Math.max(noisePoints != null ? 2 * noisePoints : 3, 1.5);
 }

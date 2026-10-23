@@ -4,7 +4,7 @@ import { guard } from "@/lib/admin-actions";
 import { sql } from "@/lib/db";
 import { dispatchAnalysis } from "@/lib/github";
 import { createRequest, markFailed, reapStuck } from "@/lib/repo";
-import { getGameInfo } from "@/lib/steam";
+import { getGameInfo, notAnalyzableReason } from "@/lib/steam";
 
 export const maxDuration = 30;
 
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
   if (b.action === "rerun") {
     const info = await getGameInfo(Number(b.appId)).catch(() => null);
-    if (!info || info.comingSoon) return NextResponse.json({ error: "스팀에서 분석할 수 있는 게임을 찾지 못했습니다." }, { status: 400 });
+    if (!info || notAnalyzableReason(info)) return NextResponse.json({ error: info ? notAnalyzableReason(info) : "스팀에서 분석할 수 있는 게임을 찾지 못했습니다." }, { status: 400 });
     const r = await createRequest({ appId: info.appId, name: info.name, headerImage: info.headerImage, releaseDate: info.releaseDate?.toISOString().slice(0, 10) ?? null, via: "admin", requesterHash: null });
     if (r.kind === "active") return NextResponse.json({ ok: false, message: "이 게임은 이미 분석이 진행 중입니다." });
     if (r.kind !== "created") return NextResponse.json({ error: "접수하지 못했습니다." }, { status: 500 });

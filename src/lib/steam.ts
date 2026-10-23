@@ -149,6 +149,7 @@ export async function getOfficial(appId: number): Promise<Rate & { steam_desc_en
 export type GameInfo = {
   appId: number; name: string; headerImage: string | null;
   releaseDate: Date | null; comingSoon: boolean; type: string | null;
+  genres: string[]; isFree: boolean; earlyAccess: boolean;
 };
 
 /** 한국어 '2025년 1월 20일' 과 영어 '20 Jan, 2025' 모두 읽습니다. 못 읽으면 null. */
@@ -168,7 +169,16 @@ export async function getGameInfo(appId: number): Promise<GameInfo | null> {
   return {
     appId, name: String(d.name ?? appId), headerImage: d.header_image ?? null,
     releaseDate: parseReleaseDate(d.release_date?.date), comingSoon: Boolean(d.release_date?.coming_soon), type: d.type ?? null,
+    genres: ((d.genres ?? []) as { description?: string }[]).map((g) => String(g.description ?? "")).filter(Boolean),
+    isFree: Boolean(d.is_free), earlyAccess: ((d.genres ?? []) as { id?: string }[]).some((g) => String(g.id) === "70"),
   };
+}
+
+/** 분석할 수 없는 항목이면 사용자에게 보여 줄 이유를 돌려줍니다. (출시 전, DLC·사운드트랙·영상 같은 게임 본편이 아닌 것) */
+export function notAnalyzableReason(info: GameInfo): string | null {
+  if (info.comingSoon) return "아직 출시 전인 게임이라 분석할 리뷰가 없습니다.";
+  if (info.type && !["game", "demo"].includes(info.type)) return "게임 본편이 아닌 항목(DLC·사운드트랙·영상 등)이에요. 게임 본편을 골라 주세요.";
+  return null;
 }
 
 // ───────────────── 공식 소식 ─────────────────

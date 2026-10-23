@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Pill, PosNegBar, RatingPill, Thumb } from "./ui";
-import { dateKo, num, pct1, signed } from "@/lib/format";
+import { SIZE_LABEL, ageKo, dateKo, num, pct1, signed } from "@/lib/format";
 import { langName } from "@/lib/config";
 import type { Texts } from "@/lib/text-defs";
 
@@ -75,8 +75,18 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
         <div className="stack">
           <div className="kpi4">
             <KCard k="스팀 상점 평가 (전체 기간)" r={s.official} label={s.official.steam_label ?? s.official.label} sub="스팀 구매만 · 모든 언어" />
-            <KCard k={`${s.window.label} 평가`} r={s.recent} sub={s.delta_points != null ? <>직전 {s.window.days}일 대비 <b className={s.delta_significant ? (s.delta_points >= 0 ? "up" : "down") : "flat"}>{signed(s.delta_points)}</b> {s.delta_significant ? "(뚜렷한 변화)" : "(작은 변화, 우연일 수 있음)"}</> : "비교할 직전 기간 없음"} />
+            <KCard k={`${s.window.label} 평가`} r={s.recent} sub={s.delta_points != null ? <>직전 {s.window.days}일 대비 <b className={s.delta_notable ? (s.delta_points >= 0 ? "up" : "down") : "flat"}>{signed(s.delta_points)}</b> {s.delta_notable ? "(평소 흔들림을 넘는 뚜렷한 변화)" : "(평소 흔들림 범위 안의 변화)"}</> : "비교할 직전 기간 없음"} />
             <KCard k="스팀 밖 구매까지 포함한 전체" r={s.all} sub="키 구매 등 포함" />
+          </div>
+
+          <div className="callout">
+            <h3>이 게임의 분석 기준 <span className="muted" style={{ fontWeight: 400 }}>· 게임마다 달라요. 이 게임의 리뷰량·분포·평소 흔들림으로 정했어요</span></h3>
+            <ul>
+              <li>리뷰가 쌓인 기간 {ageKo(s.profile.history_days)} · 최근 30일 리뷰 {num(s.profile.volume.d30)}건 → <b>{SIZE_LABEL[s.profile.size_class as keyof typeof SIZE_LABEL]}</b>{s.profile.genres?.length ? ` · ${s.profile.genres.join(", ")}` : ""}{s.profile.is_free ? " · 무료" : ""}{s.profile.early_access ? " · 얼리 액세스" : ""}</li>
+              <li>분석 기간: <b>{s.window.label}</b> ({num(s.window.reviews)}건) — {s.window.reason}</li>
+              <li>{s.profile.noise_points != null ? <>이 게임의 긍정률은 평소 기간마다 <b>±{s.profile.noise_points.toFixed(1)}%p</b> 정도 흔들려요(과거 {s.profile.baseline_windows}개 기간). 이보다 작은 변화는 의미를 두지 않았어요.</> : "과거 기간이 부족해 이 게임의 평소 흔들림은 알 수 없어요. 변화는 3%p 이상일 때만 의미 있다고 봤어요."}</li>
+              <li>플레이타임 구간은 이 게임 리뷰어를 4등분한 경계예요: {s.profile.playtime.bounds[0]}시간 · {s.profile.playtime.bounds[1]}시간 · {s.profile.playtime.bounds[2]}시간 (고정 시간이 아니에요)</li>
+            </ul>
           </div>
 
           {s.highlights?.length > 0 && (
@@ -96,7 +106,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
                 <h3>AI 해석 <span className="muted" style={{ fontWeight: 400 }}>· {t.ai_notice}</span></h3>
                 <p>{ai.headline}</p>
               </div>
-              <div className="sec-title" style={{ margin: "4px 0 0" }}><h2>리뷰에서 보이는 주제</h2><span>표본 {num(sampleTotal)}건 안에서의 비중이에요</span></div>
+              <div className="sec-title" style={{ margin: "4px 0 0" }}><h2>리뷰에서 보이는 주제</h2><span>표본 {num(sampleTotal)}건 안에서의 비중이에요 · AI가 표본을 주제별로 분류한 개수라 오차가 있을 수 있어요</span></div>
               <div className="themes">
                 {ai.themes.length === 0 && <div className="empty">표본에서 뚜렷한 주제를 찾지 못했어요.</div>}
                 {ai.themes.map((th: any, i: number) => (
@@ -148,7 +158,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
                       <td>{l.name}<div className="muted small">{num(l.all.total)}건</div></td>
                       <td><div className="langbar"><div className="bar-track"><div className="bar-fill" style={{ width: `${Math.min(100, l.share)}%` }} /></div><span className="num">{l.share.toFixed(1)}%</span></div></td>
                       <td><Rate r={l.all} /> <RatingPill label={l.all.label} /></td>
-                      <td>{l.window ? <><Rate r={l.window} /><div className="muted small">{num(l.window.total)}건</div></> : <span className="muted">-</span>}</td>
+                      <td>{l.window ? <><Rate r={l.window} /><div className="muted small">{num(l.window.total)}건{!l.window.reliable ? " · 표본 적음" : ""}</div></> : <span className="muted">-</span>}</td>
                       <td>{l.prev ? <span className="num">{pct1(l.prev.rate)}</span> : <span className="muted">-</span>}</td>
                       <td className="num">{langN(l.code) || "-"}</td>
                     </tr>
@@ -190,23 +200,26 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
 
       {tab === "play" && (
         <div className="stack">
-          <div className="callout"><h3>플레이타임 구간은 모든 게임에 같은 기준이에요</h3><p>리뷰를 쓸 때까지의 플레이타임으로 나눴어요 (입문 2시간 이하 · 초반 2~10시간 · 중반 10~50시간 · 코어 50시간 초과). 게임마다 달라지는 '상대 순위'가 아니라서 게임끼리 비교할 수 있어요.</p></div>
+          <div className="callout"><h3>플레이타임 구간은 이 게임 안에서 정한 상대적 위치예요</h3>
+            <p>리뷰를 쓸 때까지의 플레이타임 분포를 이 게임의 모든 리뷰로 계산해 4등분했어요. 출시한 지 얼마 안 된 게임에서 20시간은 오래 한 쪽이고, 오래된 게임에서는 짧은 쪽일 수 있어서 고정 시간 기준을 쓰지 않았어요. 경계: {s.profile.playtime.bounds[0]}시간 · {s.profile.playtime.bounds[1]}시간 · {s.profile.playtime.bounds[2]}시간 (리뷰 {num(s.profile.playtime.reviewers)}건 기준).</p></div>
           <div className="card">
             <h2>구간별 평가</h2>
             <div className="tbl-wrap">
               <table>
-                <thead><tr><th>구간</th><th>{s.window.label}</th><th>전체 기간</th></tr></thead>
+                <thead><tr><th>구간</th><th>리뷰 비중<div className="muted small" style={{ fontWeight: 400 }}>전체 → {s.window.label}</div></th><th>{s.window.label} 긍정률</th><th>전체 기간 긍정률</th></tr></thead>
                 <tbody>
                   {s.segments.map((g: any) => (
                     <tr key={g.key}>
                       <td><b>{g.label}</b><div className="muted small">{g.range}</div></td>
-                      <td><Rate r={g.window} /><div className="muted small">{num(g.window.total)}건</div><PosNegBar pos={g.window.pos} neg={g.window.neg} /></td>
+                      <td className="num">{g.share_all.toFixed(0)}% → <b>{g.share_window.toFixed(0)}%</b></td>
+                      <td><Rate r={g.window} /><div className="muted small">{num(g.window.total)}건{!g.window.reliable ? " · 표본 적음" : ""}</div><PosNegBar pos={g.window.pos} neg={g.window.neg} /></td>
                       <td><Rate r={g.all} /><div className="muted small">{num(g.all.total)}건</div><PosNegBar pos={g.all.pos} neg={g.all.neg} /></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <p className="help">비중이 전체 기간(약 25%)과 크게 다르면, 그 기간에 리뷰를 쓴 사람의 구성이 평소와 다르다는 뜻이에요. 예를 들어 "플레이 짧은 편" 비중이 늘면, 시작한 지 얼마 안 된 사람의 리뷰가 많아진 거예요.</p>
           </div>
           {ai?.segment_notes?.length > 0 && (
             <div className="grid2">
@@ -235,7 +248,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
                 <div className="r"><span>{s.window.label}</span><div className="bar-track"><div className="bar-fill" style={{ width: `${s.recent.rate}%` }} /></div><span className="num">{pct1(s.recent.rate)}</span></div>
               </div>
             ) : <p className="muted">출시 직후라 비교할 직전 기간이 없어요.</p>}
-            {s.delta_points != null && <p className="help">차이 {signed(s.delta_points)} — {s.delta_significant ? "표본 크기를 고려해도 우연으로 설명하기 어려운 변화예요." : "표본 크기를 고려하면 우연으로도 생길 수 있는 작은 차이예요."}</p>}
+            {s.delta_points != null && <p className="help">차이 {signed(s.delta_points)} — {s.delta_notable ? `표본 크기로도${s.profile.noise_points != null ? `, 이 게임이 평소 흔들리는 폭(±${s.profile.noise_points.toFixed(1)}%p)으로도` : ""} 설명하기 어려운 변화예요.` : `표본 크기나 이 게임의 평소 흔들림${s.profile.noise_points != null ? `(±${s.profile.noise_points.toFixed(1)}%p)` : ""}으로 생길 수 있는 범위의 변화예요.`}</p>}
             <p className="help">{s.window.reason}</p>
           </div>
           {ai?.change_notes?.length > 0 && (
@@ -268,6 +281,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
               <li><b>숫자</b>는 스팀에서 조건별 건수를 직접 받아 코드가 계산했어요 (전체·기간별·언어별·플레이타임별). AI는 숫자를 만들지 않아요.</li>
               <li><b>표본</b>: {s.sample?.method}</li>
               <li><b>AI</b>는 표본을 읽고 주제를 찾고, 근거가 되는 리뷰 번호만 가리켜요. 번호가 실제 있는지, 주제의 비중과 긍정/부정 성향은 코드가 근거 리뷰로 계산했어요.</li>
+              <li><b>분석 기간·플레이타임 구간·변화 판정</b>은 모든 게임에 같은 값이 아니라, 이 게임의 리뷰량(기간), 리뷰어의 플레이타임 분포(구간), 과거 기간들의 평소 흔들림(변화 판정)으로 정했어요. 요약 탭의 "이 게임의 분석 기준"에서 값을 볼 수 있어요.</li>
               <li>등급 이름(압도적으로 긍정적 등)은 스팀 상점의 구간 기준을 따르되 리뷰 수가 적으면 붙이지 않았어요. 괄호 속 범위는 95% 신뢰 구간이에요.</li>
               <li>이 분석은 <b>언어</b> 기준이에요. 국가가 아니에요.</li>
             </ul>

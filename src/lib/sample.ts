@@ -1,16 +1,8 @@
-import { SAMPLE, SEGMENTS, langName, type SegmentKey } from "./config";
+import { SAMPLE, langName, minChars } from "./config";
 import { getReviewPage, SteamError, type RawReview } from "./steam";
-import { allocateSamples, type WindowPlan } from "./stats";
+import { allocateSamples } from "./stats";
+import type { WindowPlan } from "./profile";
 import type { SampleInfo, SampleReview } from "./types";
-
-/** 리뷰 쓸 때 플레이타임(시간)이 어느 구간인지. 구간은 (하한, 상한]. */
-export function segmentOf(hours: number | null): SegmentKey | null {
-  if (hours == null) return null;
-  for (const s of SEGMENTS) {
-    if ((s.min == null || hours > s.min) && (s.max == null || hours <= s.max)) return s.key;
-  }
-  return null;
-}
 
 export function shuffle<T>(arr: T[], rng: () => number = Math.random): T[] {
   const a = [...arr];
@@ -28,7 +20,7 @@ const clean = (s: string) => s.replace(/\u0000/g, "").replace(/\s+/g, " ").trim(
  *  - 분석 기간 안의 리뷰만, 비중이 큰 언어 위주로 (언어별 목표 건수는 그 언어의 기간 리뷰 수 비중대로)
  *  - 기간을 5등분해서 구간마다 무작위로 골라, 최근 하루에 쏠리지 않게 함
  *  - '도움이 많이 눌린 순'이 아니라 시간 범위 안에서 무작위(도움순은 길고 비판적인 글에 치우침)
- *  - 해석에 쓸 수 없는 너무 짧은 글(20자 미만)은 먼저 거르고, 모자랄 때만 채움
+ *  - 해석에 쓸 수 없는 너무 짧은 글(영어 등 20자 미만, 한·중·일·태 8자 미만)은 먼저 거르고, 모자랄 때만 채움
  */
 export async function collectSample(
   appId: number, plan: WindowPlan, windowTotals: { code: string; total: number; pos: number }[], notes: string[],
@@ -62,8 +54,9 @@ export async function collectSample(
       }));
       const got: RawReview[] = [];
       for (const reviews of pages) {
-        const usable = shuffle(reviews.filter((r) => r.review && clean(r.review).length >= 20), rng);
-        const filler = shuffle(reviews.filter((r) => r.review && clean(r.review).length < 20 && clean(r.review).length > 0), rng);
+        const min = minChars(code);   // 글자당 담기는 뜻이 많은 언어(한·중·일·태)는 더 짧은 글도 해석 가능
+        const usable = shuffle(reviews.filter((r) => r.review && clean(r.review).length >= min), rng);
+        const filler = shuffle(reviews.filter((r) => r.review && clean(r.review).length < min && clean(r.review).length > 0), rng);
         got.push(...[...usable, ...filler].slice(0, perSlice));
       }
       picked.push(...shuffle(got, rng).slice(0, quota));
@@ -92,7 +85,7 @@ export async function collectSample(
     reviews,
     info: {
       total: reviews.length, languages: perLang,
-      method: `분석 기간(${plan.label}) 안의 리뷰를 시간 순 5구간으로 나눠 구간마다 무작위로 뽑았습니다. 리뷰가 많은 언어 최대 ${SAMPLE.maxLanguages}개(한국어 포함)를 기간 리뷰 수 비중대로 배분했고, 각 언어 안에서는 긍정·부정을 그 언어의 실제 비율대로 나눠 뽑았습니다. 20자 미만의 짧은 글은 해석할 수 없어 먼저 제외했습니다.`,
+      method: `분석 기간(${plan.label}) 안의 리뷰를 시간 순 5구간으로 나눠 구간마다 무작위로 뽑았습니다. 리뷰가 많은 언어 최대 ${SAMPLE.maxLanguages}개(한국어 포함)를 기간 리뷰 수 비중대로 배분했고, 각 언어 안에서는 긍정·부정을 그 언어의 실제 비율대로 나눠 뽑았습니다. 너무 짧은 글(영어 등 20자, 한·중·일·태 8자 미만)은 해석할 수 없어 먼저 제외했습니다.`,
     },
   };
 }

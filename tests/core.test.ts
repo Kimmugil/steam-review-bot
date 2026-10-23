@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ratingLabel, makeRate, wilson, significantChange, steamScoreLabel } from "../src/lib/rating";
-import { pickWindow, allocateSamples, minusRate, buildGroups, findHighlights } from "../src/lib/stats";
-import { segmentOf, shuffle } from "../src/lib/sample";
-import { finalizeAi, buildPrompt } from "../src/lib/interpret";
-import { cleanNewsText, parseAppId, parseReleaseDate } from "../src/lib/steam";
+import { ratingLabel, makeRate, wilson, significantChange, steamScoreLabel, notableChange } from "../src/lib/rating";
+import { allocateSamples, minusRate, buildGroups, findHighlights, typicalVolume } from "../src/lib/stats";
+import { inferHistoryDays, planWindow, noiseFromWindows, niceBound, quantileHours, segmentBounds, segmentDefs, segmentOfHours } from "../src/lib/profile";
+import { minChars } from "../src/lib/config";
+import { shuffle } from "../src/lib/sample";
+import { finalizeAi, buildPrompt, changeDirective, mayInterpretChange } from "../src/lib/interpret";
+import { cleanNewsText, notAnalyzableReason, parseAppId, parseReleaseDate, type GameInfo } from "../src/lib/steam";
 import { kstDay } from "../src/lib/db";
 import type { AiRaw, SampleReview, Stats } from "../src/lib/types";
 
@@ -44,19 +46,85 @@ test("변화가 우연인지: 표본이 작거나 차이가 작으면 '뚜렷한
   assert.equal(significantChange(makeRate(5, 5), makeRate(1, 9)), false);           // 표본 10건
 });
 
-test("분석 기간: 출시 직후/중간/안정기", () => {
+const DAYS = [7, 14, 30, 60, 90, 180, 365, 730, 1095, 1460, 1825, 2190];
+/** 하루 평균 perDay 건씩 쌓이는 게임의 기간별 누적 리뷰량 (기록이 history 일) */
+const vol = (perDay: number, history: number) => DAYS.map((d) => ({ days: d, n: Math.round(perDay * Math.min(d, history)) }));
+
+test("리뷰 기록 나이: 전체의 99.5%가 쌓인 가장 짧은 눈금 (출시일이 같은 구간 안이면 더 정확한 값)", () => {
+  assert.equal(inferHistoryDays(vol(100, 400), 100 * 400, null), 730);
+  assert.equal(inferHistoryDays(vol(100, 400), 100 * 400, 400), 400);          // 출시일이 365~730 구간 안 → 400
+  assert.equal(inferHistoryDays(vol(100, 400), 100 * 400, 100), 730);          // 출시일(100일)은 리뷰 기록과 무관(정식 출시일 등) → 무시
+  assert.equal(inferHistoryDays(vol(10, 6000), 10 * 6000, null), 2190);        // 가장 긴 눈금보다 오래됨
+});
+
+test("분석 기간: 이 게임의 리뷰량으로 정한다 — 리뷰 많은 게임은 짧게, 적은 게임은 길게, 신작은 처음부터", () => {
   const now = new Date("2026-10-23T00:00:00Z");
-  const d = (days: number) => new Date(now.getTime() - days * 86400000);
-  const a = pickWindow(d(5), now);
-  assert.equal(a.days, 5); assert.equal(a.has_previous, false); assert.equal(a.prevStartTs, null);
-  const b = pickWindow(d(20), now);
-  assert.equal(b.days, 10); assert.equal(b.has_previous, true);
-  assert.equal(b.startTs - b.prevStartTs!, 10 * 86400);
-  assert.equal(pickWindow(d(14), now).days, 7);
-  assert.equal(pickWindow(d(59), now).days, 29);
-  const c = pickWindow(d(400), now);
-  assert.equal(c.days, 30); assert.equal(c.label, "최근 30일");
-  assert.equal(pickWindow(null, now).days, 30);                                     // 출시일을 모르면 안정기로 취급
+  const busy = planWindow(1000, vol(300, 1000), now);          // 하루 300건 → 14일에 4,200건
+  assert.equal(busy.days, 14); assert.equal(busy.has_previous, true);
+  const mid = planWindow(1000, vol(50, 1000), now);            // 하루 50건 → 14일 700건, 30일 1,500건
+  assert.equal(mid.days, 30);
+  const small = planWindow(1000, vol(3, 1000), now);           // 하루 3건 → 180일 540건, 목표 못 채움 → 가장 긴 후보
+  assert.equal(small.days, 180); assert.match(small.reason, /리뷰가 적은 게임/);
+  const young = planWindow(40, vol(500, 40), now);             // 기록 40일: 후보 중 40/2=20 이하는 14일뿐
+  assert.equal(young.days, 14); assert.equal(young.has_previous, true);
+  const launch = planWindow(6, vol(2000, 6), now);             // 기록 6일 → 처음부터, 비교 없음
+  assert.equal(launch.days, 6); assert.equal(launch.has_previous, false); assert.equal(launch.prevStartTs, null);
+  const weekOld = planWindow(20, vol(500, 20), now);           // 기록 20일: 후보 없음 → 절반
+  assert.equal(weekOld.days, 10);
+  assert.equal(busy.startTs - busy.prevStartTs!, 14 * 86400);
+  assert.equal(busy.baseline.length, 6);                       // 과거 같은 길이 기간 6개(변동 폭 계산용)
+  assert.equal(planWindow(60, vol(300, 60), now).baseline.length, 3);     // 기록 60일, 14일 창 → 기록 안에 들어가는 과거 기간은 3개뿐
+});
+
+test("변동 폭: 과거 기간 3개 미만이면 모름, 표본 크기만으로 생기는 흔들림보다 작게 잡지 않는다", () => {
+  assert.equal(noiseFromWindows([makeRate(90, 10), makeRate(91, 9)]).noise, null);
+  assert.equal(noiseFromWindows([makeRate(90, 10), makeRate(91, 9), makeRate(5, 5)]).noise, null);        // 30건 미만은 제외 → 2개
+  const calm = noiseFromWindows([makeRate(900, 100), makeRate(905, 95), makeRate(902, 98), makeRate(899, 101)]);
+  assert.ok(calm.noise! > 0.5 && calm.noise! < 2);                                                         // 표본이 커서 흔들림이 작음
+  const wild = noiseFromWindows([makeRate(900, 100), makeRate(750, 250), makeRate(950, 50), makeRate(800, 200)]);
+  assert.ok(wild.noise! > 7);
+});
+
+test("의미 있는 변화: 통계적으로 뚜렷하고 그 게임의 평소 흔들림의 2배 이상일 때만", () => {
+  const a = makeRate(9300, 700), b = makeRate(9490, 510);            // 93% vs 94.9%, 표본 큼 → 통계적으로는 뚜렷
+  assert.equal(significantChange(b, a), true);
+  assert.equal(notableChange(b, a, 3.0), false);                      // 평소 ±3%p 흔들리는 게임이면 1.9%p는 아무 일도 아님
+  assert.equal(notableChange(b, a, 0.5), true);                       // 평소 ±0.5%p 인 게임이면 큰 변화
+  assert.equal(notableChange(b, a, null), false);                     // 평소 흔들림을 모르면 3%p 이상만 인정
+  assert.equal(notableChange(makeRate(8000, 2000), makeRate(8500, 1500), null), true);   // 5%p
+});
+
+test("플레이타임 구간: 그 게임 리뷰어 분포의 사분위로 정한다 (신작과 오래된 게임의 경계가 다르다)", () => {
+  const LADDER = [1, 2, 3, 5, 8, 12, 20, 30, 50, 80, 120, 200, 300, 500, 800, 1200, 2000];
+  const cdfOf = (median: number, total: number) => LADDER.map((h) => ({ h, n: Math.round(total * (1 - Math.exp(-Math.LN2 * h / median))) }));   // 중앙값이 median 시간인 분포
+  const fresh = segmentBounds(cdfOf(6, 20000), 20000).bounds;     // 막 나온 게임: 리뷰어 중앙값 6시간
+  const old = segmentBounds(cdfOf(55, 900000), 900000).bounds;    // 오래된 게임: 중앙값 55시간
+  assert.ok(fresh[2] < old[0] + 30, "신작의 '오래 한 쪽' 경계가 오래된 게임의 '짧은 쪽' 경계 근처");
+  assert.ok(fresh[1] < 10 && old[1] > 40);
+  assert.ok(fresh[0] < fresh[1] && fresh[1] < fresh[2] && old[0] < old[1] && old[1] < old[2]);
+  assert.equal(Math.round(quantileHours([{ h: 10, n: 50 }, { h: 20, n: 100 }], 100, 0.25)), 5);   // 눈금 사이 직선 보간
+  assert.equal(niceBound(0.4), 1); assert.equal(niceBound(7.6), 8); assert.equal(niceBound(23.4), 23); assert.equal(niceBound(73.8), 75); assert.equal(niceBound(118.9), 120); assert.equal(niceBound(432), 450);
+  const defs = segmentDefs([10, 40, 100]);
+  assert.deepEqual(defs.map((d) => d.range), ["10시간 이하", "10~40시간", "40~100시간", "100시간 초과"]);
+  assert.equal(segmentOfHours(0.5, defs), "q1"); assert.equal(segmentOfHours(10, defs), "q1"); assert.equal(segmentOfHours(10.1, defs), "q2");
+  assert.equal(segmentOfHours(40, defs), "q2"); assert.equal(segmentOfHours(100, defs), "q3"); assert.equal(segmentOfHours(100.1, defs), "q4"); assert.equal(segmentOfHours(null, defs), null);
+  const same = segmentBounds([{ h: 1, n: 100 }, { h: 2, n: 100 }], 100).bounds;       // 거의 모두 1시간 이하여도 경계는 계속 커져야 함
+  assert.ok(same[0] < same[1] && same[1] < same[2]);
+});
+
+test("평소 리뷰량(과거 기간 중앙값)과 분석 불가 항목 판정", () => {
+  assert.equal(typicalVolume([makeRate(80, 20), makeRate(90, 10)]), null);                               // 과거 기간 3개 미만
+  assert.equal(typicalVolume([makeRate(80, 20), makeRate(900, 100), makeRate(40, 10)]), 100);           // 중앙값
+  const gi = (o: Partial<GameInfo>): GameInfo => ({ appId: 1, name: "x", headerImage: null, releaseDate: null, comingSoon: false, type: "game", genres: [], isFree: false, earlyAccess: false, ...o });
+  assert.equal(notAnalyzableReason(gi({})), null);
+  assert.equal(notAnalyzableReason(gi({ type: "demo" })), null);
+  assert.match(notAnalyzableReason(gi({ type: "music" }))!, /게임 본편이 아닌/);
+  assert.match(notAnalyzableReason(gi({ type: "dlc" }))!, /게임 본편이 아닌/);
+  assert.match(notAnalyzableReason(gi({ comingSoon: true }))!, /출시 전/);
+});
+
+test("글자 수 기준은 언어에 맞게: 한·중·일·태는 더 짧은 글도 해석 가능", () => {
+  assert.equal(minChars("english"), 20); assert.equal(minChars("koreana"), 8); assert.equal(minChars("schinese"), 8); assert.equal(minChars("russian"), 20);
 });
 
 test("표본 배분: 한국어는 항상 포함, 최소·최대 지킴", () => {
@@ -69,25 +137,37 @@ test("표본 배분: 한국어는 항상 포함, 최소·최대 지킴", () => {
   assert.equal(tiny[0].n, 5);                                                       // 실제 리뷰보다 많이 뽑지 않음
 });
 
-test("플레이타임 구간은 (하한, 상한]", () => {
-  assert.equal(segmentOf(0.5), "intro"); assert.equal(segmentOf(2), "intro");
-  assert.equal(segmentOf(2.1), "early"); assert.equal(segmentOf(10), "early");
-  assert.equal(segmentOf(10.1), "mid"); assert.equal(segmentOf(50), "mid");
-  assert.equal(segmentOf(50.1), "core"); assert.equal(segmentOf(null), null);
-});
-
-test("눈에 띄는 사실: 언어 격차·최근 vs 전체·플레이타임·뚜렷한 변화만 뽑는다", () => {
+test("눈에 띄는 사실: 우연이 아니고 이 게임의 평소 변동보다 클 때만 뽑는다", () => {
   const lr = (name: string, share: number, pos: number, neg: number) => ({ code: name, name, group: "g", all: makeRate(pos, neg), share, window: null, prev: null });
-  const base = { recent: makeRate(900, 100), all: makeRate(600, 400), previous: makeRate(850, 150), delta_points: 5, delta_significant: true,
-    window: { days: 30, start: "", end: "", label: "최근 30일", reason: "", has_previous: true },
-    segments: [{ key: "intro", label: "입문", range: "2시간 이하", all: makeRate(0, 0), window: makeRate(40, 10) }, { key: "core", label: "코어", range: "50시간 초과", all: makeRate(0, 0), window: makeRate(300, 200) }] };
-  const h = findHighlights({ ...base, languages: [lr("중국어", 49, 320, 680), lr("영어", 38, 920, 80), lr("한국어", 2, 80, 20)] } as never);
-  assert.equal(h.length, 4);
+  const seg = (key: string, label: string, range: string, w: [number, number], sh: number) => ({ key, label, range, min: null, max: null, all: makeRate(0, 0), window: makeRate(w[0], w[1]), share_all: 25, share_window: sh });
+  const profile = (noise: number | null, ratio: number | null = null, typical: number | null = null, prevTypical: number | null = null) => ({ noise_points: noise, volume_ratio: ratio, volume_vs_typical: typical, previous_vs_typical: prevTypical, baseline_windows: 5 }) as never;
+  const base = { recent: makeRate(900, 100), all: makeRate(800, 200), previous: makeRate(850, 150), delta_points: 5, delta_notable: true,
+    window: { days: 30, start: "", end: "", label: "최근 30일", reason: "", has_previous: true, reviews: 1000 },
+    segments: [seg("q1", "플레이 짧은 편", "5시간 이하", [40, 10], 25), seg("q4", "플레이 긴 편", "100시간 초과", [300, 200], 25)] };
+  const langs = [lr("중국어", 49, 320, 680), lr("영어", 38, 920, 80), lr("한국어", 2, 80, 20)];
+  const h = findHighlights({ ...base, languages: langs, profile: profile(1.0) } as never);
   assert.ok(h[0].includes("중국어") && h[0].includes("영어") && h[0].includes("격차"));
   assert.ok(h.some((x) => x.includes("전체 기간") && x.includes("높습니다")));
   assert.ok(h.some((x) => x.includes("플레이타임")));
   assert.ok(h.some((x) => x.includes("올랐습니다")));
-  const quiet = findHighlights({ ...base, recent: makeRate(600, 400), delta_significant: false, segments: [], languages: [lr("영어", 90, 800, 200), lr("중국어", 10, 70, 30)] } as never);
+  // 평소 변동이 큰 게임(±12%p)이면 같은 숫자(최근 vs 전체 10%p, 플레이타임 20%p)라도 평소 흔들림의 2배(24%p)에 못 미쳐 뽑히지 않는다
+  const noisy = findHighlights({ ...base, languages: langs, profile: profile(12) } as never);
+  assert.ok(!noisy.some((x) => x.includes("전체 기간")));
+  assert.ok(!noisy.some((x) => x.includes("플레이타임에 따라")));
+  assert.ok(noisy.some((x) => x.includes("언어 간 격차")));                      // 언어 격차(60%p)는 여전히 큼
+  // 리뷰량이 몰렸을 때
+  const spike = findHighlights({ ...base, languages: [], segments: [], delta_notable: false, profile: profile(null, 3.2), previous: makeRate(400, 100) } as never);
+  assert.ok(spike.some((x) => x.includes("3.2배")));
+  // 평소 대비: 이번 기간이 평소의 3배면 알리고, 직전 기간이 평소의 2.7배(몰린 때)였다면 비교가 왜곡될 수 있다고 알린다
+  const typ = findHighlights({ ...base, languages: [], segments: [], delta_notable: false, profile: profile(null, 0.3, 3.1, 2.7), previous: makeRate(400, 100) } as never);
+  assert.ok(typ.some((x) => x.includes("평소") && x.includes("3.1배")));
+  assert.ok(typ.some((x) => x.includes("직전 기간") && x.includes("2.7배") && x.includes("몰린")));
+  const calmVol = findHighlights({ ...base, all: makeRate(900, 100), languages: [], segments: [], delta_notable: false, profile: profile(null, 0.3, 0.9, 1.0), previous: makeRate(400, 100) } as never);
+  assert.equal(calmVol.length, 0);                                  // 평소 대비가 있으면 그것을 우선: 평소 범위면 직전 대비 0.3배여도 따로 알리지 않음
+  // 구성 변화: 플레이 짧은 편 비중이 평소(25%)보다 크게 늘었을 때
+  const mix = findHighlights({ ...base, languages: [], delta_notable: false, profile: profile(null), segments: [{ ...base.segments[0], share_window: 42 }, base.segments[1], base.segments[1], base.segments[1]] } as never);
+  assert.ok(mix.some((x) => x.includes("구성이 평소와 다릅니다") && x.includes("42%")));
+  const quiet = findHighlights({ ...base, recent: makeRate(600, 400), all: makeRate(600, 400), delta_notable: false, segments: [], languages: [lr("영어", 90, 800, 200), lr("중국어", 10, 70, 30)], profile: profile(2) } as never);
   assert.equal(quiet.length, 0);                                    // 격차·변화가 없으면 아무것도 만들지 않음
 });
 
@@ -119,8 +199,8 @@ test("AI 검증: 없는 번호는 걸러내고, 주제 성격은 AI 것을 쓰�
   raw.change_notes = ["R4 에서 확인되는 변화", "R404 를 근거로 든 문장", "번호 없이 숫자만 말하는 문장"];
   raw.quotes = [{ review_id: "R4", korean: "번역 4" }, { review_id: "R404", korean: "없는 번호" }, { review_id: "R1", korean: "한국어 리뷰" }];
   raw.language_notes = [{ language_code: "koreana", summary: "한국어 3건뿐", review_ids: ["R1"] }, { language_code: "english", summary: "영어", review_ids: ["R4", "R1"] }];
-  raw.segment_notes = [{ segment_key: "core", summary: "코어", review_ids: ["R3", "R4", "R5"] }, { segment_key: "intro", summary: "입문 표본 부족", review_ids: ["R1"] }];
-  const ai = finalizeAi(raw, samples(), "test-model");
+  raw.segment_notes = [{ segment_key: "q3", summary: "중간 위", review_ids: ["R3", "R4", "R1"] }, { segment_key: "q4", summary: "표본 부족", review_ids: ["R8"] }];
+  const ai = finalizeAi(raw, samples(), "test-model", segmentDefs([10, 40, 100]));
   assert.deepEqual(ai.themes.map((t) => t.label).sort(), ["재미", "최적화"]);
   const opt = ai.themes.find((t) => t.label === "최적화")!;
   assert.equal(opt.polarity, "negative"); assert.equal(opt.stance, "against"); assert.equal(opt.pos_share, 0); assert.equal(opt.support, 3); assert.equal(Math.round(opt.support_share * 100), 25);   // 근거 3건 / 표본 12건
@@ -134,18 +214,37 @@ test("AI 검증: 없는 번호는 걸러내고, 주제 성격은 AI 것을 쓰�
   assert.equal(ai.quotes.find((q) => q.review_id === 1)!.korean, "");              // 한국어 리뷰는 번역 불필요
   assert.deepEqual(ai.language_notes.map((n) => n.language_code), ["english"]);    // 표본 8건 미만 언어(한국어 3건)는 제외
   assert.deepEqual(ai.language_notes[0].review_ids, [4]);                          // 다른 언어 번호(R1)는 걸러짐
-  assert.deepEqual(ai.segment_notes.map((n) => n.segment_key), ["core"]);          // 표본 5건 미만 구간 제외
+  assert.deepEqual(ai.segment_notes.map((n) => n.segment_key), ["q3"]);            // 표본 5건 미만 구간(q4) 제외
+  assert.deepEqual(ai.segment_notes[0].review_ids, [3, 4]);                        // 다른 구간 번호(R1)는 걸러짐
 });
 
-test("프롬프트에 숫자 규칙·표본 번호가 들어가고 오류 은폐 지시는 없다", () => {
+test("변화 해석 허용 규칙: 뚜렷한 변화이고 비교 대상이 평소와 비슷할 때만, 아니면 코드가 변화 해석을 막는다", () => {
+  const mk = (notable: boolean, prevTypical: number | null) => ({ delta_points: 10.6, delta_notable: notable, profile: { previous_vs_typical: prevTypical } }) as unknown as Stats;
+  assert.equal(mayInterpretChange(mk(true, 1.0)), true);
+  assert.equal(mayInterpretChange(mk(true, 4.5)), false);        // 직전 기간이 평소의 4.5배(몰린 때) → 단정 금지
+  assert.equal(mayInterpretChange(mk(false, 1.0)), false);       // 평소 흔들림 범위
+  assert.equal(mayInterpretChange(mk(true, null)), true);        // 평소를 모르면 통계적으로 뚜렷한 변화만 보고 판단
+  assert.match(changeDirective(mk(false, 4.5)), /해석하지 마라/);
+  assert.match(changeDirective(mk(true, 4.5)), /이례적/);
+  const raw = baseRaw(); raw.change_notes = ["R4 에서 확인되는 변화"];
+  assert.equal(finalizeAi(raw, samples(), "m", segmentDefs([10, 40, 100]), { allowChangeNotes: false }).change_notes.length, 0);   // AI가 규칙을 어겨도 화면에 나가지 않음
+  assert.equal(finalizeAi(raw, samples(), "m", segmentDefs([10, 40, 100])).change_notes.length, 1);
+});
+
+test("프롬프트에 게임 상황·숫자 규칙·표본 번호가 들어가고 오류 은폐 지시는 없다", () => {
   const rate = makeRate(90, 10);
+  const defs = segmentDefs([10, 40, 100]).map((d) => ({ ...d, all: rate, window: rate, share_all: 25, share_window: 25 }));
   const stats = { version: 2, fetched_at: "", official: { ...rate, steam_desc_en: null, steam_label: "매우 긍정적" }, all: rate,
-    window: { days: 30, start: "a", end: "b", label: "최근 30일", reason: "", has_previous: true }, recent: rate, previous: makeRate(80, 20),
-    delta_points: 10, delta_significant: false, languages: [], groups: [], segments: [], sample: { total: 10, languages: [], method: "" }, highlights: ["테스트 사실"], data_notes: [] } as Stats;
+    window: { days: 30, start: "a", end: "b", label: "최근 30일", reason: "목표 건수를 채우는 가장 짧은 기간", has_previous: true, reviews: 100 }, recent: rate, previous: makeRate(80, 20),
+    profile: { history_days: 900, release_days: 100, genres: ["액션", "RPG"], is_free: false, early_access: false, volume: { d7: 30, d30: 100, d90: 300 }, size_class: "small", volume_ratio: 1, noise_points: 2.5, baseline_windows: 5, playtime: { bounds: [10, 40, 100], raw: [9, 38, 99], reviewers: 5000 } },
+    delta_points: 10, delta_notable: false, languages: [], groups: [], segments: defs, sample: { total: 10, languages: [], method: "" }, highlights: ["테스트 사실"], data_notes: [] } as unknown as Stats;
   const p = buildPrompt("테스트", stats, [], samples());
-  assert.ok(p.includes("[R4]") && p.includes("우연으로도 설명될 수 있는 작은 변화"));
+  assert.ok(p.includes("[R4]") && p.includes("작은 변화"));
+  assert.ok(p.includes("이 게임의 상황") && p.includes("액션, RPG") && p.includes("±2.5%p") && p.includes("10·40·100시간 경계"));
+  assert.ok(p.includes("스토어 표시 출시일은 100일 전이지만"));                 // 리뷰 나이와 출시일이 다르면 알려 줌
   assert.ok(!p.includes("해고") && !p.includes("0개"));
   assert.ok(p.includes("언어' 기준"));
+  assert.ok(p.includes("q1(플레이 짧은 편, 10시간 이하)"));
 });
 
 test("뉴스 정리·App ID·출시일·한국 날짜", () => {
