@@ -57,7 +57,7 @@ export type SegmentKey = (typeof SEGMENT_KEYS)[number];
 export const SEGMENT_LABELS: Record<SegmentKey, string> = { q1: "플레이 짧은 편", q2: "중간 아래", q3: "중간 위", q4: "플레이 긴 편" };
 
 /** 리뷰량 곡선을 재는 기간(일). 게임의 '리뷰 기록 나이'와 기간별 리뷰량을 한꺼번에 알아냅니다. */
-export const VOLUME_DAYS = [7, 14, 30, 60, 90, 180, 365, 730, 1095, 1460, 1825, 2190];
+export const VOLUME_DAYS = [1, 2, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 135, 180, 270, 365, 730, 1095, 1460, 1825, 2190];
 /** 플레이타임 분포를 재는 시간 눈금(시간) — 이 눈금별 누적 리뷰 수로 사분위를 계산합니다. */
 export const HOURS_LADDER = [1, 2, 3, 5, 8, 12, 20, 30, 50, 80, 120, 200, 300, 500, 800, 1200, 2000];
 

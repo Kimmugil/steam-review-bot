@@ -33,7 +33,7 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
 
     // 2) 숫자 (스팀에서 정확한 건수를 받아 코드가 계산)
     const { stats, plan } = await collectStats(row.app_id, info, (s) => setStep(id, s));
-    if (stats.all.total === 0) throw new UserFacing("이 게임에는 아직 유저 리뷰가 없습니다.");
+    if (stats.all.total < 10) throw new UserFacing(`이 게임의 리뷰가 아직 ${stats.all.total}건뿐이라 분석하기엔 너무 적어요. 리뷰가 10건 이상 쌓인 뒤에 다시 요청해 주세요.`);
     lap(`숫자 수집 완료: 전체 ${stats.all.total}건, ${stats.window.label} ${stats.recent.total}건`);
 
     // 3) 소식 (실패해도 분석은 계속, 안내만 남김)

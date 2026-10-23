@@ -50,9 +50,14 @@ export function buildStatsText(stats: Stats): string {
     L.push(`- ${r.name}: 비중 ${pct(r.share)}, 전체 긍정률 ${pct(r.all.rate)} (${r.all.total.toLocaleString()}건)` +
       (r.window ? `, 분석 기간 긍정률 ${pct(r.window.rate)} (${r.window.total.toLocaleString()}건)` : "") +
       (r.prev ? `, 직전 기간 ${pct(r.prev.rate)}${odd ? " (직전 기간이 평소와 달라 변화 비교는 의미 없음)" : notableChange(r.window, r.prev, null) ? " ← 뚜렷한 변화" : " (변화는 표본이 작거나 차이가 작아 우연일 수 있음)"}` : ""));
-  L.push("");
-  L.push("플레이타임 구간 (리뷰 쓸 때 기준. 이 게임 리뷰어의 분포를 4등분한 것 — 절대 시간이 아니라 이 게임 안에서의 상대적 위치):");
-  for (const s of stats.segments) L.push(`- ${s.label}(${s.range}): 전체 기간 리뷰어의 ${s.share_all.toFixed(0)}%, 분석 기간에는 ${s.share_window.toFixed(0)}% / 긍정률 전체 ${pct(s.all.rate)} (${s.all.total.toLocaleString()}건), 분석 기간 ${pct(s.window.rate)} (${s.window.total.toLocaleString()}건)`);
+  if (stats.segments.length) {
+    L.push("");
+    L.push("플레이타임 구간 (리뷰 쓸 때 기준. 이 게임 리뷰어의 분포를 4등분한 것 — 절대 시간이 아니라 이 게임 안에서의 상대적 위치):");
+    for (const s of stats.segments) L.push(`- ${s.label}(${s.range}): 전체 기간 리뷰어의 ${s.share_all.toFixed(0)}%, 분석 기간에는 ${s.share_window.toFixed(0)}% / 긍정률 전체 ${pct(s.all.rate)} (${s.all.total.toLocaleString()}건), 분석 기간 ${pct(s.window.rate)} (${s.window.total.toLocaleString()}건)`);
+  } else {
+    L.push("");
+    L.push("플레이타임: 이 게임은 스팀에 플레이타임이 거의 기록되지 않아 플레이타임 정보가 없다. 플레이타임에 대해 아무것도 쓰지 마라(segment_notes 는 빈 배열).");
+  }
   return L.join("\n");
 }
 
@@ -69,7 +74,7 @@ export function buildProfileText(stats: Stats, gameName: string): string {
     `- 규모: ${SIZE_KO[p.size_class]} (최근 7일 ${p.volume.d7.toLocaleString()}건, 30일 ${p.volume.d30.toLocaleString()}건, 90일 ${p.volume.d90.toLocaleString()}건)`,
     `- 분석 기간: ${stats.window.label} — ${stats.window.reason}`,
     p.noise_points != null ? `- 이 게임의 긍정률은 평소 기간마다 ±${p.noise_points.toFixed(1)}%p 정도 흔들립니다(과거 ${p.baseline_windows}개 기간 기준). 이보다 작은 변화는 의미를 두지 마세요.` : "- 평소 변동 폭을 알 만한 과거 기간이 부족합니다.",
-    `- 플레이타임 구간은 이 게임 리뷰어 기준 사분위입니다(${p.playtime.bounds[0]}·${p.playtime.bounds[1]}·${p.playtime.bounds[2]}시간 경계). '${gameName}'에서 오래 한 쪽이 다른 게임의 오래 한 쪽과 같은 시간이 아닙니다.`,
+    p.playtime ? `- 플레이타임 구간은 이 게임 리뷰어 기준 사분위입니다(${p.playtime.bounds[0]}·${p.playtime.bounds[1]}·${p.playtime.bounds[2]}시간 경계). '${gameName}'에서 오래 한 쪽이 다른 게임의 오래 한 쪽과 같은 시간이 아닙니다.` : "- 이 게임은 스팀에 플레이타임이 거의 기록되지 않아 플레이타임 분석을 하지 않습니다.",
   ];
   return L.join("\n");
 }

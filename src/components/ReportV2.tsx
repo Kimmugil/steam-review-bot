@@ -85,7 +85,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
               <li>리뷰가 쌓인 기간 {ageKo(s.profile.history_days)} · 최근 30일 리뷰 {num(s.profile.volume.d30)}건 → <b>{SIZE_LABEL[s.profile.size_class as keyof typeof SIZE_LABEL]}</b>{s.profile.genres?.length ? ` · ${s.profile.genres.join(", ")}` : ""}{s.profile.is_free ? " · 무료" : ""}{s.profile.early_access ? " · 얼리 액세스" : ""}</li>
               <li>분석 기간: <b>{s.window.label}</b> ({num(s.window.reviews)}건) — {s.window.reason}</li>
               <li>{s.profile.noise_points != null ? <>이 게임의 긍정률은 평소 기간마다 <b>±{s.profile.noise_points.toFixed(1)}%p</b> 정도 흔들려요(과거 {s.profile.baseline_windows}개 기간). 이보다 작은 변화는 의미를 두지 않았어요.</> : "과거 기간이 부족해 이 게임의 평소 흔들림은 알 수 없어요. 변화는 3%p 이상일 때만 의미 있다고 봤어요."}</li>
-              <li>플레이타임 구간은 이 게임 리뷰어를 4등분한 경계예요: {s.profile.playtime.bounds[0]}시간 · {s.profile.playtime.bounds[1]}시간 · {s.profile.playtime.bounds[2]}시간 (고정 시간이 아니에요)</li>
+              <li>{s.profile.playtime ? <>플레이타임 구간은 이 게임 리뷰어를 4등분한 경계예요: {s.profile.playtime.bounds[0]}시간 · {s.profile.playtime.bounds[1]}시간 · {s.profile.playtime.bounds[2]}시간 (고정 시간이 아니에요)</> : "이 게임은 스팀이 플레이타임을 거의 기록하지 않아 플레이타임 분석을 하지 않았어요."}</li>
             </ul>
           </div>
 
@@ -199,6 +199,9 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
       )}
 
       {tab === "play" && (
+        !s.profile.playtime ? (
+          <div className="callout warn"><h3>이 게임은 플레이타임 분석을 하지 않았어요</h3><p>스팀이 이 게임의 플레이타임을 거의 기록하지 않아요(리뷰의 {(s.profile.playtime_coverage * 100).toFixed(1)}%만 기록). 게임 자체 런처 등으로 플레이 시간이 스팀에 잡히지 않는 게임에서 생겨요. 없는 자료로 구간을 만들면 틀린 결론이 나와서 이 탭은 비워 뒀어요.</p></div>
+        ) : (
         <div className="stack">
           <div className="callout"><h3>플레이타임 구간은 이 게임 안에서 정한 상대적 위치예요</h3>
             <p>리뷰를 쓸 때까지의 플레이타임 분포를 이 게임의 모든 리뷰로 계산해 4등분했어요. 출시한 지 얼마 안 된 게임에서 20시간은 오래 한 쪽이고, 오래된 게임에서는 짧은 쪽일 수 있어서 고정 시간 기준을 쓰지 않았어요. 경계: {s.profile.playtime.bounds[0]}시간 · {s.profile.playtime.bounds[1]}시간 · {s.profile.playtime.bounds[2]}시간 (리뷰 {num(s.profile.playtime.reviewers)}건 기준).</p></div>
@@ -236,6 +239,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
             </div>
           )}
         </div>
+        )
       )}
 
       {tab === "chg" && (

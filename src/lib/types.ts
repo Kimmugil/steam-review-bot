@@ -38,7 +38,8 @@ export type GameProfile = {
   previous_vs_typical: number | null;   // 직전 기간 리뷰 수 ÷ 중앙값 — 직전 기간이 평소와 달랐는지(몰린 때인지)
   noise_points: number | null;          // 이 게임이 평소 기간마다 흔들리는 긍정률 폭(%p). 과거 기간이 부족하면 null
   baseline_windows: number;             // 변동 폭을 계산에 쓴 과거 기간 수
-  playtime: { bounds: [number, number, number]; raw: [number, number, number]; reviewers: number };  // 사분위 경계(시간)
+  playtime: { bounds: [number, number, number]; raw: [number, number, number]; reviewers: number } | null;  // 사분위 경계(시간). 스팀이 플레이타임을 기록하지 않는 게임이면 null
+  playtime_coverage: number;            // 리뷰 중 플레이타임이 기록된 비율(0~1)
 };
 
 export type WindowInfo = {

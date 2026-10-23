@@ -46,15 +46,17 @@ test("변화가 우연인지: 표본이 작거나 차이가 작으면 '뚜렷한
   assert.equal(significantChange(makeRate(5, 5), makeRate(1, 9)), false);           // 표본 10건
 });
 
-const DAYS = [7, 14, 30, 60, 90, 180, 365, 730, 1095, 1460, 1825, 2190];
+import { VOLUME_DAYS as DAYS } from "../src/lib/config";
 /** 하루 평균 perDay 건씩 쌓이는 게임의 기간별 누적 리뷰량 (기록이 history 일) */
 const vol = (perDay: number, history: number) => DAYS.map((d) => ({ days: d, n: Math.round(perDay * Math.min(d, history)) }));
 
-test("리뷰 기록 나이: 전체의 99.5%가 쌓인 가장 짧은 눈금 (출시일이 같은 구간 안이면 더 정확한 값)", () => {
+test("리뷰 기록 나이: 전체의 99.5%가 쌓인 가장 짧은 눈금. 출시일은 거친 눈금(180일 초과)에서만 보정", () => {
   assert.equal(inferHistoryDays(vol(100, 400), 100 * 400, null), 730);
-  assert.equal(inferHistoryDays(vol(100, 400), 100 * 400, 400), 400);          // 출시일이 365~730 구간 안 → 400
+  assert.equal(inferHistoryDays(vol(100, 400), 100 * 400, 400), 400);          // 365~730 구간 안 → 출시일 400일로 보정
   assert.equal(inferHistoryDays(vol(100, 400), 100 * 400, 100), 730);          // 출시일(100일)은 리뷰 기록과 무관(정식 출시일 등) → 무시
   assert.equal(inferHistoryDays(vol(10, 6000), 10 * 6000, null), 2190);        // 가장 긴 눈금보다 오래됨
+  assert.equal(inferHistoryDays(vol(5000, 0.5), 2500, 0), 1);                  // 출시 당일: 리뷰 기록 1일
+  assert.equal(inferHistoryDays(vol(1000, 7), 7000, 1), 7);                    // 출시 다음 날인데 리뷰는 이미 7일에 걸쳐 있음(사전 구매자 조기 플레이) → 출시일(1일)을 믿지 않고 7일
 });
 
 test("분석 기간: 이 게임의 리뷰량으로 정한다 — 리뷰 많은 게임은 짧게, 적은 게임은 길게, 신작은 처음부터", () => {
@@ -69,6 +71,9 @@ test("분석 기간: 이 게임의 리뷰량으로 정한다 — 리뷰 많은 �
   assert.equal(young.days, 14); assert.equal(young.has_previous, true);
   const launch = planWindow(6, vol(2000, 6), now);             // 기록 6일 → 처음부터, 비교 없음
   assert.equal(launch.days, 6); assert.equal(launch.has_previous, false); assert.equal(launch.prevStartTs, null);
+  assert.equal(launch.endTs - launch.startTs, 7 * 86400);                    // 리뷰 기록 6일 → 하루 여유를 두고 모든 리뷰가 들어가는 범위
+  const dayOne = planWindow(1, vol(5000, 1), now);                              // 출시 다음 날(32시간): 24시간이 아니라 이틀 범위로 전부 포함
+  assert.equal(dayOne.endTs - dayOne.startTs, 2 * 86400); assert.equal(dayOne.has_previous, false); assert.match(dayOne.label, /출시 직후/);
   const weekOld = planWindow(20, vol(500, 20), now);           // 기록 20일: 후보 없음 → 절반
   assert.equal(weekOld.days, 10);
   assert.equal(busy.startTs - busy.prevStartTs!, 14 * 86400);
@@ -245,6 +250,18 @@ test("프롬프트에 게임 상황·숫자 규칙·표본 번호가 들어가�
   assert.ok(!p.includes("해고") && !p.includes("0개"));
   assert.ok(p.includes("언어' 기준"));
   assert.ok(p.includes("q1(플레이 짧은 편, 10시간 이하)"));
+});
+
+test("플레이타임이 기록되지 않는 게임: 구간 없이 프롬프트가 만들어지고 AI에게 플레이타임을 쓰지 말라고 한다", () => {
+  const rate = makeRate(90, 10);
+  const stats = { version: 2, fetched_at: "", official: { ...rate, steam_desc_en: null, steam_label: "매우 긍정적" }, all: rate,
+    window: { days: 2, start: "a", end: "b", label: "출시 직후 2일 전체", reason: "처음부터 지금까지", has_previous: false, reviews: 100 }, recent: rate, previous: null,
+    profile: { history_days: 2, release_days: 1, genres: ["액션"], is_free: false, early_access: false, volume: { d7: 100, d30: 100, d90: 100 }, size_class: "small", volume_ratio: null, volume_vs_typical: null, previous_vs_typical: null, noise_points: null, baseline_windows: 0, playtime: null, playtime_coverage: 0.001 },
+    delta_points: null, delta_notable: false, languages: [], groups: [], segments: [], sample: { total: 10, languages: [], method: "" }, highlights: [], data_notes: [] } as unknown as Stats;
+  const p = buildPrompt("신작", stats, [], samples());
+  assert.ok(p.includes("플레이타임 정보가 없다") && p.includes("플레이타임 분석을 하지 않습니다"));
+  assert.ok(!p.includes("사분위입니다("));
+  assert.deepEqual(findHighlights({ ...stats, languages: [] } as never), []);          // 구간이 없어도 오류 없이 동작
 });
 
 test("뉴스 정리·App ID·출시일·한국 날짜", () => {

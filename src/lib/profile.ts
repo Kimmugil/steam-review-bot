@@ -28,7 +28,11 @@ export function inferHistoryDays(points: VolumePoint[], total: number, releaseDa
   const i = sorted.findIndex((p) => p.n >= total * 0.995);
   if (i < 0) return sorted[sorted.length - 1].days;
   const upper = sorted[i].days, lower = i > 0 ? sorted[i - 1].days : 0;
-  return releaseDays != null && releaseDays > lower && releaseDays <= upper ? releaseDays : upper;
+  // 눈금이 촘촘한 구간(180일 이하)은 눈금을 그대로 믿습니다. 출시일보다 먼저 리뷰가 쌓일 수 있어서입니다
+  // (사전 구매자의 조기 플레이 등. 출시 '다음 날'인데 리뷰는 이미 7일에 걸쳐 있는 경우가 실제로 있음).
+  // 눈금이 거친 구간에서만 출시일로 보정합니다.
+  if (lower >= 180 && releaseDays != null && releaseDays > lower && releaseDays <= upper) return releaseDays;
+  return upper;
 }
 
 export type WindowPlan = WindowInfo & {
@@ -48,10 +52,11 @@ export function planWindow(history: number, volume: VolumePoint[], now: Date = n
   const n = (d: number) => volume.find((v) => v.days === d)?.n ?? 0;
   const empty = { prevStartTs: null, prevEndTs: null, baseline: [] as WindowPlan["baseline"], has_previous: false, reviews: 0 };
   if (history < 14) {
+    // 신작: 처음부터 지금까지 전부. 리뷰 기록 나이는 일 단위로 올림되어 실제 시간이 더 길 수 있으므로, 모든 리뷰가 들어가도록 하루 여유를 둠.
     const days = Math.max(1, history);
-    const startTs = endTs - days * DAY;
-    return { ...empty, days, startTs, endTs, start: iso(startTs), end: iso(endTs), label: `리뷰가 쌓인 ${days}일 전체`,
-      reason: `리뷰 기록이 ${days}일뿐이라 처음부터 지금까지를 봅니다. 비교할 이전 기간이 없습니다.` };
+    const startTs = endTs - (days + 1) * DAY;
+    return { ...empty, days, startTs, endTs, start: iso(endTs - days * DAY), end: iso(endTs), label: `출시 직후 ${days}일 전체`,
+      reason: `출시한 지 얼마 안 되어(리뷰 기록 ${days}일) 처음부터 지금까지의 리뷰를 모두 봅니다. 비교할 이전 기간이 없어서 변화는 말하지 않고, 지금 시점의 첫인상을 보여 드립니다.` };
   }
   const cands = WINDOW.candidates.filter((c) => c * 2 <= history);
   let days: number, reason: string;

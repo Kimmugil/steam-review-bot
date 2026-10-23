@@ -86,7 +86,7 @@ export function findHighlights(s: Pick<Stats, "languages" | "recent" | "all" | "
       out.push(`플레이타임에 따라 평가가 갈립니다(${s.window.label}, 이 게임 리뷰어 기준): ${hi.label}(${hi.range}) ${hi.window.rate!.toFixed(1)}% vs ${lo.label}(${lo.range}) ${lo.window.rate!.toFixed(1)}%.`);
   }
 
-  const q1 = s.segments[0], q4 = s.segments[3];
+  const q1 = s.segments[0], q4 = s.segments[3];   // 플레이타임이 기록되지 않는 게임은 구간이 없어 둘 다 없음
   if (q1 && Math.abs(q1.share_window - q1.share_all) >= 8 && s.recent.total >= 100)
     out.push(`분석 기간에 리뷰를 쓴 사람의 구성이 평소와 다릅니다: 플레이 시간이 짧은 상태(${q1.range})에서 쓴 리뷰가 ${q1.share_window.toFixed(0)}%로, 전체 기간(${q1.share_all.toFixed(0)}%)보다 ${q1.share_window > q1.share_all ? "많습니다" : "적습니다"}.`);
   else if (q4 && Math.abs(q4.share_window - q4.share_all) >= 8 && s.recent.total >= 100)
@@ -115,7 +115,7 @@ export async function collectStats(appId: number, info: GameInfo, onStep?: (s: s
     countRate({ appId, purchaseType: 1 }, "전체 평가"),
     collectVolume(appId),
   ]);
-  const releaseDays = info.releaseDate ? Math.floor((Date.now() - info.releaseDate.getTime()) / 86400000) : null;
+  const releaseDays = info.releaseDate ? Math.max(0, Math.floor((Date.now() - info.releaseDate.getTime()) / 86400000)) : null;   // 시차로 출시일이 '내일'로 보여도 0일로
   const history = inferHistoryDays(volume, all.total, releaseDays);
 
   // 2) 이 게임에 맞는 분석 기간과 과거 기간들 (직전 기간 + 변동 폭 계산용)
@@ -156,18 +156,29 @@ export async function collectStats(appId: number, info: GameInfo, onStep?: (s: s
       window: winLang.get(code)?.w ?? null, prev: winLang.get(code)?.p ?? null } : null;
   }).filter((x): x is LangRow => x !== null).sort((a, b) => b.all.total - a.all.total);
 
-  // 5) 플레이타임: 이 게임 리뷰어의 분포(누적 건수)로 사분위를 구해 구간을 정함
+  // 5) 플레이타임: 이 게임 리뷰어의 분포(누적 건수)로 사분위를 구해 구간을 정함.
+  //    일부 게임(런처 방식 등)은 스팀이 플레이타임을 기록하지 않아, 그럴 땐 구간 분석을 하지 않음.
   await onStep?.("segments");
   const cdf = await collectPlaytimeCdf(appId);
-  const { bounds, raw } = segmentBounds(cdf, all.total);
-  const defs = segmentDefs(bounds);
-  const [segAll, segWin] = await Promise.all([
-    tryRate(notes, "플레이타임 구간(전체 기간)", () => collectSegmentRates(appId, defs)),
-    tryRate(notes, "플레이타임 구간(분석 기간)", () => collectSegmentRates(appId, defs, win)),
-  ]);
-  const sumA = (segAll ?? []).reduce((s, r) => s + r.total, 0) || 1, sumW = (segWin ?? []).reduce((s, r) => s + r.total, 0) || 1;
-  const segments: SegmentRow[] = defs.map((d, i) => ({ ...d, all: segAll?.[i] ?? makeRate(0, 0), window: segWin?.[i] ?? makeRate(0, 0),
-    share_all: (100 * (segAll?.[i]?.total ?? 0)) / sumA, share_window: (100 * (segWin?.[i]?.total ?? 0)) / sumW }));
+  const covered = Math.max(0, ...cdf.map((p) => p.n));
+  const coverage = all.total ? covered / all.total : 0;
+  let segments: SegmentRow[] = [];
+  let playtime: Stats["profile"]["playtime"] = null;
+  if (coverage >= 0.5 && covered >= 100) {
+    const { bounds, raw } = segmentBounds(cdf, covered);          // 플레이타임이 기록된 리뷰만으로 분포를 계산
+    const defs = segmentDefs(bounds);
+    const [segAll, segWin] = await Promise.all([
+      tryRate(notes, "플레이타임 구간(전체 기간)", () => collectSegmentRates(appId, defs)),
+      tryRate(notes, "플레이타임 구간(분석 기간)", () => collectSegmentRates(appId, defs, win)),
+    ]);
+    const sumA = (segAll ?? []).reduce((s, r) => s + r.total, 0) || 1, sumW = (segWin ?? []).reduce((s, r) => s + r.total, 0) || 1;
+    segments = defs.map((d, i) => ({ ...d, all: segAll?.[i] ?? makeRate(0, 0), window: segWin?.[i] ?? makeRate(0, 0),
+      share_all: (100 * (segAll?.[i]?.total ?? 0)) / sumA, share_window: (100 * (segWin?.[i]?.total ?? 0)) / sumW }));
+    playtime = { bounds, raw: [Math.round(raw[0] * 10) / 10, Math.round(raw[1] * 10) / 10, Math.round(raw[2] * 10) / 10], reviewers: covered };
+    if (coverage < 0.9) notes.push(`리뷰의 ${(coverage * 100).toFixed(0)}%만 스팀에 플레이타임이 기록되어 있어, 플레이타임 구간은 그 리뷰들만으로 계산했습니다.`);
+  } else {
+    notes.push(`이 게임은 스팀이 플레이타임을 거의 기록하지 않아(리뷰의 ${(coverage * 100).toFixed(1)}%만 기록) 플레이타임별 분석은 하지 않았습니다. (게임 자체 런처 등으로 플레이 시간이 스팀에 잡히지 않는 게임에서 생깁니다)`);
+  }
 
   // 6) 안내문 — 숨기지 않고 화면에 그대로 보여 줌
   if (official.rate != null && all.rate != null && Math.abs(official.rate - all.rate) >= 2)
@@ -184,7 +195,7 @@ export async function collectStats(appId: number, info: GameInfo, onStep?: (s: s
     volume_vs_typical: typical ? recent.total / typical : null,
     previous_vs_typical: typical && previous ? previous.total / typical : null,
     noise_points: noise, baseline_windows: used,
-    playtime: { bounds, raw: [Math.round(raw[0] * 10) / 10, Math.round(raw[1] * 10) / 10, Math.round(raw[2] * 10) / 10], reviewers: all.total },
+    playtime, playtime_coverage: coverage,
   };
   const stats: Stats = {
     version: 2, fetched_at: new Date().toISOString(),
