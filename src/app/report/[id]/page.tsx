@@ -12,7 +12,8 @@ export const maxDuration = 30;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const a = await getAnalysis((await params).id).catch(() => null);
-  return { title: a ? `${a.game_name} · 스팀 리뷰 탈곡기` : "스팀 리뷰 탈곡기" };
+  const t = await getTexts();
+  return { title: a ? `${a.game_name} · ${t.site_title}` : t.site_title };
 }
 
 export default async function ReportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +23,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   if (!a || (a.hidden && !(await isAdmin()))) notFound();
   const texts = await getTexts();
 
-  if (a.status !== "done") return <ProgressView a={a} />;
+  if (a.status !== "done") return <ProgressView a={a} texts={texts} />;
   const versions = await listVersionsOfGame(Number(a.app_id)).catch(() => []);
   if (a.method_version === 1) return <ReportLegacy a={a} texts={texts} versions={versions} />;
 

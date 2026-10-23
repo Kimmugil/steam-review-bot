@@ -38,7 +38,7 @@ export default function HomeClient({ texts: t, data }: { texts: Texts; data: any
       if (j.status === "exists") return setDlg({ kind: "exists", a: j.analysis, hit: hit ?? { appid: appId, name: j.analysis.game_name, meta: "", image: j.analysis.header_image } });
       setDlg({ kind: "error", msg: "알 수 없는 응답입니다." });
     } catch {
-      setDlg({ kind: "error", msg: "서버에 연결하지 못했습니다. 잠시 뒤에 다시 시도해 주세요." });
+      setDlg({ kind: "error", msg: t.dlg_net_error });
     } finally {
       setBusy(false);
     }
@@ -72,14 +72,14 @@ export default function HomeClient({ texts: t, data }: { texts: Texts; data: any
 
   return (
     <>
-      {data.error && <div className="notice err">데이터를 불러오지 못했습니다. 잠시 뒤에 다시 시도해 주세요. (관리자: /api/health 에서 연결 상태를 확인할 수 있어요)</div>}
+      {data.error && <div className="notice err">{t.home_data_error}</div>}
 
       <section className="card hero">
         <h1>{t.home_title}</h1>
         <p>{t.home_desc}</p>
         <form className="reqbox" onSubmit={submit}>
-          <input type="text" name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.home_placeholder} aria-label="게임 이름, 스팀 상점 주소 또는 App ID" autoComplete="off" />
-          <button className="btn primary" disabled={busy}>{busy ? "확인 중…" : t.home_btn}</button>
+          <input type="text" name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.home_placeholder} aria-label={t.home_placeholder} autoComplete="off" />
+          <button className="btn primary" disabled={busy}>{busy ? t.home_btn_busy : t.home_btn}</button>
         </form>
         <div className="quota">
           <span>{t.home_quota} <b className="num">{left}</b> / {data.usage.limit}</span>
@@ -93,34 +93,34 @@ export default function HomeClient({ texts: t, data }: { texts: Texts; data: any
                 <div><div className="t">{h.name}</div><div className="m">{h.meta} · App ID {h.appid}</div></div>
               </button>
             ))}
-            {hits.length === 0 && <p className="muted">검색 결과가 없어요. 스팀 상점 주소나 App ID를 붙여 넣어 보세요.</p>}
+            {hits.length === 0 && <p className="muted">{t.home_no_result}</p>}
           </div>
         )}
       </section>
 
       {data.active.length > 0 && (
         <>
-          <div className="sec-title"><h2>{t.home_progress_title}</h2><span>끝나면 이 목록에서 사라지고 아래 리포트로 올라가요</span></div>
+          <div className="sec-title"><h2>{t.home_progress_title}</h2><span>{t.home_progress_sub}</span></div>
           <div className="prog-list">
             {data.active.map((a: any) => (
               <Link key={a.id} href={`/report/${a.id}`} className="prog-card">
                 <span className="spin" aria-hidden />
                 <Thumb appid={Number(a.app_id)} name={a.game_name} src={a.header_image} size="s" />
-                <div><b>{a.game_name}</b><div className="muted small">{dateKo(a.requested_at, true)} 요청 · 진행 상황 보기 →</div></div>
+                <div><b>{a.game_name}</b><div className="muted small">{fill(t.home_progress_item, { time: dateKo(a.requested_at, true) })}</div></div>
               </Link>
             ))}
           </div>
         </>
       )}
 
-      <div className="sec-title"><h2>{t.home_recent_title}</h2><span>{cards.length}개</span></div>
+      <div className="sec-title"><h2>{t.home_recent_title}</h2><span>{fill(t.home_count, { n: String(cards.length) })}</span></div>
       <div className="toolbar">
         <div className="row" role="group" aria-label="평가별 보기">
-          {[["all", "전체"], ["good", "긍정"], ["warn", "복합"], ["bad", "부정"]].map(([k, l]) => (
+          {[["all", t.home_filter_all], ["good", t.home_filter_good], ["warn", t.home_filter_warn], ["bad", t.home_filter_bad]].map(([k, l]) => (
             <button key={k} className="chip" aria-pressed={filter === k} onClick={() => setFilter(k)}>{l} {counts[k]}</button>
           ))}
         </div>
-        <label className="sp"><input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder="게임 이름 찾기" aria-label="게임 이름 찾기" /></label>
+        <label className="sp"><input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder={t.home_find} aria-label={t.home_find} /></label>
       </div>
       <div className="gcards">
         {cards.length === 0 && <div className="empty" style={{ gridColumn: "1/-1" }}>{t.home_empty}</div>}
@@ -129,16 +129,16 @@ export default function HomeClient({ texts: t, data }: { texts: Texts; data: any
             <div className="img">
               <Thumb appid={Number(c.app_id)} name={c.game_name} src={c.header_image} />
               <RatingPill label={c.all_desc} title="스팀 상점 기준 전체 평가" />
-              {c.method_version === 1 && <span className="newb" style={{ background: "var(--warn)", color: "#fff" }}>예전 방식</span>}
+              {c.method_version === 1 && <span className="newb" style={{ background: "var(--warn)", color: "#fff" }}>{t.card_legacy}</span>}
             </div>
             <div className="body">
               <div className="nm">{c.game_name}</div>
-              <div className="one">{c.one_liner ?? "숫자만 저장된 리포트예요."}</div>
+              <div className="one">{c.one_liner ?? t.card_no_oneliner}</div>
               <div className="nums">
-                <span>{c.recent_label ?? "최근"}<b className={c.recent_rate != null ? "num" : "lbl"}>{c.recent_rate != null ? pct1(c.recent_rate) : (c.recent_desc ?? "-")}</b></span>
-                {c.runs > 1 && <span>분석 <b className="num">{c.runs}</b>회</span>}
+                <span>{c.recent_label ?? t.card_recent_default}<b className={c.recent_rate != null ? "num" : "lbl"}>{c.recent_rate != null ? pct1(c.recent_rate) : (c.recent_desc ?? "-")}</b></span>
+                {c.runs > 1 && <span>{fill(t.card_runs, { n: String(c.runs) })}</span>}
               </div>
-              <div className="muted small">{dateKo(c.finished_at)} 분석</div>
+              <div className="muted small">{fill(t.card_date, { date: dateKo(c.finished_at) })}</div>
             </div>
           </Link>
         ))}
@@ -148,7 +148,7 @@ export default function HomeClient({ texts: t, data }: { texts: Texts; data: any
         <Modal title={t.dlg_exists_title} onClose={() => setDlg(null)}>
           <div className="row" style={{ marginBottom: 12 }}>
             <Thumb appid={Number(dlg.a.app_id)} name={dlg.a.game_name} src={dlg.a.header_image} size="s" />
-            <div><b>{dlg.a.game_name}</b><div className="muted small">{dateKo(dlg.a.finished_at, true)} 분석 · <RatingPill label={dlg.a.all_desc} /></div></div>
+            <div><b>{dlg.a.game_name}</b><div className="muted small">{fill(t.card_date, { date: dateKo(dlg.a.finished_at, true) })} · <RatingPill label={dlg.a.all_desc} /></div></div>
           </div>
           <p>{fill(t.dlg_exists_body, { date: dateKo(dlg.a.finished_at) })}</p>
           <div className="row" style={{ marginTop: 16, justifyContent: "flex-end" }}>
@@ -164,15 +164,15 @@ export default function HomeClient({ texts: t, data }: { texts: Texts; data: any
         </Modal>
       )}
       {dlg?.kind === "limit" && (
-        <Modal title="오늘은 여기까지예요" onClose={() => setDlg(null)}>
+        <Modal title={t.dlg_limit_title} onClose={() => setDlg(null)}>
           <p>{t.dlg_limit}</p>
-          <div className="row" style={{ marginTop: 16, justifyContent: "flex-end" }}><button className="btn primary" onClick={() => setDlg(null)}>알겠어요</button></div>
+          <div className="row" style={{ marginTop: 16, justifyContent: "flex-end" }}><button className="btn primary" onClick={() => setDlg(null)}>{t.dlg_limit_ok}</button></div>
         </Modal>
       )}
       {dlg?.kind === "error" && (
-        <Modal title="요청하지 못했어요" onClose={() => setDlg(null)}>
+        <Modal title={t.dlg_error_title} onClose={() => setDlg(null)}>
           <p>{dlg.msg}</p>
-          <div className="row" style={{ marginTop: 16, justifyContent: "flex-end" }}><button className="btn primary" onClick={() => setDlg(null)}>닫기</button></div>
+          <div className="row" style={{ marginTop: 16, justifyContent: "flex-end" }}><button className="btn primary" onClick={() => setDlg(null)}>{t.dlg_close}</button></div>
         </Modal>
       )}
     </>
