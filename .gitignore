@@ -6,27 +6,20 @@ build/
 # Node
 node_modules/
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Env
+# Env (비밀번호·키는 절대 올리지 않습니다)
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
-# Python legacy
-_legacy/__pycache__/
-_legacy/*.pyc
-__pycache__/
-*.pyc
-.streamlit/
+# 로컬 도구 설정·로그·빌드 캐시
+.claude/settings.local.json
+*.log
+*.tsbuildinfo
+next-env.d.ts
 
-# OS
+# OS / IDE
 .DS_Store
 Thumbs.db
-
-# IDE
 .vscode/
 .idea/

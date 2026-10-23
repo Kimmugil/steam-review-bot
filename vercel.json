@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "src/app/api/analyze/steam/route.ts": { "maxDuration": 60 },
-    "src/app/api/analyze/ai/route.ts":    { "maxDuration": 60 },
-    "src/app/api/qa/route.ts":            { "maxDuration": 60 }
-  }
-}

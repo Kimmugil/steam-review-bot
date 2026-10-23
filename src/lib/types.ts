@@ -1,183 +1,128 @@
-export interface Review {
-  language: string;
-  is_positive: boolean;
-  playtime: number;
-  steam_id: string;
-  review: string;
-}
+import type { Rate } from "./rating";
+import type { SegmentKey } from "./config";
 
-export interface LangStat {
+export type { Rate };
+
+/** 언어 한 줄: 누적(전체 기간)과 분석 기간·직전 기간 수치 */
+export type LangRow = {
+  code: string;
+  name: string;
+  group: string;
+  all: Rate;                 // 이 언어의 전체 기간 리뷰
+  share: number;             // 전체 리뷰 중 이 언어 비중(%)
+  window: Rate | null;       // 분석 기간 (비중 큰 언어만)
+  prev: Rate | null;         // 직전 같은 길이 기간
+};
+
+export type GroupRow = { group: string; languages: string[]; all: Rate; share: number };
+
+export type SegmentRow = {
+  key: SegmentKey; label: string; range: string;
+  all: Rate;                 // 전체 기간 중 이 구간 리뷰
+  window: Rate;              // 분석 기간 중 이 구간 리뷰
+};
+
+export type WindowInfo = {
+  days: number;
+  start: string;             // YYYY-MM-DD
+  end: string;
+  label: string;             // '최근 30일'
+  reason: string;            // 왜 이 길이를 골랐는지
+  has_previous: boolean;
+};
+
+export type SampleInfo = {
   total: number;
-  positive: number;
-}
+  languages: { code: string; name: string; n: number; window_total: number }[];
+  method: string;            // 표본을 뽑은 방법(화면에 그대로 보여 줌)
+};
 
-export interface TableRow {
-  rank: string;
+/** 코드가 계산한 숫자 전부 */
+export type Stats = {
+  version: 2;
+  fetched_at: string;
+  official: Rate & { steam_desc_en: string | null; steam_label: string | null };  // 스팀 구매, 전 언어, 전 기간 = 스토어의 '모든 평가'와 같은 기준
+  all: Rate;                                           // 스팀 외 구매(키 등) 포함
+  window: WindowInfo;
+  recent: Rate;                                        // 분석 기간
+  previous: Rate | null;                               // 직전 기간
+  delta_points: number | null;                         // 분석 기간 − 직전 기간 (퍼센트포인트)
+  delta_significant: boolean;                          // 우연으로 설명되지 않는 변화인가
+  languages: LangRow[];
+  groups: GroupRow[];
+  segments: SegmentRow[];
+  sample: SampleInfo;
+  highlights: string[];                                // 코드가 숫자에서 찾아낸 눈에 띄는 사실 (AI가 쓴 문장이 아님)
+  data_notes: string[];                                // 수집 한계·누락 (숨기지 않고 화면에 표시)
+};
+
+export type NewsItem = { title: string; date: string; url: string; text: string; feed: string };
+
+/** AI가 돌려주는 해석. 숫자와 인용 원문은 AI가 쓰지 않고, '표본 번호'만 가리킵니다. */
+export type AiRaw = {
+  one_liner: string;
+  headline: string;
+  themes: { label: string; polarity: "positive" | "negative" | "mixed"; summary: string; review_ids: string[] }[];
+  language_notes: { language_code: string; summary: string; review_ids: string[] }[];
+  segment_notes: { segment_key: SegmentKey; summary: string; review_ids: string[] }[];
+  change_notes: string[];
+  news_notes: { title: string; summary: string }[];
+  quotes: { review_id: string; korean: string }[];
+  caveats: string[];
+};
+
+/** 검증·계산을 거쳐 저장하는 해석 */
+export type AiResult = {
+  one_liner: string;
+  headline: string;
+  themes: { label: string; polarity: "positive" | "negative" | "mixed"; stance: "recommend" | "against" | "split"; summary: string; support: number; support_share: number; pos_share: number; review_ids: number[] }[];
+  language_notes: { language_code: string; name: string; summary: string; sample_n: number; review_ids: number[] }[];
+  segment_notes: { segment_key: SegmentKey; summary: string; sample_n: number; review_ids: number[] }[];
+  change_notes: { text: string; review_ids: number[] }[];
+  news_notes: { title: string; summary: string }[];
+  quotes: { review_id: number; language: string; voted_up: boolean; playtime_h: number | null; original: string; korean: string }[];
+  caveats: string[];
+  model: string;
+  dropped: { unknown_ids: number; empty_themes: number };   // 검증에서 걸러낸 것(투명성)
+};
+
+/** 표본 한 건 (DB 저장 단위) */
+export type SampleReview = {
+  n: number;                 // 이 분석 안에서의 번호 (R1, R2, …)
+  rid: string;               // 스팀 리뷰 번호
   lang: string;
-  lang_with_flag: string;
-  count: number;
-  ratio: string;
-  pos_ratio: string;
-  neg_ratio: string;
-  eval: string;
-}
+  voted_up: boolean;
+  playtime_h: number | null;
+  text: string;
+  ts: number;
+};
 
-export interface RegionTableRow {
-  rank: string;
-  region: string;
-  count: number;
-  ratio: string;
-  pos_ratio: string;
-  neg_ratio: string;
-  eval: string;
-}
-
-export interface RawReview {
-  language: string;
-  is_positive: boolean;
-  playtime: number;
-  review: string;
-}
-
-export interface StoreStats {
-  official_desc: string;
-  all_desc: string;
-  all_total: number;
-  recent_desc: string;
-  recent_total: number;
-  table_data_all: TableRow[];
-  table_data_30: TableRow[];
-  table_data_region: RegionTableRow[];
-  days_since_release: number;
-  newbie_avg: number;
-  newbie_total: number;
-  newbie_desc: string;
-  norm_avg: number;
-  norm_total: number;
-  norm_desc: string;
-  core_avg: number;
-  core_total: number;
-  core_desc: string;
-  playtime_sample_total: number;
-  collection_period: string;
-  country_langs_ordered: string[];
-  summary_langs: string[];
-  summary_coverage: number;
-  region_langs: string[];
-  issue_langs: string[];
-}
-
-export interface CategorySummary {
-  category: string;
-  summary: string[];
-}
-
-export interface RegionCategory {
-  name: string;
-  summary: string[];
-}
-
-export interface RegionData {
-  region: string;
-  trend: string;
-  keywords: string[];
-  categories: RegionCategory[];
-}
-
-export interface Quote {
-  original: string;
-  korean: string;
-}
-
-export interface CountryCategory {
-  name: string;
-  summary: string[];
-  quote: Quote;
-}
-
-
-export interface CountryData {
-  country: string;
-  categories: CountryCategory[];
-}
-
-export interface PlaytimeAnalysis {
-  comparison_insights: string[];
-  newbie_title: string;
-  newbie_summary: string[];
-  normal_title: string;
-  normal_summary: string[];
-  core_title: string;
-  core_summary: string[];
-}
-
-export interface AiInsights {
-  critic_one_liner: string;
-  sentiment_analysis: string;
-  final_summary_all: string[];
-  final_summary_recent: string[];
-  ai_issue_pick: string[];
-  news_summary: string[];
-  playtime_analysis: PlaytimeAnalysis;
-  global_category_summary: CategorySummary[];
-  region_analysis: {
-    divergence_insight: string;
-    regions: RegionData[];
-  };
-  country_analysis: CountryData[];
-}
-
-export interface NewsData {
-  title: string | null;
-  contents: string | null;
-  url: string | null;
-  date: string | null;
-  image_url: string | null;
-}
-
-export interface QAItem {
-  qa_uuid?: string;   // 개별 질문 UUID
-  q: string;
-  a: string;
-  asked_at?: string;  // ISO 8601 timestamp
-}
-
-export interface AnalysisReport {
-  uuid: string;
-  app_id: string;
+export type AnalysisRow = {
+  id: string;
+  app_id: number;
   game_name: string;
-  release_date: string;
-  header_image: string;
-  recent_label: string;
-  smart_reason: string;
-  store_stats: StoreStats;
-  ai_data: AiInsights;
-  news_data: NewsData;
-  qa_history: QAItem[];
-  analysis_time: string;
-}
-
-export interface ReportIndex {
-  uuid: string;
-  app_id: string;
-  game_name: string;
-  analysis_time: string;
-  collection_period: string;
-  all_desc: string;
-  all_total: number;
-  recent_desc: string;
-  recent_total: number;
-  game_sheet_id: string | null;
-  hidden?: boolean;
-  one_liner?: string;     // AI 한줄평 (column O, index 14)
-  header_image?: string;  // Steam 헤더 이미지 URL (column P, index 15)
-}
-
-export type AnalysisStep =
-  | { step: "game_info"; data: { game_name: string; header_image: string; release_date: string } }
-  | { step: "stats_start" }
-  | { step: "reviews_start" }
-  | { step: "ai_start" }
-  | { step: "saving" }
-  | { step: "complete"; uuid: string }
-  | { step: "error"; message: string };
+  header_image: string | null;
+  release_date: string | null;
+  status: "queued" | "running" | "done" | "failed";
+  step: string | null;
+  error: string | null;
+  method_version: number;
+  hidden: boolean;
+  requested_via: string;
+  requested_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  period_days: number | null;
+  period_start: string | null;
+  period_end: string | null;
+  recent_label: string | null;
+  smart_reason: string | null;
+  all_desc: string | null;
+  all_total: number | null;
+  recent_desc: string | null;
+  recent_total: number | null;
+  one_liner: string | null;
+  stats: any;   // eslint-disable-line @typescript-eslint/no-explicit-any
+  ai: any;      // eslint-disable-line @typescript-eslint/no-explicit-any
+  news: any;    // eslint-disable-line @typescript-eslint/no-explicit-any
+};

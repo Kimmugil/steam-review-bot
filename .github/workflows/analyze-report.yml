@@ -1,0 +1,40 @@
+name: 리뷰 분석 실행
+# 웹에서 분석을 요청하면 서버가 이 작업을 깨웁니다. (분석 ID 하나를 받아 끝까지 실행하고 결과를 DB에 저장)
+# 이름을 예전 'analyze.yml' 과 다르게 한 것은, 이전 파일에 쌓인 실행 기록·상태와 섞이지 않게 하려는 것입니다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      analysis_id:
+        description: "분석 ID"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ANALYSIS_ID: ${{ inputs.analysis_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 필요한 프로그램 설치
+        run: npm ci
+
+      - name: 분석 실행
+        run: npx tsx scripts/run_analysis.ts "$ANALYSIS_ID"
+
+      # 어떤 이유로든 중간에 멈추거나 취소되면, 화면이 '진행 중'에 영원히 머물지 않게 실패로 표시하고 오늘 한도 1칸을 돌려줍니다.
+      - name: 중단된 분석 정리
+        if: failure() || cancelled()
+        run: npx tsx scripts/mark_failed.ts "$ANALYSIS_ID" "분석 실행기가 중간에 멈췄어요. 잠시 뒤 다시 요청해 주세요."

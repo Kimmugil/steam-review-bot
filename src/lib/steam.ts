@@ -1,495 +1,209 @@
-import { LANG_MAP, REGION_MAP, SCORE_MAP, calculateCustomScore, getLangName, EVAL_LABELS } from "./config";
-import type { StoreStats, TableRow, RegionTableRow, NewsData, RawReview } from "./types";
+import type { NewsItem } from "./types";
+import { makeRate, steamScoreLabel, type Rate } from "./rating";
 
-function sanitizeUrl(url: string): string {
-  return url.split("").filter((c) => c.charCodeAt(0) >= 32 && c.charCodeAt(0) <= 126).join("").trim();
+/**
+ * 스팀 통신. 원칙:
+ *  1) 요청은 동시에 몇 개까지만, 간격을 두고 보냅니다 (제한에 걸리지 않도록).
+ *  2) 일시 오류(429·5xx·네트워크)는 기다렸다가 다시 시도합니다.
+ *  3) 끝내 실패하면 0으로 바꿔 숨기지 않고 SteamError 로 올립니다. (호출한 쪽이 '누락'으로 표시할지 중단할지 정함)
+ */
+const REVIEWS_URL = "https://api.steampowered.com/IUserReviewsService/GetAppReviews/v1/";
+const UA = "Mozilla/5.0 (compatible; SteamThresher/4.0; +https://github.com/Kimmugil/steam-review-bot)";
+
+export class SteamError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+    this.name = "SteamError";
+  }
 }
 
-const STEAM_COOKIES = "birthtime=0; lastagecheckage=1-0-1900; wants_mature_content=1";
-const STEAM_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-  Cookie: STEAM_COOKIES,
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** 동시에 최대 N개, 시작 간격 최소 gap ms */
+function makeLimiter(concurrency: number, gapMs: number) {
+  let active = 0;
+  let lastStart = 0;
+  const queue: (() => void)[] = [];
+  const next = () => {
+    if (active >= concurrency) return;
+    const run = queue.shift();
+    if (!run) return;
+    active++;
+    run();
+  };
+  return async function limit<T>(fn: () => Promise<T>): Promise<T> {
+    await new Promise<void>((resolve) => {
+      queue.push(resolve);
+      next();
+    });
+    try {
+      const wait = lastStart + gapMs - Date.now();
+      if (wait > 0) await sleep(wait);
+      lastStart = Date.now();
+      return await fn();
+    } finally {
+      active--;
+      next();
+    }
+  };
+}
+const limit = makeLimiter(4, 100);
+
+type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+async function fetchJson(url: string, label: string, retries = 5): Promise<Json> {
+  let last = "";
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await limit(() => fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(25_000) }));
+      if (res.status === 200) {
+        try {
+          return (await res.json()) as Json;
+        } catch {
+          last = "JSON이 아닌 응답";
+        }
+      } else if (res.status === 429 || res.status >= 500 || (res.status >= 300 && res.status < 400)) {
+        last = `상태 ${res.status}`;
+        await sleep(Math.min(2000 * 2 ** attempt, 30_000));
+        continue;
+      } else {
+        throw new SteamError(`${label}: 스팀이 요청을 거절했습니다 (상태 ${res.status})`, res.status);
+      }
+    } catch (e) {
+      if (e instanceof SteamError) throw e;
+      last = e instanceof Error ? e.message : String(e);
+    }
+    await sleep(Math.min(1000 * 2 ** attempt, 15_000));
+  }
+  throw new SteamError(`${label}: 스팀에서 응답을 받지 못했습니다 (${last})`);
+}
+
+// ───────────────── 리뷰 ─────────────────
+export type ReviewQuery = {
+  appId: number;
+  languages?: string[];          // 기본: 전체
+  filter?: 0 | 1 | 2;            // 0 도움순, 1 최신순, 2 수정순.  이 프로그램은 항상 1(최신순)을 씁니다.
+  purchaseType?: 0 | 1;          // 0 스팀 구매만, 1 전부
+  reviewType?: 0 | 1 | 2;
+  startTs?: number;              // 작성 시각 범위 (초)
+  endTs?: number;
+  minHours?: number;             // 리뷰 쓸 때 플레이타임 하한(이상)
+  maxHours?: number;             // 상한(이하)
+  perPage?: number;
+  cursor?: string;
 };
 
-export async function getSteamGameInfo(appId: string): Promise<{
-  appId: string; gameName: string; releaseDate: Date; headerImage: string;
-} | null> {
-  try {
-    const url = sanitizeUrl(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=korean`);
-    const res = await fetch(url, { headers: STEAM_HEADERS });
-    const data = await res.json();
-    if (!data?.[appId]?.success) return null;
-    const gameData = data[appId].data;
-    const gameName = (gameData.name as string).replace(/[^\x00-\x7F]/g, (c: string) => c);
-    const headerImage = gameData.header_image ?? "";
-    let releaseDate = new Date(2020, 0, 1);
-    try {
-      const rawDate: string = gameData.release_date?.date ?? "";
-      const cleaned = rawDate
-        .replace("년 ", "-").replace("월 ", "-").replace("일", "")
-        .replace(/[^\d\s-]/g, "").trim();
-      const parsed = new Date(cleaned);
-      if (!isNaN(parsed.getTime())) releaseDate = parsed;
-    } catch {}
-    return { appId, gameName, releaseDate, headerImage };
-  } catch {
-    return null;
-  }
-}
+export type RawReview = {
+  recommendationid: string;
+  author: { playtime_at_review?: number; playtime_forever?: number };
+  language: string;
+  review: string;
+  timestamp_created: number;
+  voted_up: boolean;
+};
 
-async function fetchStoreOfficialRating(appId: string): Promise<string> {
-  try {
-    const url = sanitizeUrl(`https://store.steampowered.com/app/${appId}/?l=korean`);
-    const res = await fetch(url, { headers: STEAM_HEADERS });
-    const html = await res.text();
-    const match = html.match(/<span class="game_review_summary[^>]*>([^<]+)<\/span>/);
-    return match ? match[1].trim() : EVAL_LABELS.none;
-  } catch {
-    return EVAL_LABELS.none;
-  }
-}
+export type ReviewPage = {
+  pos: number; neg: number; total: number;       // 요청 조건에 맞는 전체 건수(페이지 크기와 무관)
+  scoreCode: number | null; scoreDescEn: string | null;
+  reviews: RawReview[]; cursor: string | null;
+};
 
-export async function fetchLatestNews(appId: string): Promise<NewsData> {
-  try {
-    const url = sanitizeUrl(
-      `https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=${appId}&count=5&maxlength=3000&format=json`
-    );
-    const res = await fetch(url, { headers: STEAM_HEADERS });
-    const json = await res.json();
-    const newsItems: Record<string, unknown>[] = json?.appnews?.newsitems ?? [];
-    if (!newsItems.length) return { title: null, contents: null, url: null, date: null, image_url: null };
-
-    const parseItem = (item: Record<string, unknown>): NewsData => {
-      const date = new Date((item.date as number) * 1000).toISOString().slice(0, 10);
-      const contents = (item.contents as string) ?? "";
-      let imageUrl: string | null = null;
-      const htmlMatch = contents.match(/<img[^>]+src=["'](http[^"']+)['"]/i);
-      const bbMatch = contents.match(/\[img\](http.*?)\[\/img\]/i);
-      if (htmlMatch) imageUrl = htmlMatch[1];
-      else if (bbMatch) imageUrl = bbMatch[1];
-      return {
-        title: item.title as string,
-        contents,
-        url: item.url as string,
-        date,
-        image_url: imageUrl,
-      };
-    };
-
-    for (const item of newsItems) {
-      const title = (item.title as string).toLowerCase();
-      if (["update", "patch", "패치", "업데이트"].some((kw) => title.includes(kw))) {
-        return parseItem(item);
-      }
-    }
-    return parseItem(newsItems[0]);
-  } catch {
-    return { title: null, contents: null, url: null, date: null, image_url: null };
-  }
-}
-
-export function getSmartPeriod(releaseDate: Date): {
-  days: number; label: string; reason: string; periodStr: string;
-} {
-  const now = new Date();
-  const daysSince = Math.floor((now.getTime() - releaseDate.getTime()) / 86400000);
-  let days: number, label: string, reason: string;
-
-  if (daysSince < 6) {
-    days = 3;
-    label = "출시 초기";
-    reason = "출시 직후 민심을 파악하기 위해 오픈 시점부터의 동향을 분석했습니다.";
-  } else if (daysSince < 40) {
-    days = Math.floor(daysSince / 2);
-    label = `최근 ${days}일`;
-    reason = "오픈 초기 노이즈를 배제하기 위해 출시일의 절반인 기간의 동향을 분석했습니다.";
-  } else {
-    days = 30;
-    label = "최근 30일";
-    reason = "서비스가 안정화된 상태로 장기 동향을 분석했습니다.";
-  }
-
-  const start = new Date(now.getTime() - days * 86400000);
-  const fmt = (d: Date) => `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
-  const periodStr = `${fmt(start)} ~ ${fmt(now)}`;
-  return { days, label, reason, periodStr };
-}
-
-async function fetchLangStats(appId: string, lang: string): Promise<{ lang: string; total: number; positive: number }> {
-  try {
-    const url = sanitizeUrl(
-      `https://store.steampowered.com/appreviews/${appId}?json=1&language=${lang}&num_per_page=0&purchase_type=all`
-    );
-    const res = await fetch(url, { headers: STEAM_HEADERS });
-    const json = await res.json();
-    const qs = json?.query_summary ?? {};
-    return { lang, total: qs.total_reviews ?? 0, positive: qs.total_positive ?? 0 };
-  } catch {
-    return { lang, total: 0, positive: 0 };
-  }
-}
-
-async function fetchLangReviews(
-  appId: string, lang: string, dayRange: number | null = null, limit = 40
-): Promise<Array<{ language: string; is_positive: boolean; playtime: number; review: string }>> {
-  const reviews: Array<{ language: string; is_positive: boolean; playtime: number; review: string }> = [];
-  const filterType = dayRange ? "recent" : "all";
-  let baseUrl = sanitizeUrl(
-    `https://store.steampowered.com/appreviews/${appId}?json=1&filter=${filterType}&language=${lang}&num_per_page=100&purchase_type=all`
-  );
-  if (dayRange) baseUrl += `&day_range=${dayRange}`;
-  let cursor = "*";
-
-  for (let i = 0; i < 3; i++) {
-    try {
-      const url = baseUrl + `&cursor=${encodeURIComponent(cursor)}`;
-      const res = await fetch(url, { headers: STEAM_HEADERS });
-      const json = await res.json();
-      if (!json?.reviews?.length) break;
-      for (const r of json.reviews) {
-        reviews.push({
-          language: lang,
-          is_positive: Boolean(r.voted_up),
-          playtime: Math.round((r.author?.playtime_at_review ?? 0) / 60 * 10) / 10,
-          review: (r.review ? String(r.review) : "").slice(0, 400).replace(/\n/g, " "),
-        });
-      }
-      cursor = json.cursor ?? "*";
-      if (!cursor) break;
-    } catch {
-      break;
-    }
-  }
-  return reviews.slice(0, limit);
-}
-
-async function fetchPlaytimeSample(
-  appId: string,
-  limit = 2000
-): Promise<Array<{ pt: number; pos: boolean }>> {
-  const results: Array<{ pt: number; pos: boolean }> = [];
-  let cursor = "*";
-  const baseUrl = sanitizeUrl(
-    `https://store.steampowered.com/appreviews/${appId}?json=1&filter=all&language=all&num_per_page=100&purchase_type=all`
-  );
-  for (let i = 0; i < Math.ceil(limit / 100); i++) {
-    try {
-      const res = await fetch(baseUrl + `&cursor=${encodeURIComponent(cursor)}`, { headers: STEAM_HEADERS });
-      const json = await res.json();
-      if (!json?.reviews?.length) break;
-      for (const r of json.reviews) {
-        results.push({
-          pt: Math.round((r.author?.playtime_at_review ?? 0) / 60 * 10) / 10,
-          pos: Boolean(r.voted_up),
-        });
-      }
-      cursor = json.cursor ?? "*";
-      if (!cursor) break;
-    } catch { break; }
-  }
-  return results.slice(0, limit);
-}
-
-function summaryLimit(ratio: number): number {
-  if (ratio >= 0.05) return 20;
-  if (ratio >= 0.02) return 10;
-  return 5;
-}
-
-function buildLangTable(
-  langData: Record<string, { total: number; positive: number }>,
-  total: number
-): TableRow[] {
-  return Object.entries(langData)
-    .sort((a, b) => b[1].total - a[1].total)
-    .map(([code, stat], i) => ({
-      rank: `${i + 1}위`,
-      lang: getLangName(code).split(" ").slice(1).join(" ").trim(),
-      lang_with_flag: getLangName(code),
-      count: stat.total,
-      ratio: total > 0 ? `${((stat.total / total) * 100).toFixed(1)}%` : "0%",
-      pos_ratio: `${((stat.positive / stat.total) * 100).toFixed(1)}%`,
-      neg_ratio: `${(((stat.total - stat.positive) / stat.total) * 100).toFixed(1)}%`,
-      eval: calculateCustomScore(stat.positive / stat.total, stat.total),
-    }));
-}
-
-function buildRegionTable(
-  langData: Record<string, { total: number; positive: number }>,
-  total: number
-): RegionTableRow[] {
-  const regStat: Record<string, { total: number; positive: number }> = {};
-  for (const [lang, stat] of Object.entries(langData)) {
-    const region = REGION_MAP[lang] ?? "🌐 기타";
-    if (!regStat[region]) regStat[region] = { total: 0, positive: 0 };
-    regStat[region].total += stat.total;
-    regStat[region].positive += stat.positive;
-  }
-  return Object.entries(regStat)
-    .sort((a, b) => b[1].total - a[1].total)
-    .map(([region, stat], i) => ({
-      rank: `${i + 1}위`,
-      region,
-      count: stat.total,
-      ratio: total > 0 ? `${((stat.total / total) * 100).toFixed(1)}%` : "0%",
-      pos_ratio: `${((stat.positive / stat.total) * 100).toFixed(1)}%`,
-      neg_ratio: `${(((stat.total - stat.positive) / stat.total) * 100).toFixed(1)}%`,
-      eval: calculateCustomScore(stat.positive / stat.total, stat.total),
-    }));
-}
-
-export async function fetchSteamReviews(
-  appId: string,
-  recentDaysVal: number,
-  releaseDate: Date,
-  periodStr: string
-): Promise<{
-  filteredAll: Record<string, string[]>;
-  filteredRecent: Record<string, string[]>;
-  storeStats: StoreStats;
-  actualRecentLabel: string | null;
-  rawReviewsAll: RawReview[];
-  rawReviewsRecent: RawReview[];
-}> {
-  const now = new Date();
-  const daysSinceRelease = Math.floor((now.getTime() - releaseDate.getTime()) / 86400000);
-
-  // ── Phase 1: parallel stats for all 30 languages ──
-  const allLangs = Object.keys(LANG_MAP);
-  const statResults = await Promise.all(allLangs.map((lang) => fetchLangStats(appId, lang)));
-  const langStatsAll: Record<string, { total: number; positive: number }> = {};
-  let sumTotal = 0, sumPos = 0;
-  for (const { lang, total, positive } of statResults) {
-    if (total > 0) {
-      langStatsAll[lang] = { total, positive };
-      sumTotal += total;
-      sumPos += positive;
-    }
-  }
-
-  // Official rating
-  let officialDesc = await fetchStoreOfficialRating(appId);
-  if (!officialDesc || officialDesc === EVAL_LABELS.none) {
-    try {
-      const url = sanitizeUrl(
-        `https://store.steampowered.com/appreviews/${appId}?json=1&language=all&num_per_page=0&purchase_type=steam`
-      );
-      const res = await fetch(url, { headers: STEAM_HEADERS });
-      const json = await res.json();
-      const qs = json?.query_summary ?? {};
-      const code = qs.review_score ?? 0;
-      if (code === 0 && qs.total_reviews > 0) {
-        officialDesc = calculateCustomScore(qs.total_positive / qs.total_reviews, qs.total_reviews);
-      } else {
-        officialDesc = SCORE_MAP[code] ?? EVAL_LABELS.none;
-      }
-    } catch {}
-  }
-
-  const allDesc = sumTotal > 0 ? calculateCustomScore(sumPos / sumTotal, sumTotal) : EVAL_LABELS.none;
-
-  // ── Phase 2: recent period stats ──
-  const langStats30: Record<string, { total: number; positive: number }> = {};
-  let recentTotal = 0, recentPos = 0;
-  let actualOldestTs: number | null = null; // 실제로 수집된 가장 오래된 리뷰의 timestamp
-
-  if (recentDaysVal) {
-    if (daysSinceRelease < 4) {
-      const url = sanitizeUrl(
-        `https://store.steampowered.com/appreviews/${appId}?json=1&filter=recent&language=all&num_per_page=100&purchase_type=all`
-      );
-      let cursor = "*";
-      const rawReviews: Array<Record<string, unknown>> = [];
-      for (let i = 0; i < 5; i++) {
-        try {
-          const res = await fetch(url + `&cursor=${encodeURIComponent(cursor)}`, { headers: STEAM_HEADERS });
-          const json = await res.json();
-          if (!json?.reviews?.length) break;
-          rawReviews.push(...json.reviews);
-          cursor = json.cursor ?? "*";
-          if (!cursor) break;
-        } catch { break; }
-      }
-      const cutoff = Math.max(1, Math.floor(rawReviews.length * 0.3));
-      for (const r of rawReviews.slice(0, cutoff)) {
-        recentTotal++;
-        if (r.voted_up) recentPos++;
-        const rLang = r.language as string;
-        if (rLang && allLangs.includes(rLang)) {
-          if (!langStats30[rLang]) langStats30[rLang] = { total: 0, positive: 0 };
-          langStats30[rLang].total++;
-          if (r.voted_up) langStats30[rLang].positive++;
-        }
-      }
-    } else {
-      const cutoffTs = Math.floor((now.getTime() - recentDaysVal * 86400000) / 1000);
-      const url = sanitizeUrl(
-        `https://store.steampowered.com/appreviews/${appId}?json=1&filter=recent&language=all&num_per_page=100&purchase_type=all`
-      );
-      let cursor = "*";
-      outer: for (let i = 0; i < 50; i++) {
-        try {
-          const res = await fetch(url + `&cursor=${encodeURIComponent(cursor)}`, { headers: STEAM_HEADERS });
-          const json = await res.json();
-          if (!json?.reviews?.length) break;
-          for (const r of json.reviews as Array<Record<string, unknown>>) {
-            const ts = r.timestamp_created as number;
-            if (ts < cutoffTs) break outer;
-            recentTotal++;
-            if (r.voted_up) recentPos++;
-            const rLang = r.language as string;
-            if (rLang && allLangs.includes(rLang)) {
-              if (!langStats30[rLang]) langStats30[rLang] = { total: 0, positive: 0 };
-              langStats30[rLang].total++;
-              if (r.voted_up) langStats30[rLang].positive++;
-            }
-            // 가장 오래된 수집 timestamp 갱신 (reviews는 최신→오래된 순 정렬)
-            actualOldestTs = ts;
-          }
-          cursor = json.cursor ?? "*";
-          if (!cursor) break;
-        } catch { break; }
-      }
-    }
-  }
-
-  // ── 실제 수집 기간 보정 ──
-  // actualOldestTs가 cutoffTs보다 크면(= 의도한 기간을 다 못 채움) 실제 기간으로 교체
-  const fmtDate = (d: Date) =>
-    `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
-  let actualPeriodStr = periodStr;
-  let actualRecentLabel: string | null = null;
-  if (actualOldestTs !== null) {
-    const actualDays = Math.ceil((now.getTime() / 1000 - actualOldestTs) / 86400);
-    if (actualDays < recentDaysVal) {
-      const actualStart = new Date(actualOldestTs * 1000);
-      actualPeriodStr = `${fmtDate(actualStart)} ~ ${fmtDate(now)}`;
-      actualRecentLabel = `최근 ${actualDays}일`;
-    }
-  }
-
-
-  const recentDesc = recentTotal > 0 ? calculateCustomScore(recentPos / recentTotal, recentTotal) : EVAL_LABELS.none;
-  const tableDataAll = buildLangTable(langStatsAll, sumTotal);
-  const flagToCode = Object.fromEntries(Object.keys(langStatsAll).map((l) => [getLangName(l), l]));
-
-  // ── Phase 3: determine collection roles per language ──
-  const minThreshold = Math.max(10, Math.floor(sumTotal * 0.01));
-  const summaryLangsMap: Record<string, number> = {};
-  for (const row of tableDataAll) {
-    const code = flagToCode[row.lang_with_flag];
-    if (!code || !langStatsAll[code]) continue;
-    if (langStatsAll[code].total < minThreshold) continue;
-    const ratio = langStatsAll[code].total / sumTotal;
-    summaryLangsMap[code] = summaryLimit(ratio);
-  }
-  const summaryLangsCoverage = sumTotal > 0
-    ? Math.round(Object.keys(summaryLangsMap).reduce((s, c) => s + (langStatsAll[c]?.total ?? 0), 0) / sumTotal * 1000) / 10
-    : 0;
-
-  const regionPrefixes = ["동아시아", "동남아시아", "영미권", "서유럽", "동유럽", "북유럽", "CIS(러시아권)", "중남미", "중동·기타"];
-  const regionLangsMap: Record<string, number> = {};
-  for (const prefix of regionPrefixes) {
-    const inRegion = Object.keys(langStatsAll).filter((l) => (REGION_MAP[l] ?? "").includes(prefix));
-    const top3 = inRegion.sort((a, b) => langStatsAll[b].total - langStatsAll[a].total).slice(0, 3);
-    for (const lang of top3) regionLangsMap[lang] = 15;
-  }
-
-  const top3Codes: string[] = [];
-  for (const row of tableDataAll) {
-    const code = flagToCode[row.lang_with_flag];
-    if (code && langStatsAll[code]) top3Codes.push(code);
-    if (top3Codes.length >= 3) break;
-  }
-  const countryLangsOrdered = [...top3Codes];
-  if (!countryLangsOrdered.includes("koreana")) countryLangsOrdered.push("koreana");
-
-  const issueLangsMap: Record<string, number> = {};
-  if (Object.keys(langStats30).length) {
-    const top5Recent = Object.entries(langStats30)
-      .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 5)
-      .map(([l]) => l);
-    for (const lang of top5Recent) issueLangsMap[lang] = 10;
-  }
-
-  const langLimitMap: Record<string, number> = {};
-  for (const [lang, lim] of Object.entries(issueLangsMap)) langLimitMap[lang] = Math.max(langLimitMap[lang] ?? 0, lim);
-  for (const [lang, lim] of Object.entries(regionLangsMap)) langLimitMap[lang] = Math.max(langLimitMap[lang] ?? 0, lim);
-  for (const [lang, lim] of Object.entries(summaryLangsMap)) langLimitMap[lang] = Math.max(langLimitMap[lang] ?? 0, lim);
-  for (const lang of countryLangsOrdered) langLimitMap[lang] = Math.max(langLimitMap[lang] ?? 0, 40);
-
-  // ── Phase 4: fetch review texts in parallel, collect raw reviews ──
-  const filteredAll: Record<string, string[]> = {};
-  const filteredRecent: Record<string, string[]> = {};
-  const rawReviewsAll: RawReview[] = [];
-  const rawReviewsRecent: RawReview[] = [];
-
-  await Promise.all(
-    Object.entries(langLimitMap).map(async ([lang, fetchLimit]) => {
-      const allRevs = await fetchLangReviews(appId, lang, null, fetchLimit);
-      rawReviewsAll.push(...allRevs.map((r) => ({ language: r.language, is_positive: r.is_positive, playtime: r.playtime, review: r.review })));
-      const langLabel = getLangName(lang);
-      filteredAll[lang] = allRevs.map(
-        (r) => `[${r.is_positive ? "👍" : "👎"} | 🌐 ${langLabel} | ⏱️ ${r.playtime}h] ${r.review}`
-      );
-      if (recentDaysVal) {
-        const issueLimit = issueLangsMap[lang] ?? 0;
-        const recLimit = Math.max(fetchLimit, issueLimit);
-        const recRevs = await fetchLangReviews(appId, lang, recentDaysVal, recLimit);
-        rawReviewsRecent.push(...recRevs.map((r) => ({ language: r.language, is_positive: r.is_positive, playtime: r.playtime, review: r.review })));
-        filteredRecent[lang] = recRevs.map(
-          (r) => `[${r.is_positive ? "👍" : "👎"} | 🌐 ${langLabel} | ⏱️ ${r.playtime}h] ${r.review}`
-        );
-      } else {
-        rawReviewsRecent.push(...rawReviewsAll.filter((r) => r.language === lang));
-        filteredRecent[lang] = filteredAll[lang];
-      }
-    })
-  );
-
-  // ── Phase 5: playtime segmentation (dedicated 2000-review sample) ──
-  const playtimeSample = await fetchPlaytimeSample(appId, 2000);
-  playtimeSample.sort((a, b) => a.pt - b.pt);
-  const n = playtimeSample.length;
-  const q1 = Math.floor(n / 4);
-  const q3 = Math.floor((n * 3) / 4);
-  const newbies = n >= 4 ? playtimeSample.slice(0, q1) : playtimeSample;
-  const normals = n >= 4 ? playtimeSample.slice(q1, q3) : [];
-  const cores = n >= 4 ? playtimeSample.slice(q3) : [];
-
-  function calcPtStats(group: Array<{ pt: number; pos: boolean }>): [number, number, string] {
-    if (!group.length) return [0, 0, EVAL_LABELS.none];
-    const pos = group.filter((x) => x.pos).length;
-    const avg = Math.round(group.reduce((s, x) => s + x.pt, 0) / group.length * 10) / 10;
-    return [avg, group.length, calculateCustomScore(pos / group.length, group.length)];
-  }
-
-  const [nAvg, nTot, nDesc] = calcPtStats(newbies);
-  const [normAvg, normTot, normDesc] = calcPtStats(normals);
-  const [cAvg, cTot, cDesc] = calcPtStats(cores);
-
-  const storeStats: StoreStats = {
-    official_desc: officialDesc,
-    all_desc: allDesc,
-    all_total: sumTotal,
-    recent_desc: recentDesc,
-    recent_total: recentTotal,
-    table_data_all: tableDataAll,
-    table_data_30: buildLangTable(langStats30, Object.values(langStats30).reduce((s, v) => s + v.total, 0)),
-    table_data_region: buildRegionTable(langStatsAll, sumTotal),
-    days_since_release: daysSinceRelease,
-    newbie_avg: nAvg, newbie_total: nTot, newbie_desc: nDesc,
-    norm_avg: normAvg, norm_total: normTot, norm_desc: normDesc,
-    core_avg: cAvg, core_total: cTot, core_desc: cDesc,
-    playtime_sample_total: n,
-    collection_period: actualPeriodStr,
-    country_langs_ordered: countryLangsOrdered,
-    summary_langs: Object.keys(summaryLangsMap),
-    summary_coverage: summaryLangsCoverage,
-    region_langs: Object.keys(regionLangsMap),
-    issue_langs: Object.keys(issueLangsMap),
+export async function getReviewPage(q: ReviewQuery, label: string): Promise<ReviewPage> {
+  const input: Json = {
+    appid: q.appId,
+    languages: q.languages ?? ["all"],
+    filter: q.filter ?? 1,
+    purchase_type: q.purchaseType ?? 1,
+    review_type: q.reviewType ?? 0,
+    num_per_page: q.perPage ?? 1,
+    cursor: q.cursor ?? "*",
   };
+  if (q.startTs != null && q.endTs != null) { input.date_range_start = q.startTs; input.date_range_end = q.endTs; }
+  if (q.minHours != null) input.playtime_min_hours = q.minHours;
+  if (q.maxHours != null) input.playtime_max_hours = q.maxHours;
+  const url = `${REVIEWS_URL}?input_json=${encodeURIComponent(JSON.stringify(input))}`;
+  const json = await fetchJson(url, label);
+  const r = json.response;
+  if (!r || typeof r !== "object" || !r.query_summary) throw new SteamError(`${label}: 응답 형식이 예상과 다릅니다`);
+  const s = r.query_summary;
+  return {
+    pos: Number(s.total_positive ?? 0), neg: Number(s.total_negative ?? 0), total: Number(s.total_reviews ?? 0),
+    scoreCode: s.review_score != null ? Number(s.review_score) : null, scoreDescEn: s.review_score_desc ?? null,
+    reviews: Array.isArray(r.reviews) ? (r.reviews as RawReview[]) : [], cursor: r.cursor ?? null,
+  };
+}
 
-  return { filteredAll, filteredRecent, storeStats, actualRecentLabel, rawReviewsAll, rawReviewsRecent };
+/** 조건에 맞는 리뷰의 긍정/부정 수 (호출 1번, 리뷰 본문은 안 받음) */
+export async function countRate(q: ReviewQuery, label: string): Promise<Rate> {
+  const p = await getReviewPage({ ...q, perPage: 1 }, label);
+  return makeRate(p.pos, p.neg);
+}
+
+/** 스팀 '모든 평가'와 같은 기준(스팀 구매, 전 언어, 전 기간)의 수치와 스팀이 매긴 등급 */
+export async function getOfficial(appId: number): Promise<Rate & { steam_desc_en: string | null; steam_label: string | null }> {
+  const p = await getReviewPage({ appId, purchaseType: 0, perPage: 1 }, "공식 평가");
+  return { ...makeRate(p.pos, p.neg), steam_desc_en: p.scoreDescEn, steam_label: steamScoreLabel(p.scoreCode) };
+}
+
+// ───────────────── 게임 정보 ─────────────────
+export type GameInfo = {
+  appId: number; name: string; headerImage: string | null;
+  releaseDate: Date | null; comingSoon: boolean; type: string | null;
+};
+
+/** 한국어 '2025년 1월 20일' 과 영어 '20 Jan, 2025' 모두 읽습니다. 못 읽으면 null. */
+export function parseReleaseDate(raw: string | undefined | null): Date | null {
+  if (!raw) return null;
+  const ko = raw.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (ko) return new Date(Date.UTC(+ko[1], +ko[2] - 1, +ko[3]));
+  const t = Date.parse(raw + " UTC");
+  return Number.isNaN(t) ? null : new Date(t);
+}
+
+export async function getGameInfo(appId: number): Promise<GameInfo | null> {
+  const json = await fetchJson(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=korean`, "게임 정보");
+  const node = json[String(appId)];
+  if (!node?.success || !node.data) return null;
+  const d = node.data;
+  return {
+    appId, name: String(d.name ?? appId), headerImage: d.header_image ?? null,
+    releaseDate: parseReleaseDate(d.release_date?.date), comingSoon: Boolean(d.release_date?.coming_soon), type: d.type ?? null,
+  };
+}
+
+// ───────────────── 공식 소식 ─────────────────
+/** BBCode·HTML 꼬리표를 걷어 낸 읽을 수 있는 글 */
+export function cleanNewsText(raw: string, max = 1500): string {
+  return raw
+    .replace(/\[\/?[a-z0-9*]+(?:=[^\]]*)?\]/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\{STEAM_CLAN_IMAGE\}\S+/g, " ")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+/** 개발사가 직접 올린 공지(feed_type=1)만. 언론 기사(타 사이트 글)는 '공식 소식'이 아니므로 제외. */
+export async function getOfficialNews(appId: number, maxItems = 3, sinceDays = 120): Promise<NewsItem[]> {
+  const json = await fetchJson(`https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=${appId}&count=20&maxlength=0&format=json`, "소식");
+  const items: Json[] = json?.appnews?.newsitems ?? [];
+  const cutoff = Date.now() / 1000 - sinceDays * 86400;
+  return items
+    .filter((x) => x.feed_type === 1 && x.date >= cutoff)
+    .slice(0, maxItems)
+    .map((x) => ({
+      title: String(x.title ?? ""),
+      date: new Date(x.date * 1000).toISOString().slice(0, 10),
+      url: String(x.url ?? ""),
+      text: cleanNewsText(String(x.contents ?? "")),
+      feed: String(x.feedname ?? ""),
+    }));
+}
+
+/** 게임 이름이나 주소에서 App ID를 뽑습니다. */
+export function parseAppId(input: string): number | null {
+  const s = input.trim();
+  if (/^\d{1,9}$/.test(s)) return Number(s);
+  const m = s.match(/store\.steampowered\.com\/app\/(\d{1,9})/i);
+  return m ? Number(m[1]) : null;
 }

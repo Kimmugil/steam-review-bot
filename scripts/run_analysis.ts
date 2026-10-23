@@ -1,82 +1,34 @@
-import { v4 as uuidv4 } from "uuid";
-import { getSteamGameInfo, fetchLatestNews, getSmartPeriod, fetchSteamReviews } from "../src/lib/steam";
-import { saveAnalysisToSheets, updateQueueStatus } from "../src/lib/sheets";
-import { analyzeWithGemini } from "../src/lib/gemini";
-import type { AnalysisReport } from "../src/lib/types";
+/**
+ * 분석 한 건 실행.   npx tsx scripts/run_analysis.ts <분석 ID>
+ *   - GitHub Actions 가 웹 요청마다 호출합니다.
+ *   - 내 컴퓨터에서 시험할 때는 새 분석을 만들어 바로 돌릴 수도 있습니다:  npx tsx scripts/run_analysis.ts --new <App ID>
+ */
+import { loadEnvConfig } from "@next/env";
+loadEnvConfig(process.cwd());
 
 async function main() {
-  const appId = process.argv[2];
-  const uuid = process.argv[3] || uuidv4();
-
-  if (!appId) {
-    console.error("Usage: tsx scripts/run_analysis.ts <appId> [uuid]");
-    process.exit(1);
+  const { runAnalysis } = await import("../src/lib/analysis");
+  const { createRequest } = await import("../src/lib/repo");
+  const { sql } = await import("../src/lib/db");
+  const args = process.argv.slice(2);
+  let id = args[0];
+  if (args[0] === "--new") {
+    const appId = Number(args[1]);
+    if (!Number.isInteger(appId)) { console.error("사용법: --new <App ID>"); process.exit(1); }
+    const r = await createRequest({ appId, name: String(appId), headerImage: null, releaseDate: null, via: "admin", requesterHash: null });
+    if (r.kind === "active") { console.log("이미 진행 중인 분석이 있습니다:", r.analysis.id); await sql.end(); return; }
+    if (r.kind !== "created") { console.error("접수하지 못했습니다:", r.kind); process.exit(1); }
+    id = r.id;
+    console.log("새 분석 접수:", id);
   }
-
-  console.log(`Starting analysis for appId: ${appId}, uuid: ${uuid}`);
-
+  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) { console.error("사용법: run_analysis.ts <분석 ID>  |  --new <App ID>"); process.exit(1); }
   try {
-    // 1) 게임 기본 정보
-    const gameInfo = await getSteamGameInfo(appId);
-    if (!gameInfo) {
-      throw new Error(`Invalid App ID or failed to fetch game info for ${appId}`);
-    }
-
-    // 2) 스마트 기간 계산
-    const { days, label, reason, periodStr } = getSmartPeriod(gameInfo.releaseDate);
-
-    // 3) 뉴스 + 리뷰 수집
-    console.log("Fetching news and reviews...");
-    const [newsData, reviewResult] = await Promise.all([
-      fetchLatestNews(appId),
-      fetchSteamReviews(appId, days, gameInfo.releaseDate, periodStr),
-    ]);
-
-    const { filteredAll, filteredRecent, storeStats, actualRecentLabel, rawReviewsAll, rawReviewsRecent } = reviewResult;
-
-    // 4) AI 분석 (Gemini)
-    console.log("Analyzing with AI (Gemini)...");
-    const { insights, error: aiError } = await analyzeWithGemini(
-      gameInfo.gameName, filteredAll, filteredRecent, storeStats, actualRecentLabel ?? label, newsData
-    );
-
-    if (aiError || !insights) {
-      throw new Error(`AI Analysis failed: ${aiError}`);
-    }
-
-    const report: AnalysisReport = {
-      uuid,
-      app_id: appId,
-      game_name: gameInfo.gameName,
-      release_date: gameInfo.releaseDate.toISOString().slice(0, 10),
-      header_image: gameInfo.headerImage,
-      recent_label: label,
-      smart_reason: reason,
-      store_stats: storeStats,
-      news_data: newsData,
-      ai_data: insights,
-      qa_history: [],
-      analysis_time: new Date().toISOString(),
-    };
-
-    // 4) 구글 시트에 적재
-    console.log("Saving to Google Sheets...");
-    await saveAnalysisToSheets(report, rawReviewsAll, rawReviewsRecent);
-
-    // 5) 큐 상태 업데이트
-    console.log("Updating Queue status to COMPLETED...");
-    await updateQueueStatus(uuid, "COMPLETED");
-
-    console.log("Analysis completed successfully!");
-  } catch (error) {
-    console.error("Analysis failed:", error);
-    try {
-      await updateQueueStatus(uuid, "ERROR");
-    } catch (qError) {
-      console.error("Failed to update queue status:", qError);
-    }
-    process.exit(1);
+    await runAnalysis(id);
+    console.log("완료:", id);
+  } catch {
+    process.exitCode = 1;
+  } finally {
+    await sql.end();
   }
 }
-
 main();
