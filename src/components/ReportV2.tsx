@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import HistoryPicker from "./HistoryPicker";
 import { Pill, PosNegBar, RatingPill, Thumb } from "./ui";
 import { SIZE_LABEL, ageKo, dateKo, num, pct1, signed } from "@/lib/format";
 import { langName } from "@/lib/config";
@@ -46,7 +47,7 @@ function KCard({ k, label, r, sub }: { k: string; label?: string; r: any; sub?: 
 
 const TABS = [["sum", "요약"], ["lang", "언어별"], ["play", "플레이타임"], ["chg", "변화·소식"], ["how", "방법·한계"]] as const;
 
-export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }: { a: any; stats: any; ai: any; news: any[]; ev: Ev; texts: Texts; admin?: boolean }) {
+export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, versions = [] }: { a: any; stats: any; ai: any; news: any[]; ev: Ev; texts: Texts; admin?: boolean; versions?: any[] }) {
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("sum");
   const sampleTotal = s.sample?.total ?? 0;
   const langN = (code: string) => s.sample?.languages?.find((x: any) => x.code === code)?.n ?? 0;
@@ -64,6 +65,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin }:
             <a href={`https://store.steampowered.com/app/${a.app_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>스팀 상점 ↗</a>
           </div>
           {ai?.one_liner && <p className="one">{ai.one_liner}</p>}
+          <HistoryPicker currentId={a.id} items={versions} />
         </div>
       </div>
 

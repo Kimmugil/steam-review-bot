@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import HistoryPicker from "./HistoryPicker";
 import { RatingPill, Thumb } from "./ui";
 import { dateKo, num } from "@/lib/format";
 import type { Texts } from "@/lib/text-defs";
@@ -8,7 +9,7 @@ import type { Texts } from "@/lib/text-defs";
 const list = (x: unknown): string[] => (Array.isArray(x) ? x.map(String) : []);
 
 /** 예전 방식(구글 시트 시절)으로 만든 리포트. 모양이 다른 옛 자료를 있는 그대로, 방식이 달랐다는 안내와 함께 보여 줍니다. */
-export default function ReportLegacy({ a, texts: t }: { a: any; texts: Texts }) {
+export default function ReportLegacy({ a, texts: t, versions = [] }: { a: any; texts: Texts; versions?: any[] }) {
   const s = a.stats ?? {}, ai = a.ai ?? {}, n = a.news ?? {};
   const rows: any[] = Array.isArray(s.table_data_all) ? s.table_data_all.slice(0, 10) : [];
   return (
@@ -22,6 +23,7 @@ export default function ReportLegacy({ a, texts: t }: { a: any; texts: Texts }) 
           <div className="meta"><span>분석 {dateKo(a.finished_at, true)}</span>{s.collection_period && <span>수집 기간 {s.collection_period}</span>}{a.release_date && <span>출시 {String(a.release_date).slice(0, 10)}</span>}
             <a href={`https://store.steampowered.com/app/${a.app_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>스팀 상점 ↗</a></div>
           {ai.critic_one_liner && <p className="one">{ai.critic_one_liner}</p>}
+          <HistoryPicker currentId={a.id} items={versions} />
         </div>
       </div>
       <div className="kpi4">

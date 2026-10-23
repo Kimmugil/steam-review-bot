@@ -19,6 +19,12 @@ export async function lookupGame(appId: number): Promise<{ active: Row | null; l
   return { active: active ? plain(active as Row) : null, latest: latest ? plain(latest as Row) : null };
 }
 
+/** 같은 게임의 완료된 분석 기록 (최신순). 리포트 화면에서 지난 분석을 골라 볼 수 있게. */
+export async function listVersionsOfGame(appId: number): Promise<{ id: string; finished_at: string; method_version: number; all_desc: string | null }[]> {
+  return plain((await sql`select id, finished_at, method_version, all_desc from analyses
+    where app_id = ${appId} and status = 'done' and not hidden order by finished_at desc nulls last limit 50`) as unknown as { id: string; finished_at: string; method_version: number; all_desc: string | null }[]);
+}
+
 export async function getAnalysis(id: string): Promise<AnalysisRow | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const [row] = await sql`select * from analyses where id = ${id}`;

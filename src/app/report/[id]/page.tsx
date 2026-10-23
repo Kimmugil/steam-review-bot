@@ -4,7 +4,7 @@ import ProgressView from "@/components/ProgressView";
 import ReportLegacy from "@/components/ReportLegacy";
 import ReportV2 from "@/components/ReportV2";
 import { isAdmin } from "@/lib/auth";
-import { getAnalysis, getSamplesByNo, reapStuck } from "@/lib/repo";
+import { getAnalysis, getSamplesByNo, listVersionsOfGame, reapStuck } from "@/lib/repo";
 import { getTexts } from "@/lib/texts";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,8 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const texts = await getTexts();
 
   if (a.status !== "done") return <ProgressView a={a} />;
-  if (a.method_version === 1) return <ReportLegacy a={a} texts={texts} />;
+  const versions = await listVersionsOfGame(Number(a.app_id)).catch(() => []);
+  if (a.method_version === 1) return <ReportLegacy a={a} texts={texts} versions={versions} />;
 
   // AI가 근거로 가리킨 표본 번호의 원문만 불러옵니다 (화면으로 보내는 양을 줄이려고)
   const ai = a.ai;
@@ -32,5 +33,5 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const rows = await getSamplesByNo(id, [...cited]);
   const ev = Object.fromEntries(rows.map((r) => [r.n, { lang: r.lang, voted_up: r.voted_up, playtime_h: r.playtime_h, text: r.text }]));
 
-  return <ReportV2 a={a} stats={a.stats} ai={ai} news={a.news ?? []} ev={ev} texts={texts} admin={await isAdmin()} />;
+  return <ReportV2 a={a} stats={a.stats} ai={ai} news={a.news ?? []} ev={ev} texts={texts} admin={await isAdmin()} versions={versions} />;
 }
