@@ -57,21 +57,3 @@ export async function interpret(prompt: string): Promise<{ raw: AiRaw; usage: Ge
   }
   throw new GeminiError(`AI 응답 형식이 맞지 않았습니다 (${lastErr}). 잠시 뒤 다시 시도해 주세요.`);
 }
-
-/** 후속 질문 — 저장된 리포트의 해석·숫자·표본에 근거해 답합니다. */
-export async function answerQuestion(context: string, question: string): Promise<{ answer: string; usage: GeminiUsage }> {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) throw new GeminiError("GEMINI_API_KEY 가 설정되지 않았습니다.");
-  const prompt = `너는 게임 사업 분석가야. 아래 [리포트 자료]에 있는 내용만 근거로 팀원의 질문에 답해라.
-- 자료에 없으면 "리포트 자료에서는 확인하기 어렵습니다"라고 답해라. 지어내지 마라.
-- 숫자는 자료에 있는 값만 그대로 써라. 표본에 근거한 이야기는 "표본 중에서는"이라고 밝혀라.
-- 한국어로 4문장 이내, 마크다운 기호 없이. 리뷰를 인용할 때는 번호(R12)를 함께 적어라.
-
-[리포트 자료]
-${context}
-
-[질문]
-${question.slice(0, 500)}`;
-  const { text, usage } = await call({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } } }, key);
-  return { answer: text.replace(/\*\*/g, "").trim(), usage };
-}

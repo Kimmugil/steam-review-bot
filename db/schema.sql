@@ -69,16 +69,6 @@ create table if not exists review_samples (
 create index if not exists review_samples_analysis_idx on review_samples (analysis_id);
 create index if not exists review_samples_no_idx on review_samples (analysis_id, sample_no);
 
--- AI 후속 질문 기록
-create table if not exists qa_history (
-  id           bigserial primary key,
-  analysis_id  uuid not null references analyses(id) on delete cascade,
-  question     text not null,
-  answer       text not null,
-  asked_at     timestamptz not null default now()
-);
-create index if not exists qa_history_analysis_idx on qa_history (analysis_id);
-
 -- 화면 문구 (관리자 화면에서 고칠 수 있음)
 create table if not exists ui_texts (
   key          text primary key,
@@ -128,7 +118,7 @@ create table if not exists ai_usage (
   id             bigserial primary key,
   used_at        timestamptz not null default now(),
   analysis_id    uuid references analyses(id) on delete set null,
-  purpose        text not null,               -- analysis / qa
+  purpose        text not null,               -- analysis
   input_tokens   int,
   output_tokens  int
 );
@@ -151,3 +141,6 @@ begin
     execute format('alter table %I enable row level security', t);
   end loop;
 end $$;
+
+-- (이전 버전에 있던 AI 후속 질문 기록 표는 기능을 없애면서 지움)
+drop table if exists qa_history;

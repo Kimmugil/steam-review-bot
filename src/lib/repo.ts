@@ -140,16 +140,8 @@ export async function aiCallsThisMonth(): Promise<{ used: number; cap: number }>
   const cap = Number(c?.value);
   return { used: Number(u?.n ?? 0), cap: Number.isFinite(cap) && cap >= 0 ? cap : 300 };
 }
-export async function recordAi(analysisId: string | null, purpose: "analysis" | "qa", input: number | null, output: number | null) {
+export async function recordAi(analysisId: string | null, purpose: "analysis", input: number | null, output: number | null) {
   await sql`insert into ai_usage (analysis_id, purpose, input_tokens, output_tokens) values (${analysisId}, ${purpose}, ${input}, ${output})`;
-}
-
-// ───────────── 후속 질문 ─────────────
-export async function getQa(id: string): Promise<Row[]> {
-  return plain((await sql`select id, question, answer, asked_at from qa_history where analysis_id = ${id} order by id`) as unknown as Row[]);
-}
-export async function saveQa(id: string, question: string, answer: string) {
-  await sql`insert into qa_history (analysis_id, question, answer) values (${id}, ${question.slice(0, 500)}, ${answer})`;
 }
 
 // ───────────── 오래 멈춘 분석 정리 ─────────────

@@ -422,3 +422,22 @@ a.btn { display: inline-block; }
 .fold { margin-top: 26px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .fold > summary { cursor: pointer; padding: 12px 16px; font-weight: 600; }
 .fold > .in { padding: 4px 16px 16px; display: grid; gap: 12px; }
+
+/* ── 문구 관리: 한 묶음씩 보고, 왼쪽 미리보기·오른쪽 입력 ── */
+.txt-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.txt-tabs .chip { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.txt-tabs .chip[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.txt-tabs .dot { background: var(--warn); color: #fff; border-radius: 999px; font-size: 10.5px; padding: 0 6px; font-weight: 700; }
+.txt-bar { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.txt-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (min-width: 900px) { .txt-split { grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr); } .txt-mock { position: sticky; top: 64px; } }
+.txt-edit { display: grid; gap: 10px; }
+.txt-edit .txt-item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0; background: var(--surface); gap: 6px; }
+.txt-edit .txt-item.on { outline: 2px solid var(--warn); }
+.txt-edit .txt-item.dirty { border-color: var(--warn); }
+.txt-edit .head { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.txt-edit .where { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+.rte-bar { display: flex; margin-bottom: 4px; }
+.rte-box { min-height: 38px; max-height: 280px; overflow: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); line-height: 1.55; font-size: 14px; white-space: pre-wrap; }
+.rte-box:focus { outline: 2px solid var(--accent); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12.5px; cursor: pointer; justify-self: start; text-decoration: underline; }
