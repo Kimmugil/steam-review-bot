@@ -25,8 +25,8 @@ export const sql =
   (globalThis.__th_sql = postgres(connectionUrl(), {
     prepare: false,         // 풀러 환경에서 이름 붙은 prepared statement 는 쓰지 않음
     fetch_types: false, // 시작 때 DB 유형 목록을 따로 조회하지 않음 (풀러에서 불필요한 왕복)
-    max: 4,
-    idle_timeout: 10,       // 놀면 10초 뒤 닫아 풀러의 연결 자리를 돌려줌
+    max: 1,                 // 서버 인스턴스 하나당 연결 1개. 질의는 줄 세워 처리 (세션 풀러 총 한도가 15개라 여러 인스턴스가 4개씩 쓰면 금방 바닥남)
+    idle_timeout: 3,        // 놀면 3초 뒤 닫아 풀러의 연결 자리를 돌려줌
     max_lifetime: 600,      // 한 연결을 10분 넘게 쓰지 않음
     connect_timeout: 15,
     types: { bigint: postgres.BigInt },

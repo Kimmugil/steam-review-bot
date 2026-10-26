@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Modal, RatingPill, Thumb } from "./ui";
-import { dateKo, fill, pct1, tone } from "@/lib/format";
+import { dateKo, fill, noEmoji, pct1, tone } from "@/lib/format";
 import type { Texts } from "@/lib/text-defs";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -133,7 +133,7 @@ export default function HomeClient({ texts: t, data }: { texts: Texts; data: any
             </div>
             <div className="body">
               <div className="nm">{c.game_name}</div>
-              <div className="one">{c.one_liner ?? t.card_no_oneliner}</div>
+              <div className="one">{c.one_liner ? noEmoji(c.one_liner) : t.card_no_oneliner}</div>
               <div className="nums">
                 <span>{c.recent_label ?? t.card_recent_default}<b className={c.recent_rate != null ? "num" : "lbl"}>{c.recent_rate != null ? pct1(c.recent_rate) : (c.recent_desc ?? "-")}</b></span>
                 {c.runs > 1 && <span>{fill(t.card_runs, { n: String(c.runs) })}</span>}

@@ -374,3 +374,26 @@ a.btn { display: inline-block; }
 .steps2 li.on { color: var(--ink); font-weight: 600; }
 .steps2 li.done { color: var(--good); }
 .steps2 { padding: 0; }
+
+/* ── 리포트 그래프 ── */
+.chart-donut { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.chart-donut .legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; min-width: 160px; flex: 1; }
+.chart-donut .legend li { display: flex; align-items: center; gap: 8px; }
+.chart-donut .legend li span { flex: 1; }
+.chart-donut .legend i, .chart-pairs .legend2 i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; }
+.chart-dots .rowx { display: grid; grid-template-columns: minmax(90px, 160px) 1fr 56px; gap: 10px; align-items: center; padding: 5px 0; }
+.chart-dots .lbl { display: flex; flex-direction: column; line-height: 1.25; font-size: 13px; }
+.chart-dots .track { position: relative; height: 18px; background: var(--surface-2); border-radius: 9px; }
+.chart-dots .track s { position: absolute; top: 6px; height: 6px; border-radius: 3px; opacity: .35; }
+.chart-dots .track em { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; border: 2px solid var(--surface); }
+.chart-dots .track u { position: absolute; top: -2px; bottom: -2px; border-left: 2px dashed var(--muted); }
+.chart-dots .val { text-align: right; font-weight: 600; font-size: 13px; }
+.chart-dots .axis .track { background: none; height: 14px; }
+.chart-dots .axis .track span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--muted); }
+.chart-pairs .rowx { display: grid; grid-template-columns: minmax(90px, 160px) 1fr; gap: 10px; align-items: center; padding: 6px 0; }
+.chart-pairs .lbl { display: flex; flex-direction: column; line-height: 1.25; font-size: 13px; }
+.chart-pairs .bars { display: grid; gap: 3px; }
+.chart-pairs .bars > div { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.chart-pairs .bars i { display: block; height: 10px; border-radius: 5px; min-width: 2px; }
+.chart-pairs .legend2 { display: flex; gap: 14px; margin-bottom: 4px; }
+.grid2c { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }

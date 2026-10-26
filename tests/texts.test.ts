@@ -29,3 +29,12 @@ test("목록의 모든 문구가 화면 코드에서 실제로 쓰인다", () =>
   const unused = TEXT_DEFS.filter((t) => !dyn.test(t.key) && !new RegExp(String.raw`\bt\.${t.key}\b`).test(all)).map((t) => t.key);
   assert.deepEqual(unused, []);
 });
+
+import { noEmoji } from "../src/lib/format";
+import { stripEmoji } from "../src/lib/interpret";
+test("이모지는 AI 글과 화면 이름에서 모두 지워진다", () => {
+  assert.equal(stripEmoji("좋아요 👍 최고 🇰🇷"), "좋아요 최고 ");
+  assert.equal(noEmoji("🇺🇸 영어"), "영어");
+  assert.equal(noEmoji("🏰 서유럽 언어권"), "서유럽 언어권");
+  assert.equal(noEmoji("한국어 (ko) 1,234건"), "한국어 (ko) 1,234건");
+});

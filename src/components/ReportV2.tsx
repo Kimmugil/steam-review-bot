@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { Donut, PairBars, RateDots } from "./Charts";
 import HistoryPicker from "./HistoryPicker";
 import { Bullets, Rich } from "./Rich";
 import { Pill, PosNegBar, RatingPill, Thumb } from "./ui";
-import { ageKo, dateKo, fill, num, pct1, signed } from "@/lib/format";
+import { ageKo, dateKo, fill, noEmoji, num, pct1, signed } from "@/lib/format";
 import { langName } from "@/lib/config";
 import type { Texts } from "@/lib/text-defs";
 
@@ -56,6 +57,11 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
   const nz = noise != null ? noise.toFixed(1) : "";
   const pt = s.profile.playtime;
   const wl = s.window.label as string;
+  const topLangs: any[] = (s.languages ?? []).slice(0, 6);
+  const restShare = Math.max(0, 100 - topLangs.reduce((x: number, l: any) => x + l.share, 0));
+  const donutItems = [...topLangs.map((l: any) => ({ label: noEmoji(l.name), value: l.share })), ...(restShare >= 1 ? [{ label: t.chart_other, value: restShare }] : [])];
+  const row = (label: string, r: any, sub?: string) => ({ label, sub, rate: r?.rate ?? null, lo: r?.ci?.[0] ?? null, hi: r?.ci?.[1] ?? null });
+  const cmpRows = [row(t.chart_row_official, s.official), row(wl, s.recent), ...(s.previous ? [row(fill(t.chart_row_prev, { days: String(s.window.days) }), s.previous)] : [])];
   const N = (n: number) => fill(t.num_reviews, { n: num(n) });
   return (
     <div className="stack">
@@ -70,7 +76,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
             {a.release_date && <span>{fill(t.rp_release, { date: String(a.release_date).slice(0, 10) })}</span>}
             <a href={`https://store.steampowered.com/app/${a.app_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>{t.rp_store}</a>
           </div>
-          {ai?.one_liner && <p className="one">{ai.one_liner}</p>}
+          {ai?.one_liner && <p className="one">{noEmoji(ai.one_liner)}</p>}
           <HistoryPicker currentId={a.id} items={versions} label={t.hist_label} />
         </div>
       </div>
@@ -85,6 +91,18 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
             <KCard t={t} k={t.kpi_official} r={s.official} label={s.official.steam_label ?? s.official.label} sub={t.kpi_official_sub} />
             <KCard t={t} k={fill(t.kpi_recent, { label: wl })} r={s.recent} sub={s.delta_points != null ? <>{fill(t.kpi_delta, { days: String(s.window.days) })} <b className={s.delta_notable ? (s.delta_points >= 0 ? "up" : "down") : "flat"}>{signed(s.delta_points)}</b> {s.delta_notable ? t.kpi_delta_notable : t.kpi_delta_calm}</> : t.kpi_no_prev} />
             <KCard t={t} k={t.kpi_all} r={s.all} sub={t.kpi_all_sub} />
+          </div>
+
+          <div className="grid2c">
+            <div className="card">
+              <h3>{t.chart_donut_title}</h3>
+              <Donut items={donutItems} />
+            </div>
+            <div className="card">
+              <h3>{t.chart_cmp_title}</h3>
+              <RateDots refRate={s.official.rate} refLabel={t.chart_ref} rows={cmpRows} />
+              <p className="help">{t.chart_help}</p>
+            </div>
           </div>
 
           <div className="callout">
@@ -112,7 +130,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
             <>
               <div className="callout ai">
                 <h3>{t.ai_title} <span className="muted" style={{ fontWeight: 400 }}>· {t.ai_notice}</span></h3>
-                <p>{ai.headline}</p>
+                <p>{noEmoji(ai.headline)}</p>
               </div>
               <div className="sec-title" style={{ margin: "4px 0 0" }}><h2>{t.themes_title}</h2><span>{fill(t.themes_sub, { n: num(sampleTotal) })}</span></div>
               <div className="themes">
@@ -137,9 +155,9 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                   <div className="rvs">
                     {ai.quotes.map((q: any) => (
                       <div key={q.review_id} className="rv2">
-                        <div className="m"><span>{langName(q.language)}</span><span className={q.voted_up ? "pos-t" : "neg-t"}>{q.voted_up ? "👍" : "👎"}</span>{q.playtime_h != null && <span>{q.playtime_h}시간</span>}</div>
+                        <div className="m"><span>{langName(q.language)}</span><span className={q.voted_up ? "pos-t" : "neg-t"}>{q.voted_up ? t.ev_up : t.ev_down}</span>{q.playtime_h != null && <span>{q.playtime_h}시간</span>}</div>
                         {q.original}
-                        {q.korean && <div className="ko">🇰🇷 {q.korean} <span className="muted">{t.quotes_ai_tr}</span></div>}
+                        {q.korean && <div className="ko">{q.korean} <span className="muted">{t.quotes_ai_tr}</span></div>}
                       </div>
                     ))}
                   </div>
@@ -155,6 +173,13 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
       {tab === "lang" && (
         <div className="stack">
           <div className="callout warn"><h3>{t.lang_warn_title}</h3><p>{t.lang_notice}</p></div>
+          <div className="grid2c">
+            <div className="card"><h3>{t.chart_lang_share}</h3><Donut items={donutItems} /></div>
+            <div className="card"><h3>{t.chart_lang_rate}</h3>
+              <RateDots refRate={s.all?.rate ?? s.official.rate} refLabel={t.chart_lang_all}
+                rows={(s.languages as any[]).filter((l) => l.all.total >= 30).slice(0, 10).map((l) => row(noEmoji(l.name), l.all, N(l.all.total)))} />
+              <p className="help">{t.chart_lang_rate_help}</p></div>
+          </div>
           <div className="card">
             <h2>{t.lang_table_title}</h2>
             <div className="tbl-wrap">
@@ -163,7 +188,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                 <tbody>
                   {s.languages.slice(0, 14).map((l: any) => (
                     <tr key={l.code}>
-                      <td>{l.name}<div className="muted small">{N(l.all.total)}</div></td>
+                      <td>{noEmoji(l.name)}<div className="muted small">{N(l.all.total)}</div></td>
                       <td><div className="langbar"><div className="bar-track"><div className="bar-fill" style={{ width: `${Math.min(100, l.share)}%` }} /></div><span className="num">{l.share.toFixed(1)}%</span></div></td>
                       <td><Rate r={l.all} /> <RatingPill label={l.all.label} /></td>
                       <td>{l.window ? <><Rate r={l.window} /><div className="muted small">{N(l.window.total)}{!l.window.reliable ? ` · ${t.small_sample}` : ""}</div></> : <span className="muted">-</span>}</td>
@@ -183,7 +208,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                 <thead><tr><th>{t.grp_col_group}</th><th>{t.grp_col_langs}</th><th>{t.lang_col_share}</th><th>{t.lang_col_all}</th></tr></thead>
                 <tbody>
                   {s.groups.map((g: any) => (
-                    <tr key={g.group}><td>{g.group}</td><td className="small muted">{g.languages.join(", ")}</td><td className="num">{g.share.toFixed(1)}%</td><td><Rate r={g.all} /></td></tr>
+                    <tr key={g.group}><td>{noEmoji(g.group)}</td><td className="small muted">{g.languages.map(noEmoji).join(", ")}</td><td className="num">{g.share.toFixed(1)}%</td><td><Rate r={g.all} /></td></tr>
                   ))}
                 </tbody>
               </table>
@@ -195,7 +220,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
               <div className="grid2">
                 {ai.language_notes.map((n: any) => (
                   <div key={n.language_code} className="theme">
-                    <div className="top"><b>{n.name}</b><span className="share">{fill(t.note_basis, { n: String(n.sample_n) })}</span></div>
+                    <div className="top"><b>{noEmoji(n.name)}</b><span className="share">{fill(t.note_basis, { n: String(n.sample_n) })}</span></div>
                     <p>{n.summary}</p>
                     <Evidence t={t} ids={n.review_ids} ev={ev} />
                   </div>
@@ -213,6 +238,13 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
         <div className="stack">
           <div className="callout"><h3>{t.play_title}</h3>
             <p>{fill(t.play_body, { b1: String(pt.bounds[0]), b2: String(pt.bounds[1]), b3: String(pt.bounds[2]), n: num(pt.reviewers) })}</p></div>
+          <div className="grid2c">
+            <div className="card"><h3>{t.chart_play_share}</h3>
+              <PairBars aLabel={t.chart_play_a} bLabel={wl} rows={s.segments.map((g: any) => ({ label: g.label, sub: g.range, a: g.share_all, b: g.share_window }))} /></div>
+            <div className="card"><h3>{fill(t.chart_play_rate, { label: wl })}</h3>
+              <RateDots refRate={s.recent.rate} refLabel={wl} rows={s.segments.map((g: any) => row(g.label, g.window, g.range))} />
+              <p className="help">{t.chart_help}</p></div>
+          </div>
           <div className="card">
             <h2>{t.seg_title}</h2>
             <div className="tbl-wrap">
@@ -295,7 +327,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
             <h3>{fill(t.how_sample_title, { n: num(sampleTotal) })}</h3>
             <div className="tbl-wrap"><table>
               <thead><tr><th>{t.how_sample_col1}</th><th className="n">{t.how_sample_col2}</th><th className="n">{t.how_sample_col3}</th></tr></thead>
-              <tbody>{(s.sample?.languages ?? []).map((x: any) => <tr key={x.code}><td>{x.name}</td><td className="n num">{x.n}</td><td className="n num">{num(x.window_total)}</td></tr>)}</tbody>
+              <tbody>{(s.sample?.languages ?? []).map((x: any) => <tr key={x.code}><td>{noEmoji(x.name)}</td><td className="n num">{x.n}</td><td className="n num">{num(x.window_total)}</td></tr>)}</tbody>
             </table></div>
           </div>
           {ai && (

@@ -88,7 +88,7 @@ export function formatSample(samples: SampleReview[], defs: Pick<SegmentDef, "ke
     for (const r of rows) {
       const seg = segmentOfHours(r.playtime_h, defs);
       const segLabel = defs.find((x) => x.key === seg)?.label ?? "?";
-      blocks.push(`[R${r.n}] ${r.voted_up ? "👍" : "👎"} | ${r.playtime_h ?? "?"}시간(${segLabel}) | ${r.text.slice(0, SAMPLE.maxChars)}`);
+      blocks.push(`[R${r.n}] ${r.voted_up ? "추천" : "비추천"} | ${r.playtime_h ?? "?"}시간(${segLabel}) | ${r.text.slice(0, SAMPLE.maxChars)}`);
     }
   }
   return blocks.join("\n");
@@ -112,12 +112,12 @@ export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], sa
 - 원인을 추측하지 마라. "~했을 가능성도 있다", "~때문으로 보인다" 같은 문장은 쓰지 마라. 숫자가 보여 주는 사실과, 표본 리뷰에서 유저가 직접 언급한 이유(근거 번호가 있는 것)만 써라. 유저가 언급하지 않은 이유를 네가 만들어 붙이지 마라.
 - headline 과 one_liner 는 [통계]의 등급과 [코드가 찾아낸 눈에 띄는 사실]과 어긋나면 안 된다. 예를 들어 전체 등급이 '복합적'인데 "호평"이라고 쓰지 말고, 언어 간 격차가 있으면 headline 에서 그 사실을 먼저 짚어라. 최근 기간과 전체 기간의 평가가 다르면 둘 다 써라.
 - 이 분석은 국가가 아니라 '언어' 기준이다. "한국 유저", "미국 유저"가 아니라 "한국어 리뷰", "영어 리뷰"라고 써라.
-- 마크다운 기호(**, # 등)는 쓰지 마라. 문장은 한국어로.
+- 마크다운 기호(**, # 등)와 이모지·이모티콘은 어떤 항목에도 쓰지 마라. 문장은 한국어로.
 
 [분량] 각 summary 는 1~2문장(80자 안팎). themes 최대 8개, language_notes 는 표본이 8건 이상인 언어 중 표본이 많은 상위 6개까지, quotes 최대 6개. JSON 만 출력.
 
 [작성 항목]
-- one_liner: 한 줄 요약 (이모지 1개 포함, 60자 이내)
+- one_liner: 한 줄 요약 (60자 이내, 이모지 없이)
 - headline: 핵심 2~3문장
 - themes: 표본에서 보이는 주제 최대 8개 (label 짧게, polarity, summary 1~2문장, review_ids)
 - language_notes: 표본이 8건 이상인 언어마다 그 언어 리뷰의 특징 (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code는 아래 표본 제목의 언어 코드가 아니라 english, koreana 같은 스팀 코드)
@@ -166,7 +166,9 @@ const parseId = (x: unknown): number | null => {
   const m = String(x).match(/\d+/);
   return m ? Number(m[0]) : null;
 };
-const str = (x: unknown, max = 600) => String(x ?? "").replace(/\*\*/g, "").trim().slice(0, max);
+/** AI가 쓴 글에서 이모지(그림 문자)와 마크다운 강조를 지운다. 프롬프트로도 금지하지만 코드가 한 번 더 막는다. */
+export const stripEmoji = (x: string) => x.replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]/gu, "").replace(/ {2,}/g, " ");
+const str = (x: unknown, max = 600) => stripEmoji(String(x ?? "").replace(/\*\*/g, "")).trim().slice(0, max);
 
 /** AI 응답을 검증하고, 비중·성향을 근거 리뷰에서 코드가 계산한 값으로 바꿔 저장 형태로 만듭니다. */
 export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, segments: Pick<SegmentDef, "key" | "min" | "max">[], opts: { allowChangeNotes?: boolean } = {}): AiResult {

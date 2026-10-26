@@ -2,7 +2,7 @@
 import Link from "next/link";
 import HistoryPicker from "./HistoryPicker";
 import { RatingPill, Thumb } from "./ui";
-import { dateKo, fill, num } from "@/lib/format";
+import { dateKo, fill, noEmoji, num } from "@/lib/format";
 import type { Texts } from "@/lib/text-defs";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -44,7 +44,7 @@ export default function ReportLegacy({ a, texts: t, versions = [] }: { a: any; t
           <h3>{t.legacy_lang_title}</h3>
           <div className="tbl-wrap"><table>
             <thead><tr><th>언어</th><th className="n">리뷰 수</th><th className="n">비중</th><th className="n">긍정</th><th>평가</th></tr></thead>
-            <tbody>{rows.map((r, i) => <tr key={i}><td>{r.lang_with_flag}</td><td className="n num">{num(r.count)}</td><td className="n num">{r.ratio}</td><td className="n num">{r.pos_ratio}</td><td><RatingPill label={r.eval} /></td></tr>)}</tbody>
+            <tbody>{rows.map((r, i) => <tr key={i}><td>{noEmoji(r.lang_with_flag)}</td><td className="n num">{num(r.count)}</td><td className="n num">{r.ratio}</td><td className="n num">{r.pos_ratio}</td><td><RatingPill label={r.eval} /></td></tr>)}</tbody>
           </table></div>
         </div>
       )}

@@ -40,3 +40,6 @@ export const SIZE_LABEL = { tiny: "리뷰가 매우 적은 게임", small: "리�
 
 /** 리뷰가 쌓인 기간을 읽기 쉽게 (예: 약 1.5년, 40일) */
 export const ageKo = (days: number) => (days >= 365 ? `약 ${(days / 365).toFixed(1)}년` : `${days}일`);
+
+/** 그림 문자(이모지)를 지움. 예전에 저장된 리포트의 언어·언어권 이름에 붙은 깃발 등을 화면에서 걷어 낼 때 씀 */
+export const noEmoji = (x: unknown) => String(x ?? "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]/gu, "").replace(/\s{2,}/g, " ").trim();

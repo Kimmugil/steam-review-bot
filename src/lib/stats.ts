@@ -152,7 +152,7 @@ export async function collectStats(appId: number, info: GameInfo, onStep?: (s: s
   }));
   const languages: LangRow[] = codes.map((code, i) => {
     const a = langAll[i];
-    return a && a.total > 0 ? { code, name: langName(code), group: GROUP_MAP[code] ?? "🌐 기타", all: a, share: (100 * a.total) / sumAll,
+    return a && a.total > 0 ? { code, name: langName(code), group: GROUP_MAP[code] ?? "기타", all: a, share: (100 * a.total) / sumAll,
       window: winLang.get(code)?.w ?? null, prev: winLang.get(code)?.p ?? null } : null;
   }).filter((x): x is LangRow => x !== null).sort((a, b) => b.all.total - a.all.total);
 
