@@ -1,61 +1,48 @@
-/** 리포트용 간단한 그래프 (외부 라이브러리 없이 SVG·CSS로 그림). 색은 사이트 색 변수를 따라 어두운 화면에서도 보입니다. */
-const PALETTE = ["var(--accent)", "var(--cool)", "var(--good)", "var(--warn)", "var(--bad)", "#8a6bbf", "var(--muted)"];
+/** 리포트용 간단한 그래프 (외부 라이브러리 없이 CSS로 그림). 색은 사이트 색 변수를 따라 어두운 화면에서도 보입니다. */
 
-export type Slice = { label: string; value: number };
+export type RateRow = { label: string; sub?: string; pos: number; neg: number; note?: string };
 
-/** 도넛 그래프: 각 조각의 비율과 이름을 오른쪽 범례로 보여 줌 */
-export function Donut({ items, center }: { items: Slice[]; center?: string }) {
-  const total = items.reduce((s, x) => s + x.value, 0) || 1;
-  const R = 15.9155; // 둘레 100
-  let acc = 0;
+const pctOf = (r: { pos: number; neg: number }) => (r.pos + r.neg ? (100 * r.pos) / (r.pos + r.neg) : null);
+
+/** 긍정·부정 막대: 막대 전체가 100%, 초록이 긍정. 오른쪽에 긍정률 숫자. 세로선은 기준값 */
+export function RateBars({ rows, refRate }: { rows: RateRow[]; refRate?: number | null }) {
   return (
-    <div className="chart-donut">
-      <svg viewBox="0 0 42 42" width="150" height="150" role="img" aria-label={items.map((i) => `${i.label} ${((100 * i.value) / total).toFixed(0)}%`).join(", ")}>
-        <circle cx="21" cy="21" r={R} fill="none" stroke="var(--surface-2)" strokeWidth="6" />
-        {items.map((it, i) => {
-          const len = (100 * it.value) / total;
-          const el = <circle key={i} cx="21" cy="21" r={R} fill="none" stroke={PALETTE[i % PALETTE.length]} strokeWidth="6" strokeDasharray={`${Math.max(0, len - 0.4)} ${100 - Math.max(0, len - 0.4)}`} strokeDashoffset={25 - acc} />;
-          acc += len;
-          return el;
-        })}
-        {center && <text x="21" y="22.5" textAnchor="middle" fontSize="4.2" fill="var(--ink)" fontWeight="700">{center}</text>}
-      </svg>
-      <ul className="legend">
-        {items.map((it, i) => (
-          <li key={i}><i style={{ background: PALETTE[i % PALETTE.length] }} /><span>{it.label}</span><b className="num">{((100 * it.value) / total).toFixed(0)}%</b></li>
-        ))}
-      </ul>
+    <div className="chart-rate" role="img" aria-label={rows.map((r) => `${r.label} 긍정 ${pctOf(r)?.toFixed(1) ?? "-"}%`).join(", ")}>
+      {rows.map((r, i) => {
+        const p = pctOf(r);
+        return (
+          <div key={i} className="rowx">
+            <div className="lbl"><b>{r.label}</b>{r.sub && <span className="muted small">{r.sub}</span>}</div>
+            <div className="bar">
+              {p != null ? <><i className="g" style={{ width: `${p}%` }} /><i className="r" style={{ width: `${100 - p}%` }} /></> : <span className="muted small">-</span>}
+              {refRate != null && <u style={{ left: `${refRate}%` }} />}
+            </div>
+            <div className="val"><b className="num">{p != null ? `${p.toFixed(1)}%` : "-"}</b>{r.note && <span className="muted small">{r.note}</span>}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-export type RateRow = { label: string; sub?: string; rate: number | null; lo?: number | null; hi?: number | null; n?: number };
+export type LangRow = { name: string; share: number; pos: number; neg: number };
 
-/** 긍정률 점 그래프: 점은 긍정률, 가로 막대는 95% 범위. 점선은 기준값(예: 스팀 상점 전체 평가) */
-export function RateDots({ rows, refRate, refLabel }: { rows: RateRow[]; refRate?: number | null; refLabel?: string }) {
-  const ok = rows.filter((r) => r.rate != null);
-  if (!ok.length) return null;
-  const lows = ok.map((r) => r.lo ?? r.rate!), highs = ok.map((r) => r.hi ?? r.rate!);
-  if (refRate != null) { lows.push(refRate); highs.push(refRate); }
-  const min = Math.max(0, Math.floor((Math.min(...lows) - 4) / 5) * 5), max = Math.min(100, Math.ceil((Math.max(...highs) + 4) / 5) * 5);
-  const span = Math.max(10, max - min), at = (v: number) => `${(100 * (v - min)) / span}%`;
-  const color = (v: number) => (v >= 70 ? "var(--good)" : v >= 40 ? "var(--warn)" : "var(--bad)");
-  const ticks = [min, min + span / 2, min + span];
+/** 요약용 언어 한눈에: 왼쪽은 그 언어가 차지하는 비중, 오른쪽은 그 언어의 긍정·부정 비율 */
+export function LangOverview({ rows, shareLabel, rateLabel }: { rows: LangRow[]; shareLabel: string; rateLabel: string }) {
+  const max = Math.max(1, ...rows.map((r) => r.share));
   return (
-    <div className="chart-dots" role="img" aria-label={ok.map((r) => `${r.label} ${r.rate!.toFixed(1)}%`).join(", ")}>
-      {rows.map((r, i) => (
-        <div key={i} className="rowx">
-          <div className="lbl"><b>{r.label}</b>{r.sub && <span className="muted small">{r.sub}</span>}</div>
-          <div className="track">
-            {refRate != null && <u style={{ left: at(refRate) }} />}
-            {r.rate != null && r.lo != null && r.hi != null && <s style={{ left: at(r.lo), width: `${(100 * (r.hi - r.lo)) / span}%`, background: color(r.rate) }} />}
-            {r.rate != null && <em style={{ left: at(r.rate), background: color(r.rate) }} />}
+    <div className="chart-lang">
+      <div className="rowx head muted small"><span /><span>{shareLabel}</span><span>{rateLabel}</span></div>
+      {rows.map((r, i) => {
+        const p = pctOf(r);
+        return (
+          <div key={i} className="rowx">
+            <b>{r.name}</b>
+            <div className="share"><i style={{ width: `${(100 * r.share) / max}%` }} /><span className="num">{r.share.toFixed(0)}%</span></div>
+            <div className="bar">{p != null && <><i className="g" style={{ width: `${p}%` }} /><i className="r" style={{ width: `${100 - p}%` }} /></>}<em className="num">{p != null ? `${p.toFixed(0)}%` : "-"}</em></div>
           </div>
-          <div className="val num">{r.rate != null ? `${r.rate.toFixed(1)}%` : "-"}</div>
-        </div>
-      ))}
-      <div className="rowx axis"><div className="lbl" /><div className="track ticks">{ticks.map((v, i) => <span key={i} style={{ left: at(v) }}>{Math.round(v)}%</span>)}</div><div className="val" /></div>
-      {refRate != null && refLabel && <div className="muted small" style={{ marginTop: 4 }}>{refLabel} ({refRate.toFixed(1)}%)</div>}
+        );
+      })}
     </div>
   );
 }
