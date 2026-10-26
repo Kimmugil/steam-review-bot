@@ -76,7 +76,7 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
     await saveDone(id, {
       game: { name: info.name, headerImage: info.headerImage, releaseDate: releaseIso },
       period: { days: plan.days, start: plan.start, end: plan.end, label: plan.label, reason: plan.reason },
-      summary: { allDesc: stats.official.steam_label ?? stats.official.label, allTotal: stats.official.total, recentDesc: stats.recent.label, recentTotal: stats.recent.total, oneLiner: ai?.one_liner ?? null },
+      summary: { allDesc: stats.official.total >= 10 ? (stats.official.steam_label ?? stats.official.label) : stats.all.label, allTotal: stats.official.total >= 10 ? stats.official.total : stats.all.total, recentDesc: stats.recent.label, recentTotal: stats.recent.total, oneLiner: ai?.one_liner ?? null },
       stats: stats satisfies Stats, ai, news, samples: reviews,
     });
     lap("저장 완료");

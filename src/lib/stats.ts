@@ -181,7 +181,9 @@ export async function collectStats(appId: number, info: GameInfo, onStep?: (s: s
   }
 
   // 6) 안내문 — 숨기지 않고 화면에 그대로 보여 줌
-  if (official.rate != null && all.rate != null && Math.abs(official.rate - all.rate) >= 2)
+  if (official.total < 10 && all.total >= 30)
+    notes.push(`스팀 구매로 표시된 리뷰가 ${official.total}건뿐이라(무료 배포·외부 구매가 대부분인 게임) 스팀 상점 기준 평가는 의미가 없습니다. 스팀 밖 구매까지 포함한 전체(${all.total.toLocaleString()}건) 기준으로 봐 주세요.`);
+  else if (official.rate != null && all.rate != null && Math.abs(official.rate - all.rate) >= 2)
     notes.push(`스팀 상점 평가 기준(스팀 구매만) 긍정률은 ${official.rate.toFixed(1)}%, 스팀 밖 구매(키 등)까지 합치면 ${all.rate.toFixed(1)}%로 다릅니다.`);
   if (!plan.has_previous) notes.push("리뷰 기록이 짧아 비교할 직전 기간이 없습니다.");
   if (noise == null && plan.has_previous) notes.push(`이 게임의 평소 변동 폭을 알려면 리뷰 30건 이상인 과거 기간이 3개 이상 필요한데 ${used}개뿐이라, 변화는 3%p 이상일 때만 의미 있다고 봤습니다.`);
