@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { tone } from "@/lib/format";
 
 export const PAL = [["#2a4b5a", "#7a9a8a"], ["#4a3a5c", "#a07a9a"], ["#3b4a2c", "#9aa86a"], ["#5a3a2a", "#c9946a"], ["#2a3b5a", "#6a8ac9"], ["#4a2a3a", "#c96a8a"]];
@@ -25,10 +25,15 @@ export function Thumb({ appid, name, src, size }: { appid: number; name: string;
   );
 }
 
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
   return (
     <div className="modal-bg" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="mh"><h2>{title}</h2><button className="btn small" onClick={onClose}>닫기</button></div>
         {children}
       </div>

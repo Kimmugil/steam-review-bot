@@ -43,3 +43,18 @@ export const ageKo = (days: number) => (days >= 365 ? `약 ${(days / 365).toFixe
 
 /** 그림 문자(이모지)를 지움. 예전에 저장된 리포트의 언어·언어권 이름에 붙은 깃발 등을 화면에서 걷어 낼 때 씀 */
 export const noEmoji = (x: unknown) => String(x ?? "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]/gu, "").replace(/\s{2,}/g, " ").trim();
+
+/** 'YYYY-MM-DD' 에서 일수를 더하거나 뺀 날짜 */
+export function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** 비율의 95% 범위(윌슨). k건/n건 → [하한%, 상한%] */
+export function wilsonPct(k: number, n: number): [number, number] {
+  if (!n) return [0, 100];
+  const z = 1.96, p = k / n, d = 1 + (z * z) / n;
+  const c = p + (z * z) / (2 * n), m = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
+  return [Math.max(0, (100 * (c - m)) / d), Math.min(100, (100 * (c + m)) / d)];
+}

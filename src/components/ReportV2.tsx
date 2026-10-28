@@ -4,8 +4,8 @@ import { useState } from "react";
 import { LangOverview, PairBars, RateBars } from "./Charts";
 import HistoryPicker from "./HistoryPicker";
 import { Bullets, Rich } from "./Rich";
-import { RatingPill, Thumb } from "./ui";
-import { ageKo, dateKo, fill, noEmoji, num, pct1, signed } from "@/lib/format";
+import { Modal, RatingPill, Thumb } from "./ui";
+import { addDays, ageKo, dateKo, fill, noEmoji, num, pct1, signed, wilsonPct } from "@/lib/format";
 import { langName } from "@/lib/config";
 import type { Texts } from "@/lib/text-defs";
 
@@ -17,21 +17,39 @@ function Rate({ r }: { r: any }) {
   return <><b className="num">{pct1(r.rate)}</b> <span className="ci">({pct1(r.ci?.[0])}~{pct1(r.ci?.[1])})</span></>;
 }
 
-function Evidence({ ids, ev, t }: { ids: number[]; ev: Ev; t: Texts }) {
+function Rv({ r, t }: { r: { n: number; lang: string; voted_up: boolean; playtime_h: number | null; text: string }; t: Texts }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rv2">
+      <div className="m"><span>R{r.n}</span><span>{langName(r.lang)}</span><span className={r.voted_up ? "pos-t" : "neg-t"}>{r.voted_up ? t.ev_up : t.ev_down}</span>{r.playtime_h != null && <span>{r.playtime_h}시간</span>}</div>
+      <div className={`tx${open ? " open" : ""}`}>{r.text}</div>
+      {r.text.length > 260 && <button className="more" onClick={() => setOpen(!open)}>{open ? t.ev_less : t.ev_more}</button>}
+    </div>
+  );
+}
+
+/** 근거 리뷰는 아래로 길게 펼치지 않고 창으로 엽니다. 창 안에서만 스크롤되고, 추천/비추천만 골라 볼 수 있어요. */
+function Evidence({ ids, ev, t, topic }: { ids: number[]; ev: Ev; t: Texts; topic?: string }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState<"all" | "up" | "down">("all");
   const list = ids.map((n) => ({ n, ...ev[n] })).filter((x) => x.text);
   if (!list.length) return null;
+  const up = list.filter((x) => x.voted_up).length;
+  const shown = list.filter((x) => (f === "all" ? true : f === "up" ? x.voted_up : !x.voted_up));
   return (
-    <details className="ev">
-      <summary>{fill(t.ev_show, { label: t.ev_label, n: String(list.length) })}</summary>
-      <div className="rvs">
-        {list.map((r) => (
-          <div key={r.n} className="rv2">
-            <div className="m"><span>R{r.n}</span><span>{langName(r.lang)}</span><span className={r.voted_up ? "pos-t" : "neg-t"}>{r.voted_up ? t.ev_up : t.ev_down}</span>{r.playtime_h != null && <span>{r.playtime_h}시간</span>}</div>
-            {r.text}
+    <>
+      <button className="evbtn" onClick={() => setOpen(true)}>{fill(t.ev_show, { label: t.ev_label, n: String(list.length) })}</button>
+      {open && (
+        <Modal wide title={fill(t.ev_title, { label: t.ev_label, topic: topic ?? "" }).replace(/ · $/, "")} onClose={() => setOpen(false)}>
+          <div className="evfilter">
+            {([["all", fill(t.ev_filter_all, { n: String(list.length) })], ["up", fill(t.ev_filter_up, { n: String(up) })], ["down", fill(t.ev_filter_down, { n: String(list.length - up) })]] as const).map(([k, l]) => (
+              <button key={k} className="chip" aria-pressed={f === k} onClick={() => setF(k)}>{l}</button>
+            ))}
           </div>
-        ))}
-      </div>
-    </details>
+          <div className="evlist">{shown.map((r) => <Rv key={r.n} r={r} t={t} />)}</div>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -46,10 +64,11 @@ function Sec({ title, sub, lead, children }: { title: string; sub?: string; lead
   );
 }
 
-const TAB_KEYS = ["sum", "lang", "play", "chg", "how"] as const;
+const TAB_KEYS = ["sum", "lang", "play", "chg"] as const;
 
 export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, versions = [] }: { a: any; stats: any; ai: any; news: any[]; ev: Ev; texts: Texts; admin?: boolean; versions?: any[] }) {
   const [tab, setTab] = useState<(typeof TAB_KEYS)[number]>("sum");
+  const [showHow, setShowHow] = useState(false);
   const sampleTotal = s.sample?.total ?? 0;
   const langN = (code: string) => s.sample?.languages?.find((x: any) => x.code === code)?.n ?? 0;
   const noise: number | null = s.profile.noise_points;
@@ -58,6 +77,8 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
   const wl = s.window.label as string;
   const N = (n: number) => fill(t.num_reviews, { n: num(n) });
   const days = String(s.window.days);
+  const nowRange = fill(t.period_range, { start: s.window.start, end: s.window.end });
+  const prevRange = s.window.has_previous !== false && s.previous ? fill(t.period_range, { start: addDays(s.window.start, -s.window.days), end: s.window.start }) : "";
 
   // 스팀 구매로 표시된 리뷰가 거의 없는 게임(무료 배포 등)은 스팀 상점 기준 대신 전체 기준을 씁니다
   const offOk = s.official.total >= 10;
@@ -71,10 +92,10 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
 
   const Theme = ({ th }: { th: any }) => (
     <div className={`tl ${th.polarity === "positive" ? "pos" : th.polarity === "negative" ? "neg" : "mix"}`}>
-      <div className="nm"><b>{noEmoji(th.label)}</b><span className="num">{fill(t.theme_share, { n: String(sampleTotal), k: String(th.support), pct: (th.support_share * 100).toFixed(0) })}</span></div>
+      <div className="nm"><b>{noEmoji(th.label)}</b><span className="num">{(() => { const [lo, hi] = wilsonPct(th.support, sampleTotal); return fill(t.theme_share, { n: String(sampleTotal), k: String(th.support), pct: (th.support_share * 100).toFixed(0), lo: lo.toFixed(0), hi: hi.toFixed(0) }); })()}</span></div>
       <p>{noEmoji(th.summary)}</p>
       <div className="muted small">{fill(t.theme_rec, { pct: (th.pos_share * 100).toFixed(0) })}{th.polarity === "negative" && th.stance === "recommend" ? ` ${t.theme_rec_neg}` : th.polarity === "positive" && th.stance === "against" ? ` ${t.theme_rec_pos}` : ""}</div>
-      <Evidence t={t} ids={th.review_ids} ev={ev} />
+      <Evidence t={t} ids={th.review_ids} ev={ev} topic={noEmoji(th.label)} />
     </div>
   );
 
@@ -103,6 +124,8 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
 
       <div className="tabs" role="tablist">
         {TAB_KEYS.map((k) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t[`tab_${k}`]}</button>)}
+        <span className="spacer" />
+        <button className="howbtn" onClick={() => setShowHow(true)}>{t.tab_how}</button>
       </div>
 
       {tab === "sum" && (
@@ -113,7 +136,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                 <div className="t">{fill(t.kpi_recent, { label: wl })}</div>
                 <div className="big num">{s.recent.rate != null ? pct1(s.recent.rate) : "-"}</div>
                 <div style={{ marginTop: 6 }}><RatingPill label={s.recent.label} /></div>
-                <div className="s">{fill(t.stat_main_sub, { n: N(s.recent.total) })}</div>
+                <div className="s">{fill(t.stat_main_sub, { n: N(s.recent.total) })}<br />{nowRange}</div>
               </div>
               <div>
                 <div className="t">{baseTitle}</div>
@@ -124,7 +147,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
               <div>
                 <div className="t">{t.stat_delta_title}</div>
                 <div className="mid num">{s.delta_points != null ? <span className={s.delta_notable ? (s.delta_points >= 0 ? "up" : "down") : "flat"}>{signed(s.delta_points)}</span> : "-"}</div>
-                <div className="s">{s.delta_points != null ? `${fill(t.kpi_delta, { days })} ${s.delta_notable ? t.kpi_delta_notable : t.kpi_delta_calm}` : t.kpi_no_prev}</div>
+                <div className="s">{s.delta_points != null ? `${fill(t.kpi_delta, { days })} (${prevRange}) ${s.delta_notable ? t.kpi_delta_notable : t.kpi_delta_calm}` : t.kpi_no_prev}</div>
               </div>
             </div>
           </section>
@@ -137,6 +160,18 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
           ) : (
             <Sec title={t.ai_none_title}><p>{t.ai_none_body}</p></Sec>
           )}
+
+          <Sec title={t.basis_title} sub={t.basis_sub}>
+            <ul>
+              <li><Rich text={fill(t.basis_age, { age: ageKo(s.profile.history_days), n: num(s.profile.volume.d30), size: t[`size_${s.profile.size_class}`] ?? "" })} />{s.profile.genres?.length ? ` · ${s.profile.genres.join(", ")}` : ""}{s.profile.is_free ? ` · ${t.basis_free}` : ""}{s.profile.early_access ? ` · ${t.basis_ea}` : ""}</li>
+              <li><Rich text={fill(t.basis_window, { label: wl, n: num(s.window.reviews), reason: s.window.reason })} /> ({nowRange})</li>
+              <li><Rich text={noise != null ? fill(t.basis_noise, { noise: nz, n: String(s.profile.baseline_windows) }) : t.basis_noise_unknown} /></li>
+              <li>{pt ? fill(t.basis_playtime, { b1: String(pt.bounds[0]), b2: String(pt.bounds[1]), b3: String(pt.bounds[2]) }) : t.basis_playtime_none}</li>
+            </ul>
+            {s.data_notes?.length > 0 && (
+              <div className="callout warn" style={{ marginTop: 12 }}><h3>{t.notes_title}</h3><ul>{s.data_notes.map((n: string, i: number) => <li key={i}>{n}</li>)}</ul></div>
+            )}
+          </Sec>
 
           {s.highlights?.length > 0 && (
             <Sec title={t.highlights_title} sub={t.highlights_sub}>
@@ -151,8 +186,8 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
           <Sec title={t.chart_cmp_title}>
             <RateBars rows={[
               { label: offOk ? t.chart_row_official : t.chart_row_all, pos: base.pos, neg: base.neg, note: N(base.total) },
-              ...(s.previous ? [{ label: fill(t.chart_row_prev, { days }), pos: s.previous.pos, neg: s.previous.neg, note: N(s.previous.total) }] : []),
-              { label: wl, pos: s.recent.pos, neg: s.recent.neg, note: N(s.recent.total) },
+              ...(s.previous ? [{ label: fill(t.chart_row_prev, { days }), sub: prevRange, pos: s.previous.pos, neg: s.previous.neg, note: N(s.previous.total) }] : []),
+              { label: wl, sub: nowRange, pos: s.recent.pos, neg: s.recent.neg, note: N(s.recent.total) },
             ]} />
             <p className="help">{t.chart_bar_help}</p>
           </Sec>
@@ -177,6 +212,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
 
           {ai?.quotes?.length > 0 && (
             <Sec title={t.quotes_title} sub={t.quotes_sub}>
+              <p className="rulebox">{ai.quote_rule ? fill(t.quotes_rule, { rate: ai.quote_rule.rate != null ? ai.quote_rule.rate.toFixed(1) : "-", pos: String(ai.quote_rule.pos), neg: String(ai.quote_rule.neg) }) : t.quotes_rule_old}</p>
               <div className="rvs">
                 {ai.quotes.map((q: any) => (
                   <div key={q.review_id} className="rv2">
@@ -189,23 +225,6 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
             </Sec>
           )}
 
-          <details className="fold">
-            <summary>{t.basis_toggle}</summary>
-            <div className="in">
-              <div className="callout" style={{ margin: 0 }}>
-                <h3>{t.basis_title} <span className="muted" style={{ fontWeight: 400 }}>{t.basis_sub}</span></h3>
-                <ul>
-                  <li><Rich text={fill(t.basis_age, { age: ageKo(s.profile.history_days), n: num(s.profile.volume.d30), size: t[`size_${s.profile.size_class}`] ?? "" })} />{s.profile.genres?.length ? ` · ${s.profile.genres.join(", ")}` : ""}{s.profile.is_free ? ` · ${t.basis_free}` : ""}{s.profile.early_access ? ` · ${t.basis_ea}` : ""}</li>
-                  <li><Rich text={fill(t.basis_window, { label: wl, n: num(s.window.reviews), reason: s.window.reason })} /></li>
-                  <li><Rich text={noise != null ? fill(t.basis_noise, { noise: nz, n: String(s.profile.baseline_windows) }) : t.basis_noise_unknown} /></li>
-                  <li>{pt ? fill(t.basis_playtime, { b1: String(pt.bounds[0]), b2: String(pt.bounds[1]), b3: String(pt.bounds[2]) }) : t.basis_playtime_none}</li>
-                </ul>
-              </div>
-              {s.data_notes?.length > 0 && (
-                <div className="callout warn" style={{ margin: 0 }}><h3>{t.notes_title}</h3><ul>{s.data_notes.map((n: string, i: number) => <li key={i}>{n}</li>)}</ul></div>
-              )}
-            </div>
-          </details>
         </div>
       )}
 
@@ -230,7 +249,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                   <div key={n.language_code} className="tl">
                     <div className="nm"><b>{noEmoji(n.name)}</b><span>{fill(t.note_basis, { n: String(n.sample_n) })}</span></div>
                     <p>{noEmoji(n.summary)}</p>
-                    <Evidence t={t} ids={n.review_ids} ev={ev} />
+                    <Evidence t={t} ids={n.review_ids} ev={ev} topic={noEmoji(n.name)} />
                   </div>
                 ))}
               </div>
@@ -298,7 +317,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                       <div key={n.segment_key} className="tl">
                         <div className="nm"><b>{seg?.label} ({seg?.range})</b><span>{fill(t.note_basis, { n: String(n.sample_n) })}</span></div>
                         <p>{noEmoji(n.summary)}</p>
-                        <Evidence t={t} ids={n.review_ids} ev={ev} />
+                        <Evidence t={t} ids={n.review_ids} ev={ev} topic={seg?.label} />
                       </div>
                     );
                   })}
@@ -343,8 +362,8 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
           <Sec title={t.chg_title} lead={s.previous && s.delta_points != null ? fill(t.lead_chg, { days, prev: pct1(s.previous.rate).replace("%", ""), label: wl, now: pct1(s.recent.rate).replace("%", ""), diff: signed(s.delta_points) }) : undefined}>
             {s.previous ? (
               <RateBars rows={[
-                { label: fill(t.chg_prev, { days }), pos: s.previous.pos, neg: s.previous.neg, note: N(s.previous.total) },
-                { label: wl, pos: s.recent.pos, neg: s.recent.neg, note: N(s.recent.total) },
+                { label: fill(t.chg_prev, { days }), sub: prevRange, pos: s.previous.pos, neg: s.previous.neg, note: N(s.previous.total) },
+                { label: wl, sub: nowRange, pos: s.recent.pos, neg: s.recent.neg, note: N(s.recent.total) },
               ]} />
             ) : <p className="muted">{t.chg_none}</p>}
             {s.delta_points != null && <p className="help">{fill(t.chg_diff, { diff: signed(s.delta_points) })} {s.delta_notable ? (noise != null ? fill(t.chg_notable_n, { noise: nz }) : t.chg_notable) : (noise != null ? fill(t.chg_calm_n, { noise: nz }) : t.chg_calm)}</p>}
@@ -376,8 +395,9 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
         </div>
       )}
 
-      {tab === "how" && (
-        <div>
+      {showHow && (
+        <Modal wide title={t.tab_how} onClose={() => setShowHow(false)}>
+          <div className="evlist" style={{ maxHeight: "72vh" }}>
           <Sec title={t.how_title}>
             <Bullets text={fill(t.how_body, { method: s.sample?.method ?? "" })} />
           </Sec>
@@ -397,7 +417,8 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
             </Sec>
           )}
           <p className="muted small" style={{ marginTop: 24 }}>{fill(t.how_fetched, { time: dateKo(s.fetched_at, true), v: String(a.method_version) })}{admin ? ` · ID ${a.id}` : ""}</p>
-        </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

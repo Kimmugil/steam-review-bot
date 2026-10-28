@@ -441,3 +441,15 @@ a.btn { display: inline-block; }
 .rte-box { min-height: 38px; max-height: 280px; overflow: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); line-height: 1.55; font-size: 14px; white-space: pre-wrap; }
 .rte-box:focus { outline: 2px solid var(--accent); }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12.5px; cursor: pointer; justify-self: start; text-decoration: underline; }
+
+/* ── 근거 리뷰 창 · 방법 창 · 대표 리뷰 ── */
+.modal.wide { width: min(760px, 100%); }
+.modal .evlist { display: grid; gap: 8px; max-height: 62vh; overflow: auto; padding-right: 4px; margin-top: 8px; }
+.rv2 .tx { white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.rv2 .tx.open { display: block; }
+.rv2 .more { background: none; border: 0; padding: 0; margin-top: 4px; color: var(--accent); font-size: 12px; cursor: pointer; }
+.evbtn { background: var(--accent-soft); color: var(--accent); border: 0; border-radius: 999px; padding: 4px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+.evfilter { display: flex; gap: 6px; margin-top: 6px; }
+.tabs .spacer { flex: 1; }
+.tabs .howbtn { color: var(--accent); font-size: 13px; }
+.rulebox { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; line-height: 1.5; }

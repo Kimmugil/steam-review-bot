@@ -103,6 +103,7 @@ export type AiResult = {
   change_notes: { text: string; review_ids: number[] }[];
   news_notes: { title: string; summary: string }[];
   quotes: { review_id: number; language: string; voted_up: boolean; playtime_h: number | null; original: string; korean: string }[];
+  quote_rule?: { rate: number | null; pos: number; neg: number };   // 대표 리뷰를 고른 조건 (예전 분석에는 없음)
   caveats: string[];
   model: string;
   dropped: { unknown_ids: number; empty_themes: number };   // 검증에서 걸러낸 것(투명성)

@@ -67,7 +67,7 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
       await setStep(id, "ai");
       const { raw, usage } = await interpret(buildPrompt(info.name, stats, news, reviews));
       await recordAi(id, "analysis", usage.input, usage.output);
-      ai = finalizeAi(raw, reviews, MODEL, stats.segments, { allowChangeNotes: mayInterpretChange(stats) });
+      ai = finalizeAi(raw, reviews, MODEL, stats.segments, { allowChangeNotes: mayInterpretChange(stats), recentRate: stats.recent.rate });
       lap(`AI 해석 완료 (주제 ${ai.themes.length}개, 걸러낸 근거 번호 ${ai.dropped.unknown_ids}개)`);
     }
 

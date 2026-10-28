@@ -186,7 +186,7 @@ test("구간 겹침 빼기와 언어권 묶기", () => {
 });
 
 function samples(): SampleReview[] {
-  const mk = (n: number, lang: string, up: boolean, h: number): SampleReview => ({ n, rid: String(1000 + n), lang, voted_up: up, playtime_h: h, text: `리뷰 ${n}`, ts: n });
+  const mk = (n: number, lang: string, up: boolean, h: number): SampleReview => ({ n, rid: String(1000 + n), lang, voted_up: up, playtime_h: h, text: `리뷰 ${n}: ${"가".repeat(45)}`, ts: n });
   return [mk(1, "koreana", true, 1), mk(2, "koreana", true, 5), mk(3, "koreana", false, 60), mk(4, "english", false, 80), mk(5, "english", false, 90),
     mk(6, "english", true, 3), mk(7, "english", false, 100), mk(8, "english", false, 120), mk(9, "english", true, 20), mk(10, "english", false, 70),
     mk(11, "english", true, 15), mk(12, "english", true, 30)];   // 영어 9건(8건 이상), 한국어 3건
@@ -215,7 +215,7 @@ test("AI 검증: 없는 번호는 걸러내고, 주제 성격은 AI 것을 쓰�
   assert.equal(ai.dropped.empty_themes, 3);                                        // 근거 부족 주제 2 + 근거 번호가 없는 변화 문장 1
   assert.ok(ai.dropped.unknown_ids >= 3);
   assert.equal(ai.quotes.length, 2);
-  assert.equal(ai.quotes.find((q) => q.review_id === 4)!.original, "리뷰 4");      // 원문은 AI가 아니라 DB 표본에서
+  assert.ok(ai.quotes.find((q) => q.review_id === 4)!.original.startsWith("리뷰 4:"));      // 원문은 AI가 아니라 DB 표본에서
   assert.equal(ai.quotes.find((q) => q.review_id === 1)!.korean, "");              // 한국어 리뷰는 번역 불필요
   assert.deepEqual(ai.language_notes.map((n) => n.language_code), ["english"]);    // 표본 8건 미만 언어(한국어 3건)는 제외
   assert.deepEqual(ai.language_notes[0].review_ids, [4]);                          // 다른 언어 번호(R1)는 걸러짐
@@ -275,4 +275,19 @@ test("뉴스 정리·App ID·출시일·한국 날짜", () => {
   assert.equal(kstDay(new Date("2026-10-22T15:30:00Z")), "2026-10-23");           // UTC 15:30 = KST 다음날 00:30
   assert.equal(kstDay(new Date("2026-10-22T14:59:00Z")), "2026-10-22");
   assert.equal(shuffle([1, 2, 3], () => 0).length, 3);
+});
+
+test("대표 리뷰: 추천·부정을 이 기간 실제 긍정률에 맞추고, 같은 언어는 최대 2건, 짧은 글은 뺀다", () => {
+  const mk = (n: number, lang: string, up: boolean, len = 60): SampleReview => ({ n, rid: String(n), lang, voted_up: up, playtime_h: 10, text: "x".repeat(len), ts: n });
+  const s: SampleReview[] = [mk(1, "english", false), mk(2, "english", false), mk(3, "english", false), mk(4, "english", true), mk(5, "english", true),
+    mk(6, "german", true), mk(7, "german", true), mk(8, "french", true), mk(9, "french", true), mk(10, "russian", true), mk(11, "russian", true), mk(12, "polish", true, 10)];
+  const raw = baseRaw();
+  raw.quotes = s.map((r) => ({ review_id: `R${r.n}`, korean: "번역" }));   // AI가 부정 리뷰를 앞쪽에 몰아서 고른 경우
+  const ai = finalizeAi(raw, s, "m", segmentDefs([10, 40, 100]), { recentRate: 80 });
+  assert.equal(ai.quotes.length, 6);
+  assert.equal(ai.quotes.filter((q) => !q.voted_up).length, 1);                     // 6건 중 80% = 추천 5·비추천 1
+  assert.equal(ai.quote_rule!.pos, 5); assert.equal(ai.quote_rule!.neg, 1);
+  const byLang = new Map<string, number>(); for (const q of ai.quotes) byLang.set(q.language, (byLang.get(q.language) ?? 0) + 1);
+  assert.ok([...byLang.values()].every((n) => n <= 2));
+  assert.ok(!ai.quotes.some((q) => q.review_id === 12));                             // 너무 짧은 글(10자)은 제외
 });
