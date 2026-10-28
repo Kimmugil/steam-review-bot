@@ -77,6 +77,7 @@ export default function HomeClient({ texts: t, data }: { texts: Texts; data: any
       <section className="card hero">
         <h1>{t.home_title}</h1>
         <p>{t.home_desc}</p>
+        <p className="muted small" style={{ marginTop: -4 }}>{t.home_scope}</p>
         <form className="reqbox" onSubmit={submit}>
           <input type="text" name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.home_placeholder} aria-label={t.home_placeholder} autoComplete="off" />
           <button className="btn primary" disabled={busy}>{busy ? t.home_btn_busy : t.home_btn}</button>

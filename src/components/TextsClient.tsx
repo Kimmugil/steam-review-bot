@@ -96,6 +96,7 @@ export default function TextsClient({ texts, saved }: { texts: Texts; saved: str
   const [orig, setOrig] = useState<Texts>(texts);
   const [done, setDone] = useState<Set<string>>(new Set(saved));
   const [msg, setMsg] = useState("");
+  const [err, setErr] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [group, setGroup] = useState(TEXT_GROUPS[0]);
   const [active, setActive] = useState<string | null>(null);
@@ -113,9 +114,16 @@ export default function TextsClient({ texts, saved }: { texts: Texts; saved: str
     setBusy(true);
     try {
       const d = new Set(done), o = { ...orig };
-      for (const k of dirty) { await post(k, false, vals[k]); d.add(k); o[k] = vals[k]; }
-      setDone(d); setOrig(o); setMsg(`${dirty.length}개 문구를 저장했어요. 사이트에 바로 반영돼요.`); router.refresh();
-    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+      const failed: string[] = [];
+      let ok = 0;
+      for (const k of dirty) {
+        try { await post(k, false, vals[k]); d.add(k); o[k] = vals[k]; ok++; }
+        catch (e) { failed.push(`${TEXT_DEFS.find((t) => t.key === k)?.label ?? k}: ${(e as Error).message}`); }
+      }
+      setDone(d); setOrig(o); setErr(failed);
+      setMsg(ok ? `${ok}개 문구를 저장했어요. 사이트에 반영돼요(최대 1분).` : "");
+      if (ok) router.refresh();
+    } finally { setBusy(false); }
   }
   async function reset(key: string) {
     setBusy(true);
@@ -140,6 +148,9 @@ export default function TextsClient({ texts, saved }: { texts: Texts; saved: str
           return <button key={g} role="tab" aria-selected={g === group} className="chip" onClick={() => { setGroup(g); setActive(null); }}>{g.replace(/^\d+\.\s*/, "")}{n > 0 && <span className="dot" aria-label={`고친 문구 ${n}개`}>{n}</span>}</button>;
         })}
       </div>
+      {err.length > 0 && (
+        <div className="notice err" role="alert"><b>저장하지 못한 문구가 있어요</b><ul style={{ margin: "6px 0 0 18px" }}>{err.map((e, i) => <li key={i}>{e}</li>)}</ul></div>
+      )}
       <div className="txt-bar">
         <span className="muted small">{dirty.length ? `아직 저장하지 않은 문구 ${dirty.length}개` : "저장할 변경이 없어요"}</span>
         <button className="btn primary" disabled={!dirty.length || busy} onClick={saveAll}>{busy ? "저장 중…" : `변경한 문구 모두 저장${dirty.length ? ` (${dirty.length})` : ""}`}</button>

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     await sql`delete from ui_texts where key = ${key}`;
   } else {
     const v = String(value ?? "").trim();
-    if (!v || v.length > 600) return NextResponse.json({ error: "문구는 1~600자로 입력해 주세요." }, { status: 400 });
+    if (!v || v.length > 4000) return NextResponse.json({ error: v ? "문구가 너무 길어요. 4000자 이내로 줄여 주세요." : "빈 문구는 저장할 수 없어요. 기본 문구로 되돌리려면 '기본 문구로 되돌리기'를 눌러 주세요." }, { status: 400 });
     await sql`insert into ui_texts (key, value) values (${key}, ${v}) on conflict (key) do update set value = excluded.value, updated_at = now()`;
   }
   revalidateTag("ui-texts");
