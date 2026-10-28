@@ -453,3 +453,9 @@ a.btn { display: inline-block; }
 .tabs .spacer { flex: 1; }
 .tabs .howbtn { color: var(--accent); font-size: 13px; }
 .rulebox { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; line-height: 1.5; }
+
+/* 홈 맨 위 상자: 설명 글이 왼쪽 위에 쏠려 보이지 않게 가운데 정렬 */
+.card.hero { text-align: center; justify-items: center; padding-block: 28px; }
+.card.hero p { margin-inline: auto; max-width: 68ch; line-height: 1.65; }
+.card.hero .reqbox, .card.hero .res { width: min(100%, 860px); text-align: left; }
+.card.hero .quota { justify-content: center; }
