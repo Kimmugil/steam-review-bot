@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Modal, RatingPill, Thumb } from "./ui";
-import { dateKo, fill, noEmoji, pct1, tone } from "@/lib/format";
+import { ageKo, dateKo, fill, noEmoji, pct1, tone } from "@/lib/format";
 import type { Texts } from "@/lib/text-defs";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -151,7 +151,16 @@ export default function HomeClient({ texts: t, data }: { texts: Texts; data: any
             <Thumb appid={Number(dlg.a.app_id)} name={dlg.a.game_name} src={dlg.a.header_image} size="s" />
             <div><b>{dlg.a.game_name}</b><div className="muted small">{fill(t.card_date, { date: dateKo(dlg.a.finished_at, true) })} · <RatingPill label={dlg.a.all_desc} /></div></div>
           </div>
-          <p>{fill(t.dlg_exists_body, { date: dateKo(dlg.a.finished_at) })}</p>
+          {(() => {
+            const days = Math.max(0, Math.floor((Date.now() - new Date(dlg.a.finished_at).getTime()) / 86400000));
+            const stale = days >= 14;
+            return (
+              <>
+                <p>{fill(t.dlg_exists_body, { date: dateKo(dlg.a.finished_at), ago: days === 0 ? "오늘" : `${ageKo(days)} 전` })}</p>
+                <p className={`notice ${stale ? "warn" : "ok"}`} style={{ marginTop: 10, marginBottom: 0 }}>{stale ? t.dlg_exists_stale : t.dlg_exists_fresh}</p>
+              </>
+            );
+          })()}
           <div className="row" style={{ marginTop: 16, justifyContent: "flex-end" }}>
             <button className="btn" disabled={busy} onClick={() => { const h = dlg.hit; setDlg(null); request(h.appid, h, true); }}>{t.dlg_exists_new}</button>
             <Link className="btn primary" href={`/report/${dlg.a.id}`}>{t.dlg_exists_view}</Link>

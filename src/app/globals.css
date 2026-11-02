@@ -459,3 +459,8 @@ a.btn { display: inline-block; }
 .card.hero p { margin-inline: auto; max-width: 68ch; line-height: 1.65; }
 .card.hero .reqbox, .card.hero .res { width: min(100%, 860px); text-align: left; }
 .card.hero .quota { justify-content: center; }
+
+/* 홈 맨 위 안내글: 낱말 중간에서 줄이 바뀌지 않게, 가로 폭을 넓게 */
+.card.hero p { word-break: keep-all; max-width: none; text-wrap: pretty; }
+.card.hero p.small { font-size: 12.5px; }
+.notice.ok { border-color: var(--good); background: var(--good-soft); }
