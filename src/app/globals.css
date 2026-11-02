@@ -464,3 +464,71 @@ a.btn { display: inline-block; }
 .card.hero p { word-break: keep-all; max-width: none; text-wrap: pretty; }
 .card.hero p.small { font-size: 12.5px; }
 .notice.ok { border-color: var(--good); background: var(--good-soft); }
+
+/* ── 리포트 개편: 결론 한 덩어리, 행 표(이름 | 고정 폭 막대 | 설명), 주제 한 줄, ⓘ 설명 ── */
+.aibox { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 16px; border-radius: 0 10px 10px 0; color: var(--ink); }
+.aibox .lab { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 700; color: var(--accent); margin-bottom: 2px; letter-spacing: .02em; }
+.aibox p { margin: 0; }
+.info { position: relative; display: inline-block; vertical-align: middle; }
+.info > button { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--muted); background: none; color: var(--muted); font: italic 700 11px/1 var(--font); padding: 0; display: grid; place-items: center; cursor: pointer; }
+.info > button:hover, .info > button[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.info .pop { position: absolute; left: -8px; top: 26px; z-index: 40; width: min(380px, 82vw); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.2); font-size: 13px; line-height: 1.6; font-weight: 400; color: var(--ink); text-align: left; display: grid; gap: 6px; letter-spacing: 0; }
+.info .pop.wide { width: min(560px, 86vw); }
+.info .pop > b:first-child { font-size: 13px; color: var(--accent); }
+.info .pop ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.info .pop p { margin: 0; }
+
+.verdict2 { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 800px) { .verdict2 { grid-template-columns: minmax(0, 1fr); gap: 14px; } }
+.verdict2 .t { font-size: 13px; color: var(--muted); margin-bottom: 2px; }
+.verdict2 .big { font-size: 46px; font-weight: 800; line-height: 1.08; }
+.verdict2 .s { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.verdict2 .headline { font-size: 16.5px; line-height: 1.65; }
+.cmpline { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 12px; font-size: 13.5px; align-items: center; }
+.cmpline em { font-style: normal; color: var(--muted); font-size: 12.5px; }
+.cmpline b { font-size: 15px; }
+.dchip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: var(--surface-2); }
+.dchip.up { background: var(--good-soft); color: var(--good); } .dchip.down { background: var(--bad-soft); color: var(--bad); }
+.dchip em { color: inherit; opacity: .8; }
+.basisline { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+
+/* 행 표: 이름 | 긍정·부정 막대 | 설명 (언어·플레이타임·변화 공통) */
+.rtable { display: grid; }
+.rt-row { display: grid; grid-template-columns: minmax(130px, 180px) 296px minmax(0, 1fr); gap: 8px 20px; align-items: start; padding: 11px 6px; border-bottom: 1px solid var(--line); }
+.rtable.nonote .rt-row { grid-template-columns: minmax(130px, 220px) 296px; }
+.rt-row:last-child { border-bottom: 0; }
+.rt-row.focus { background: var(--warn-soft); border-radius: 8px; border-bottom-color: transparent; }
+.rt-name { display: flex; flex-direction: column; line-height: 1.3; font-size: 14.5px; }
+.rt-name .flag { align-self: flex-start; font-style: normal; font-size: 11px; font-weight: 700; background: var(--warn); color: #fff; border-radius: 4px; padding: 0 6px; margin: 3px 0 1px; }
+.rt-bar { display: grid; grid-template-columns: 200px 86px; gap: 10px; align-items: center; min-height: 34px; }
+.rt-bar .bar { position: relative; display: flex; height: 20px; border-radius: 6px; background: var(--surface-2); }
+.rt-bar .bar i.g { background: var(--good); opacity: .85; border-radius: 6px 0 0 6px; } .rt-bar .bar i.r { background: var(--bad); opacity: .75; border-radius: 0 6px 6px 0; }
+.rt-bar .bar u { position: absolute; top: -3px; bottom: -3px; border-left: 2px dashed var(--ink); opacity: .7; }
+.rt-bar .val { display: flex; flex-direction: column; line-height: 1.2; font-size: 15px; }
+.rt-note { font-size: 14px; line-height: 1.6; display: grid; gap: 2px; justify-items: start; }
+.rt-note .rt-meta { margin-top: 2px; }
+@media (max-width: 900px) { .rt-row, .rtable.nonote .rt-row { grid-template-columns: minmax(0, 1fr); } .rt-bar { grid-template-columns: minmax(0, 1fr) 86px; } }
+
+/* 주제: 이름 + 비중 막대 / 설명 / 추천 비율 + 근거 */
+.thm { padding: 10px 0 10px 14px; border-left: 4px solid var(--line); margin-bottom: 12px; }
+.thm.pos { border-left-color: var(--good); } .thm.neg { border-left-color: var(--bad); } .thm.mix { border-left-color: var(--warn); }
+.thm-h { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.thm-h b { font-size: 15px; }
+.thm .shr { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.thm .trk { width: 70px; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: inline-block; }
+.thm .trk i { display: block; height: 100%; background: var(--cool); border-radius: 4px; }
+.thm .shr em { font-style: normal; font-weight: 700; font-size: 14px; min-width: 34px; text-align: right; }
+.thm p { margin: 3px 0 4px; line-height: 1.6; font-size: 14px; }
+.thm-f { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.thm-f .evbtn { margin-top: 0; }
+
+/* 대표 리뷰: 번역을 먼저, 원문은 접기 */
+.qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; }
+.qcard { border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 8px; padding: 9px 12px; background: var(--surface); font-size: 13.5px; }
+.qcard.pos { border-left-color: var(--good); } .qcard.neg { border-left-color: var(--bad); }
+.qcard .m { font-size: 11.5px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
+.qcard .qtx { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.6; white-space: pre-wrap; }
+.qcard .orig { margin-top: 4px; font-size: 12.5px; }
+.qcard .orig summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+.qcard .orig div { margin-top: 4px; color: var(--muted); white-space: pre-wrap; }
+.chart-pairs { max-width: 640px; }

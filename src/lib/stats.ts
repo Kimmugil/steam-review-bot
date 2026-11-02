@@ -2,7 +2,7 @@ import { GROUP_MAP, LANG_MAP, langName } from "./config";
 import { collectBaseline, collectPlaytimeCdf, collectSegmentRates, collectVolume, inferHistoryDays, noiseFromWindows, planWindow, segmentBounds, segmentDefs, sizeClass, type WindowPlan } from "./profile";
 import { deltaPoints, makeRate, notableChange, twoPropZ, type Rate } from "./rating";
 import { countRate, getOfficial, SteamError, type GameInfo } from "./steam";
-import type { GroupRow, LangRow, SegmentRow, Stats } from "./types";
+import type { GroupRow, LangOutlier, LangRow, SegmentRow, Stats } from "./types";
 
 export type { WindowPlan };
 
@@ -46,6 +46,26 @@ export function allocateSamples(
 }
 
 /**
+ * 다른 언어들의 합계와 긍정률이 크게 다른 언어를 찾습니다. 비중이 작아도 포함합니다(비중이 작아서 놓치던 경우가 있었음).
+ * 기준: 건수 100건 이상, 나머지 언어 합계와 15%p 이상 차이, 우연이 아닐 것(z 2.58 이상). 가장 큰 3개까지.
+ */
+export function findLangOutliers(languages: LangRow[], all: Rate): LangOutlier[] {
+  const out: LangOutlier[] = [];
+  const big = languages.filter((l) => l.all.rate != null && l.all.total >= 100);
+  for (const l of big) {
+    // 기준값: 다른 언어들 긍정률의 중앙값(다른 이상한 언어나 큰 언어 하나에 끌려가지 않게). 다른 언어가 3개 미만이면 나머지 합계를 씀
+    const others = big.filter((o) => o.code !== l.code).map((o) => o.all.rate as number).sort((a, b) => a - b);
+    const rest = makeRate(languages.reduce((a, o) => a + (o.code === l.code ? 0 : o.all.pos), 0), languages.reduce((a, o) => a + (o.code === l.code ? 0 : o.all.neg), 0));
+    const base = others.length >= 3 ? (others.length % 2 ? others[(others.length - 1) / 2] : (others[others.length / 2 - 1] + others[others.length / 2]) / 2) : rest.rate;
+    if (base == null || rest.total < 100) continue;
+    const diff = (l.all.rate as number) - base;
+    if (Math.abs(diff) >= 15 && Math.abs(twoPropZ(l.all, rest)) >= 2.58)
+      out.push({ code: l.code, name: l.name, rate: l.all.rate as number, rest_rate: base, diff, share: l.share, total: l.all.total, pos: l.all.pos });
+  }
+  return out.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 3);
+}
+
+/**
  * 숫자에서 눈에 띄는 사실을 코드가 찾습니다. 모든 기준은 '표본 크기로 우연이 아닐 것' + '그 게임이 평소 흔들리는 폭보다 클 것'.
  * (고정 숫자만 쓰면, 평소 변동이 큰 게임에서는 사소한 일을, 작은 게임에서는 중요한 일을 놓칩니다)
  */
@@ -71,6 +91,9 @@ export function findHighlights(s: Pick<Stats, "languages" | "recent" | "all" | "
     if ((hi.all.rate ?? 0) - (lo.all.rate ?? 0) >= 15 && Math.abs(twoPropZ(hi.all, lo.all)) >= 1.96)
       out.push(`언어 간 격차가 큽니다: ${hi.name} 리뷰 긍정률 ${hi.all.rate!.toFixed(1)}%(비중 ${hi.share.toFixed(0)}%) vs ${lo.name} ${lo.all.rate!.toFixed(1)}%(비중 ${lo.share.toFixed(0)}%). 전체 평가는 비중이 큰 언어의 평가에 크게 좌우됩니다.`);
   }
+
+  for (const o of findLangOutliers(s.languages, s.all))
+    out.push(`${o.name} 리뷰의 긍정률이 ${o.rate.toFixed(1)}%로, 다른 언어들의 중간값(${o.rest_rate.toFixed(1)}%)보다 ${Math.abs(o.diff).toFixed(1)}%p ${o.diff < 0 ? "낮습니다" : "높습니다"} (비중 ${o.share.toFixed(0)}%, ${o.total.toLocaleString()}건). 비중이 작아도 평소와 크게 다른 언어라 이유를 리뷰에서 찾아볼 가치가 있습니다.`);
 
   if (s.recent.reliable && s.all.reliable && s.recent.rate != null && s.all.rate != null) {
     const d = s.recent.rate - s.all.rate;
@@ -208,5 +231,6 @@ export async function collectStats(appId: number, info: GameInfo, onStep?: (s: s
     sample: { total: 0, languages: [], method: "" }, highlights: [], data_notes: notes,
   };
   stats.highlights = findHighlights(stats);
+  stats.outliers = findLangOutliers(languages, all);
   return { stats, plan };
 }

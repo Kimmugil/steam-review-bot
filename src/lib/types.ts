@@ -52,9 +52,12 @@ export type WindowInfo = {
   reviews: number;           // 분석 기간 리뷰 수
 };
 
+/** 다른 언어들과 긍정률이 크게 다른 언어 (비중이 작아도 포함) */
+export type LangOutlier = { code: string; name: string; rate: number; rest_rate: number; diff: number; share: number; total: number; pos: number };
+
 export type SampleInfo = {
   total: number;
-  languages: { code: string; name: string; n: number; window_total: number }[];
+  languages: { code: string; name: string; n: number; window_total: number; scope?: "window" | "all" }[];   // scope all: 분석 기간 리뷰가 적어 전체 기간에서 뽑음
   method: string;            // 표본을 뽑은 방법(화면에 그대로 보여 줌)
 };
 
@@ -74,6 +77,7 @@ export type Stats = {
   groups: GroupRow[];
   segments: SegmentRow[];
   sample: SampleInfo;
+  outliers?: LangOutlier[];                            // 주목할 언어 (예전 분석에는 없음)
   highlights: string[];                                // 코드가 숫자에서 찾아낸 눈에 띄는 사실 (AI가 쓴 문장이 아님)
   data_notes: string[];                                // 수집 한계·누락 (숨기지 않고 화면에 표시)
 };
@@ -98,7 +102,7 @@ export type AiResult = {
   one_liner: string;
   headline: string;
   themes: { label: string; polarity: "positive" | "negative" | "mixed"; stance: "recommend" | "against" | "split"; summary: string; support: number; support_share: number; pos_share: number; review_ids: number[] }[];
-  language_notes: { language_code: string; name: string; summary: string; sample_n: number; review_ids: number[] }[];
+  language_notes: { language_code: string; name: string; summary: string; sample_n: number; review_ids: number[]; focus?: boolean }[];
   segment_notes: { segment_key: SegmentKey; summary: string; sample_n: number; review_ids: number[] }[];
   change_notes: { text: string; review_ids: number[] }[];
   news_notes: { title: string; summary: string }[];

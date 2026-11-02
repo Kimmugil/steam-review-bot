@@ -25,25 +25,41 @@ const clean = (s: string) => s.replace(/\u0000/g, "").replace(/\s+/g, " ").trim(
 export async function collectSample(
   appId: number, plan: WindowPlan, windowTotals: { code: string; total: number; pos: number }[], notes: string[],
   rng: () => number = Math.random,
+  focus: { code: string; pos: number; total: number }[] = [],
 ): Promise<{ reviews: SampleReview[]; info: SampleInfo }> {
-  const alloc = allocateSamples(windowTotals, SAMPLE.target, { min: SAMPLE.minPerLanguage, max: SAMPLE.maxPerLanguage, maxLanguages: SAMPLE.maxLanguages });
-  const span = plan.endTs - plan.startTs;
+  // 기본 배분 + 주목 언어(다른 언어와 긍정률이 크게 다른 언어)는 이유를 읽을 수 있게 더 뽑는다.
+  // 분석 기간에 그 언어 리뷰가 적으면(비중이 작은 언어는 기간 통계가 아예 없을 수 있음) 전체 기간에서 뽑는다.
+  type Plan = { code: string; n: number; scope: "window" | "all"; pos: number; total: number };
+  const alloc: Plan[] = allocateSamples(windowTotals, SAMPLE.target, { min: SAMPLE.minPerLanguage, max: SAMPLE.maxPerLanguage, maxLanguages: SAMPLE.maxLanguages })
+    .map((a) => { const w = windowTotals.find((x) => x.code === a.code)!; return { code: a.code, n: a.n, scope: "window" as const, pos: w.pos, total: w.total }; });
+  for (const f of focus) {
+    const i = alloc.findIndex((x) => x.code === f.code);
+    const w = windowTotals.find((x) => x.code === f.code);
+    const entry: Plan = w && w.total >= SAMPLE.focusMin * 2
+      ? { code: f.code, n: Math.min(SAMPLE.focusMin, w.total), scope: "window", pos: w.pos, total: w.total }
+      : { code: f.code, n: Math.min(SAMPLE.focusMin, f.total), scope: "all", pos: f.pos, total: f.total };
+    if (i < 0) alloc.push(entry);
+    else if (entry.scope === "all" || entry.n > alloc[i].n) alloc[i] = entry;
+  }
   const seen = new Set<string>();
   const out: Omit<SampleReview, "n">[] = [];
   const perLang: SampleInfo["languages"] = [];
   let failed = 0;
 
-  await Promise.all(alloc.map(async ({ code, n }) => {
-    const w = windowTotals.find((x) => x.code === code)!;
+  await Promise.all(alloc.map(async ({ code, n, scope, pos, total }) => {
+    const w = { pos, total };
+    const slices = scope === "window" ? SAMPLE.slices : 1;
+    const lo = scope === "window" ? plan.startTs : 0;
+    const rangeSpan = plan.endTs - lo;
     // 긍정/부정 몫: 그 언어의 실제 분석 기간 비율대로 (표본이 실제보다 비판적이거나 호의적으로 치우치지 않게)
     const posQuota = Math.min(n, Math.max(0, Math.round((n * w.pos) / Math.max(1, w.total))));
     const quotas: [1 | 2, number][] = [[1, posQuota], [2, n - posQuota]];
     const picked: RawReview[] = [];
     await Promise.all(quotas.filter(([, q]) => q > 0).map(async ([reviewType, quota]) => {
-      const perSlice = Math.ceil(quota / SAMPLE.slices);
-      const pages = await Promise.all(Array.from({ length: SAMPLE.slices }, async (_, k) => {
-        const startTs = Math.floor(plan.startTs + (span * k) / SAMPLE.slices);
-        const endTs = Math.floor(plan.startTs + (span * (k + 1)) / SAMPLE.slices);
+      const perSlice = Math.ceil(quota / slices);
+      const pages = await Promise.all(Array.from({ length: slices }, async (_, k) => {
+        const startTs = Math.floor(lo + (rangeSpan * k) / slices);
+        const endTs = Math.floor(lo + (rangeSpan * (k + 1)) / slices);
         try {
           return (await getReviewPage({ appId, languages: [code], purchaseType: 1, reviewType, startTs, endTs, perPage: 100 }, `표본 ${code}/${reviewType === 1 ? "긍정" : "부정"}#${k + 1}`)).reviews;
         } catch (e) {
@@ -73,7 +89,7 @@ export async function collectSample(
       });
       taken++;
     }
-    perLang.push({ code, name: langName(code), n: taken, window_total: w.total });
+    perLang.push({ code, name: langName(code), n: taken, window_total: windowTotals.find((x) => x.code === code)?.total ?? 0, scope });
   }));
 
   if (failed > 0) notes.push(`리뷰 표본을 모으는 요청 ${failed}건이 실패해 일부 언어·기간의 표본이 적을 수 있습니다.`);
@@ -85,7 +101,7 @@ export async function collectSample(
     reviews,
     info: {
       total: reviews.length, languages: perLang,
-      method: `분석 기간(${plan.label}) 안의 리뷰를 시간 순 5구간으로 나눠 구간마다 무작위로 뽑았습니다. 리뷰가 많은 언어 최대 ${SAMPLE.maxLanguages}개(한국어 포함)를 기간 리뷰 수 비중대로 배분했고, 각 언어 안에서는 긍정·부정을 그 언어의 실제 비율대로 나눠 뽑았습니다. 너무 짧은 글(영어 등 20자, 한·중·일·태 8자 미만)은 해석할 수 없어 먼저 제외했습니다.`,
+      method: `분석 기간(${plan.label}) 안의 리뷰를 시간 순 5구간으로 나눠 구간마다 무작위로 뽑았습니다. 리뷰가 많은 언어 최대 ${SAMPLE.maxLanguages}개(한국어 포함)를 기간 리뷰 수 비중대로 배분했고, 각 언어 안에서는 긍정·부정을 그 언어의 실제 비율대로 나눠 뽑았습니다. 너무 짧은 글(영어 등 20자, 한·중·일·태 8자 미만)은 해석할 수 없어 먼저 제외했습니다.${focus.length ? " 다른 언어와 긍정률이 크게 다른 언어는 이유를 읽을 수 있도록 더 많이 뽑았고, 분석 기간에 그 언어 리뷰가 적으면 전체 기간에서 뽑았습니다." : ""}`,
     },
   };
 }

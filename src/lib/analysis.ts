@@ -49,7 +49,7 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
     // 4) 리뷰 표본
     await setStep(id, "reviews");
     const windowTotals = stats.languages.filter((l) => l.window).map((l) => ({ code: l.code, total: l.window!.total, pos: l.window!.pos }));
-    const { reviews, info: sampleInfo } = await collectSample(row.app_id, plan, windowTotals, stats.data_notes);
+    const { reviews, info: sampleInfo } = await collectSample(row.app_id, plan, windowTotals, stats.data_notes, Math.random, (stats.outliers ?? []).map((o) => ({ code: o.code, pos: o.pos, total: o.total })));
     stats.sample = sampleInfo;
     lap(`표본 ${reviews.length}건 (${sampleInfo.languages.length}개 언어)`);
     if (reviews.length) {
@@ -67,7 +67,7 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
       await setStep(id, "ai");
       const { raw, usage } = await interpret(buildPrompt(info.name, stats, news, reviews));
       await recordAi(id, "analysis", usage.input, usage.output);
-      ai = finalizeAi(raw, reviews, MODEL, stats.segments, { allowChangeNotes: mayInterpretChange(stats), recentRate: stats.recent.rate });
+      ai = finalizeAi(raw, reviews, MODEL, stats.segments, { allowChangeNotes: mayInterpretChange(stats), recentRate: stats.recent.rate, focusCodes: (stats.outliers ?? []).map((o) => o.code) });
       lap(`AI 해석 완료 (주제 ${ai.themes.length}개, 걸러낸 근거 번호 ${ai.dropped.unknown_ids}개)`);
     }
 

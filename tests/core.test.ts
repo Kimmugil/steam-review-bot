@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ratingLabel, makeRate, wilson, significantChange, steamScoreLabel, notableChange } from "../src/lib/rating";
-import { allocateSamples, minusRate, buildGroups, findHighlights, typicalVolume } from "../src/lib/stats";
+import { allocateSamples, minusRate, buildGroups, findHighlights, findLangOutliers, typicalVolume } from "../src/lib/stats";
 import { inferHistoryDays, planWindow, noiseFromWindows, niceBound, quantileHours, segmentBounds, segmentDefs, segmentOfHours } from "../src/lib/profile";
 import { minChars } from "../src/lib/config";
 import { shuffle } from "../src/lib/sample";
@@ -290,4 +290,14 @@ test("대표 리뷰: 추천·부정을 이 기간 실제 긍정률에 맞추고,
   const byLang = new Map<string, number>(); for (const q of ai.quotes) byLang.set(q.language, (byLang.get(q.language) ?? 0) + 1);
   assert.ok([...byLang.values()].every((n) => n <= 2));
   assert.ok(!ai.quotes.some((q) => q.review_id === 12));                             // 너무 짧은 글(10자)은 제외
+});
+
+test("눈에 띄는 언어: 비중이 작아도(4%) 나머지와 크게 다르면 찾는다", () => {
+  const lang = (code: string, pos: number, neg: number) => ({ code, name: code, group: "g", all: makeRate(pos, neg), share: 0, window: null, prev: null }) as never;
+  const rows = [lang("english", 10000, 4000), lang("german", 800, 200), lang("french", 780, 220), lang("russian", 700, 300), lang("schinese", 300, 700), lang("small", 20, 5)];
+  const all = makeRate(10000 + 800 + 780 + 700 + 300 + 20, 4000 + 200 + 220 + 300 + 700 + 5);
+  const out = findLangOutliers(rows, all);
+  assert.deepEqual(out.map((o) => o.code), ["schinese"]);
+  assert.ok(out[0].diff < -30);
+  assert.deepEqual(findLangOutliers([lang("a", 700, 300), lang("b", 720, 280)], makeRate(1420, 580)), []);
 });

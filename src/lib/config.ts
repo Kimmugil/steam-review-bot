@@ -75,6 +75,7 @@ export const METHOD_VERSION = 2;
 export const SAMPLE = {
   target: 450,          // 전체 목표 건수
   minPerLanguage: 10,
+  focusMin: 30,         // 평소와 크게 다른 언어(주목 언어)는 이유를 읽을 수 있게 최소 이만큼 뽑음
   maxPerLanguage: 70,
   maxLanguages: 12,     // 표본을 뽑을 언어 수 (비중 큰 순, 한국어는 항상 포함)
   slices: 5,            // 분석 기간을 시간 순으로 5등분해서 고르게 뽑음 (최근 하루에 쏠리지 않게)

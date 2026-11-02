@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 /** 리포트용 간단한 그래프 (외부 라이브러리 없이 CSS로 그림). 색은 사이트 색 변수를 따라 어두운 화면에서도 보입니다. */
 
 export type RateRow = { label: string; sub?: string; pos: number; neg: number; note?: string };
@@ -64,6 +66,36 @@ export function PairBars({ rows, aLabel, bLabel }: { rows: PairRow[]; aLabel: st
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+export type RtRow = { key: string; label: string; sub?: string; pos: number; neg: number; note?: ReactNode; flag?: string };
+
+/**
+ * 한 줄에 '이름 | 긍정·부정 막대(고정 폭) | 설명'을 놓는 표. 언어·플레이타임·변화 비교가 모두 이 틀을 씁니다.
+ * 막대는 항상 같은 폭·같은 눈금이라 줄끼리 바로 비교되고, 설명이 같은 줄 오른쪽에 있어 눈이 덜 움직입니다.
+ */
+export function RateTable({ rows, refRate }: { rows: RtRow[]; refRate?: number | null }) {
+  const withNote = rows.some((r) => r.note != null);
+  return (
+    <div className={`rtable${withNote ? "" : " nonote"}`} role="table" aria-label={rows.map((r) => `${r.label} 긍정 ${pctOf(r)?.toFixed(1) ?? "-"}%`).join(", ")}>
+      {rows.map((r) => {
+        const p = pctOf(r);
+        return (
+          <div key={r.key} className={`rt-row${r.flag ? " focus" : ""}`} role="row">
+            <div className="rt-name"><b>{r.label}</b>{r.flag && <em className="flag">{r.flag}</em>}{r.sub && <span className="muted small">{r.sub}</span>}</div>
+            <div className="rt-bar">
+              <div className="bar">
+                {p != null ? <><i className="g" style={{ width: `${p}%` }} /><i className="r" style={{ width: `${100 - p}%` }} /></> : <span className="muted small">-</span>}
+                {refRate != null && <u style={{ left: `${refRate}%` }} />}
+              </div>
+              <div className="val"><b className="num">{p != null ? `${p.toFixed(1)}%` : "-"}</b><span className="muted small num">{(r.pos + r.neg).toLocaleString("ko-KR")}건</span></div>
+            </div>
+            {withNote && <div className="rt-note">{r.note}</div>}
+          </div>
+        );
+      })}
     </div>
   );
 }

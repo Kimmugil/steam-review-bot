@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { LangOverview, PairBars, RateBars } from "./Charts";
+import { PairBars, RateTable } from "./Charts";
+import { Info } from "./Info";
 import HistoryPicker from "./HistoryPicker";
 import { Bullets, Rich } from "./Rich";
 import { Modal, RatingPill, Thumb } from "./ui";
@@ -54,10 +55,10 @@ function Evidence({ ids, ev, t, topic }: { ids: number[]; ev: Ev; t: Texts; topi
 }
 
 /** 읽기 흐름의 한 덩어리: 제목 + (있으면) 한 줄 요약 + 내용. 박스 없이 구분선으로만 나눔 */
-function Sec({ title, sub, lead, children }: { title: string; sub?: string; lead?: React.ReactNode; children: React.ReactNode }) {
+function Sec({ title, sub, lead, info, children }: { title: string; sub?: string; lead?: React.ReactNode; info?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="rsec">
-      <h2>{title}{sub && <span className="muted" style={{ fontSize: 13, fontWeight: 400, marginLeft: 8 }}>{sub}</span>}</h2>
+      <h2>{title}{sub && <span className="muted" style={{ fontSize: 13, fontWeight: 400, marginLeft: 8 }}>{sub}</span>}{info && <span style={{ marginLeft: 8 }}>{info}</span>}</h2>
       {lead && <p className="lead">{lead}</p>}
       {children}
     </section>
@@ -90,14 +91,24 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
   const themes: any[] = ai?.themes ?? [];
   const themePos = themes.filter((x) => x.polarity === "positive"), themeNeg = themes.filter((x) => x.polarity === "negative"), themeMix = themes.filter((x) => x.polarity !== "positive" && x.polarity !== "negative");
 
-  const Theme = ({ th }: { th: any }) => (
-    <div className={`tl ${th.polarity === "positive" ? "pos" : th.polarity === "negative" ? "neg" : "mix"}`}>
-      <div className="nm"><b>{noEmoji(th.label)}</b><span className="num">{(() => { const [lo, hi] = wilsonPct(th.support, sampleTotal); return fill(t.theme_share, { n: String(sampleTotal), k: String(th.support), pct: (th.support_share * 100).toFixed(0), lo: lo.toFixed(0), hi: hi.toFixed(0) }); })()}</span></div>
-      <p>{noEmoji(th.summary)}</p>
-      <div className="muted small">{fill(t.theme_rec, { pct: (th.pos_share * 100).toFixed(0) })}{th.polarity === "negative" && th.stance === "recommend" ? ` ${t.theme_rec_neg}` : th.polarity === "positive" && th.stance === "against" ? ` ${t.theme_rec_pos}` : ""}</div>
-      <Evidence t={t} ids={th.review_ids} ev={ev} topic={noEmoji(th.label)} />
-    </div>
-  );
+  const maxShare = Math.max(0.01, ...themes.map((x) => x.support_share));
+  const Theme = ({ th }: { th: any }) => {
+    const [lo, hi] = wilsonPct(th.support, sampleTotal);
+    const tip = fill(t.theme_share, { n: String(sampleTotal), k: String(th.support), pct: (th.support_share * 100).toFixed(0), lo: lo.toFixed(0), hi: hi.toFixed(0) });
+    return (
+      <div className={`thm ${th.polarity === "positive" ? "pos" : th.polarity === "negative" ? "neg" : "mix"}`}>
+        <div className="thm-h">
+          <b>{noEmoji(th.label)}</b>
+          <span className="shr" title={tip}><span className="trk"><i style={{ width: `${(100 * th.support_share) / maxShare}%` }} /></span><em className="num">{(th.support_share * 100).toFixed(0)}%</em></span>
+        </div>
+        <p>{noEmoji(th.summary)}</p>
+        <div className="thm-f">
+          <span className="muted small">{fill(t.theme_rec, { pct: (th.pos_share * 100).toFixed(0) })}{th.polarity === "negative" && th.stance === "recommend" ? ` ${t.theme_rec_neg}` : th.polarity === "positive" && th.stance === "against" ? ` ${t.theme_rec_pos}` : ""}</span>
+          <Evidence t={t} ids={th.review_ids} ev={ev} topic={noEmoji(th.label)} />
+        </div>
+      </div>
+    );
+  };
 
   const bestWorst = <T,>(list: T[], get: (x: T) => number) => {
     const sorted = [...list].sort((x, y) => get(y) - get(x));
@@ -131,47 +142,49 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
       {tab === "sum" && (
         <div>
           <section className="rsec">
-            <div className="verdict">
-              <div>
+            <div className="verdict2">
+              <div className="vmain">
                 <div className="t">{fill(t.kpi_recent, { label: wl })}</div>
                 <div className="big num">{s.recent.rate != null ? pct1(s.recent.rate) : "-"}</div>
                 <div style={{ marginTop: 6 }}><RatingPill label={s.recent.label} /></div>
                 <div className="s">{fill(t.stat_main_sub, { n: N(s.recent.total) })}<br />{nowRange}</div>
               </div>
-              <div>
-                <div className="t">{baseTitle}</div>
-                <div className="mid num">{base.rate != null ? pct1(base.rate) : "-"}</div>
-                <div style={{ marginTop: 6 }}><RatingPill label={offOk ? (s.official.steam_label ?? s.official.label) : s.all.label} /></div>
-                <div className="s">{N(base.total)}{offOk ? ` · ${t.kpi_official_sub}` : ` · ${t.stat_all_note}`}</div>
-              </div>
-              <div>
-                <div className="t">{t.stat_delta_title}</div>
-                <div className="mid num">{s.delta_points != null ? <span className={s.delta_notable ? (s.delta_points >= 0 ? "up" : "down") : "flat"}>{signed(s.delta_points)}</span> : "-"}</div>
-                <div className="s">{s.delta_points != null ? `${fill(t.kpi_delta, { days })} (${prevRange}) ${s.delta_notable ? t.kpi_delta_notable : t.kpi_delta_calm}` : t.kpi_no_prev}</div>
+              <div className="vside">
+                {ai ? (
+                  <div className="aibox">
+                    <span className="lab">{t.ai_title}<Info title={t.ai_title}><p>{t.ai_notice}</p></Info></span>
+                    <p className="headline">{noEmoji(ai.headline)}</p>
+                  </div>
+                ) : (
+                  <div className="aibox"><span className="lab">{t.ai_none_title}</span><p>{t.ai_none_body}</p></div>
+                )}
+                <div className="cmpline">
+                  <span><em>{baseTitle}</em> <b className="num">{base.rate != null ? pct1(base.rate) : "-"}</b> <span className="muted small">{N(base.total)}{offOk ? ` · ${t.kpi_official_sub}` : ` · ${t.stat_all_note}`}</span></span>
+                  {s.previous && <span><em>{fill(t.chart_row_prev, { days })}</em> <b className="num">{s.previous.rate != null ? pct1(s.previous.rate) : "-"}</b> <span className="muted small">{N(s.previous.total)}</span></span>}
+                  {!s.previous && <span className="muted small">{t.kpi_no_prev}</span>}
+                  <span className={`dchip ${s.delta_points != null ? (s.delta_notable ? (s.delta_points >= 0 ? "up" : "down") : "flat") : "flat"}`}>
+                    <em>{t.stat_delta_title}</em> <b className="num">{s.delta_points != null ? signed(s.delta_points) : "-"}</b>
+                    {s.delta_points != null && <Info title={fill(t.kpi_delta, { days })}><p>{prevRange}</p><p>{s.delta_notable ? t.kpi_delta_notable : t.kpi_delta_calm}</p></Info>}
+                  </span>
+                </div>
+                <div className="basisline">
+                  <span className="muted small">{t.basis_title}: {wl} · {t[`size_${s.profile.size_class}`] ?? ""}{noise != null ? ` · ±${nz}%p` : ""}</span>
+                  <Info wide title={t.basis_title}>
+                    <p className="muted small">{t.basis_sub}</p>
+                    <ul>
+                      <li><Rich text={fill(t.basis_age, { age: ageKo(s.profile.history_days), n: num(s.profile.volume.d30), size: t[`size_${s.profile.size_class}`] ?? "" })} />{s.profile.genres?.length ? ` · ${s.profile.genres.join(", ")}` : ""}{s.profile.is_free ? ` · ${t.basis_free}` : ""}{s.profile.early_access ? ` · ${t.basis_ea}` : ""}</li>
+                      <li><Rich text={fill(t.basis_window, { label: wl, n: num(s.window.reviews), reason: s.window.reason })} /> ({nowRange})</li>
+                      <li><Rich text={noise != null ? fill(t.basis_noise, { noise: nz, n: String(s.profile.baseline_windows) }) : t.basis_noise_unknown} /></li>
+                      <li>{pt ? fill(t.basis_playtime, { b1: String(pt.bounds[0]), b2: String(pt.bounds[1]), b3: String(pt.bounds[2]) }) : t.basis_playtime_none}</li>
+                    </ul>
+                  </Info>
+                </div>
               </div>
             </div>
-          </section>
-
-          {ai ? (
-            <Sec title={t.ai_title}>
-              <p className="headline">{noEmoji(ai.headline)}</p>
-              <p className="help">{t.ai_notice}</p>
-            </Sec>
-          ) : (
-            <Sec title={t.ai_none_title}><p>{t.ai_none_body}</p></Sec>
-          )}
-
-          <Sec title={t.basis_title} sub={t.basis_sub}>
-            <ul>
-              <li><Rich text={fill(t.basis_age, { age: ageKo(s.profile.history_days), n: num(s.profile.volume.d30), size: t[`size_${s.profile.size_class}`] ?? "" })} />{s.profile.genres?.length ? ` · ${s.profile.genres.join(", ")}` : ""}{s.profile.is_free ? ` · ${t.basis_free}` : ""}{s.profile.early_access ? ` · ${t.basis_ea}` : ""}</li>
-              <li><Rich text={fill(t.basis_window, { label: wl, n: num(s.window.reviews), reason: s.window.reason })} /> ({nowRange})</li>
-              <li><Rich text={noise != null ? fill(t.basis_noise, { noise: nz, n: String(s.profile.baseline_windows) }) : t.basis_noise_unknown} /></li>
-              <li>{pt ? fill(t.basis_playtime, { b1: String(pt.bounds[0]), b2: String(pt.bounds[1]), b3: String(pt.bounds[2]) }) : t.basis_playtime_none}</li>
-            </ul>
             {s.data_notes?.length > 0 && (
               <div className="callout warn" style={{ marginTop: 12 }}><h3>{t.notes_title}</h3><ul>{s.data_notes.map((n: string, i: number) => <li key={i}>{n}</li>)}</ul></div>
             )}
-          </Sec>
+          </section>
 
           {s.highlights?.length > 0 && (
             <Sec title={t.highlights_title} sub={t.highlights_sub}>
@@ -180,22 +193,6 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                 <details style={{ marginTop: 10 }}><summary className="muted small" style={{ cursor: "pointer" }}>+{s.highlights.length - 5}</summary>
                   <ul className="pts" style={{ marginTop: 8 }}>{s.highlights.slice(5).map((h: string, i: number) => <li key={i}><span>{h}</span></li>)}</ul></details>
               )}
-            </Sec>
-          )}
-
-          <Sec title={t.chart_cmp_title}>
-            <RateBars rows={[
-              { label: offOk ? t.chart_row_official : t.chart_row_all, pos: base.pos, neg: base.neg, note: N(base.total) },
-              ...(s.previous ? [{ label: fill(t.chart_row_prev, { days }), sub: prevRange, pos: s.previous.pos, neg: s.previous.neg, note: N(s.previous.total) }] : []),
-              { label: wl, sub: nowRange, pos: s.recent.pos, neg: s.recent.neg, note: N(s.recent.total) },
-            ]} />
-            <p className="help">{t.chart_bar_help}</p>
-          </Sec>
-
-          {topLangs.length > 0 && (
-            <Sec title={t.sum_lang_title}>
-              <LangOverview shareLabel={t.sum_lang_share} rateLabel={t.sum_lang_rate} rows={topLangs.map((l) => ({ name: noEmoji(l.name), share: l.share, pos: l.all.pos, neg: l.all.neg }))} />
-              <p className="help">{t.sum_lang_help}</p>
             </Sec>
           )}
 
@@ -211,14 +208,13 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
           )}
 
           {ai?.quotes?.length > 0 && (
-            <Sec title={t.quotes_title} sub={t.quotes_sub}>
-              <p className="rulebox">{ai.quote_rule ? fill(t.quotes_rule, { rate: ai.quote_rule.rate != null ? ai.quote_rule.rate.toFixed(1) : "-", pos: String(ai.quote_rule.pos), neg: String(ai.quote_rule.neg) }) : t.quotes_rule_old}</p>
-              <div className="rvs">
+            <Sec title={t.quotes_title} sub={t.quotes_sub} info={<Info title={t.quotes_title}><p>{ai.quote_rule ? fill(t.quotes_rule, { rate: ai.quote_rule.rate != null ? ai.quote_rule.rate.toFixed(1) : "-", pos: String(ai.quote_rule.pos), neg: String(ai.quote_rule.neg) }) : t.quotes_rule_old}</p></Info>}>
+              <div className="qgrid">
                 {ai.quotes.map((q: any) => (
-                  <div key={q.review_id} className="rv2">
+                  <div key={q.review_id} className={`qcard ${q.voted_up ? "pos" : "neg"}`}>
                     <div className="m"><span>{langName(q.language)}</span><span className={q.voted_up ? "pos-t" : "neg-t"}>{q.voted_up ? t.ev_up : t.ev_down}</span>{q.playtime_h != null && <span>{q.playtime_h}시간</span>}</div>
-                    {q.original}
-                    {q.korean && <div className="ko">{q.korean} <span className="muted">{t.quotes_ai_tr}</span></div>}
+                    <div className="qtx">{q.korean || q.original}</div>
+                    {q.korean && <details className="orig"><summary>{t.quotes_orig}</summary><div>{q.original}</div><div className="muted small">{t.quotes_ai_tr}</div></details>}
                   </div>
                 ))}
               </div>
@@ -230,31 +226,23 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
 
       {tab === "lang" && (
         <div>
-          <div className="callout warn"><h3>{t.lang_warn_title}</h3><p>{t.lang_notice}</p></div>
-          <Sec title={t.chart_lang_rate} lead={(() => {
+          <Sec title={t.chart_lang_rate} info={<Info title={t.lang_warn_title}><p>{t.lang_notice}</p><p>{t.chart_bar_help} {t.chart_lang_help}</p><p>{t.ai_lang_sub}</p></Info>} lead={(() => {
             if (!langs.length) return null;
             const top = langs[0];
             if (langsOk.length < 2) return fill(t.lead_lang_one, { top: noEmoji(top.name), share: top.share.toFixed(0) });
             const { best, worst } = bestWorst(langsOk, (l) => l.all.rate);
             return fill(t.lead_lang, { top: noEmoji(top.name), share: top.share.toFixed(0), best: noEmoji(best.name), bestRate: best.all.rate.toFixed(1), worst: noEmoji(worst.name), worstRate: worst.all.rate.toFixed(1) });
           })()}>
-            <RateBars refRate={s.all?.rate ?? null} rows={langsOk.slice(0, 10).map((l) => ({ label: noEmoji(l.name), sub: `${t.lang_col_share} ${l.share.toFixed(0)}%`, pos: l.all.pos, neg: l.all.neg, note: N(l.all.total) }))} />
-            <p className="help">{t.chart_bar_help} {t.chart_lang_help} {fill(t.chart_ref_line, { label: t.chart_lang_all, rate: s.all?.rate != null ? s.all.rate.toFixed(1) : "-" })}</p>
+            <RateTable refRate={s.all?.rate ?? null} rows={langsOk.slice(0, 10).map((l) => {
+              const n = ai?.language_notes?.find((x: any) => x.language_code === l.code);
+              const odd = (s.outliers ?? []).some((o: any) => o.code === l.code);
+              return {
+                key: l.code, label: noEmoji(l.name), sub: `${t.lang_col_share} ${l.share.toFixed(0)}%`, pos: l.all.pos, neg: l.all.neg, flag: odd ? t.lang_flag : undefined,
+                note: n ? <><span>{noEmoji(n.summary)}</span><span className="rt-meta muted small">{fill(t.note_basis, { n: String(n.sample_n) })}</span><Evidence t={t} ids={n.review_ids} ev={ev} topic={noEmoji(n.name)} /></> : <span className="muted small">{t.lang_note_none}</span>,
+              };
+            })} />
+            <p className="help">{fill(t.chart_ref_line, { label: t.chart_lang_all, rate: s.all?.rate != null ? s.all.rate.toFixed(1) : "-" })}</p>
           </Sec>
-
-          {ai?.language_notes?.length > 0 && (
-            <Sec title={t.ai_lang_title} sub={t.ai_lang_sub}>
-              <div className="cols2">
-                {ai.language_notes.map((n: any) => (
-                  <div key={n.language_code} className="tl">
-                    <div className="nm"><b>{noEmoji(n.name)}</b><span>{fill(t.note_basis, { n: String(n.sample_n) })}</span></div>
-                    <p>{noEmoji(n.summary)}</p>
-                    <Evidence t={t} ids={n.review_ids} ev={ev} topic={noEmoji(n.name)} />
-                  </div>
-                ))}
-              </div>
-            </Sec>
-          )}
 
           <details className="fold">
             <summary>{t.more_table}</summary>
@@ -298,32 +286,20 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
           <div className="callout warn"><h3>{t.play_none_title}</h3><p>{fill(t.play_none_body, { pct: (s.profile.playtime_coverage * 100).toFixed(1) })}</p></div>
         ) : (
           <div>
-            <Sec title={fill(t.chart_play_rate, { label: wl })} lead={(() => {
+            <Sec title={fill(t.chart_play_rate, { label: wl })} info={<Info title={t.chart_play_rate_info}><p>{t.chart_bar_help}</p><p>{fill(t.chart_ref_line, { label: wl, rate: s.recent.rate != null ? s.recent.rate.toFixed(1) : "-" })}</p></Info>} lead={(() => {
               const ok = (s.segments as any[]).filter((g) => g.window.total >= 30 && g.window.rate != null);
               if (ok.length < 2) return null;
               const { best, worst } = bestWorst(ok, (g) => g.window.rate);
               return fill(t.lead_play, { best: best.label, bestRange: best.range, bestRate: best.window.rate.toFixed(1), worst: worst.label, worstRange: worst.range, worstRate: worst.window.rate.toFixed(1) });
             })()}>
-              <RateBars refRate={s.recent.rate} rows={(s.segments as any[]).map((g) => ({ label: g.label, sub: g.range, pos: g.window.pos, neg: g.window.neg, note: `${N(g.window.total)}${!g.window.reliable ? ` · ${t.small_sample}` : ""}` }))} />
-              <p className="help">{t.chart_bar_help} {fill(t.chart_ref_line, { label: wl, rate: s.recent.rate != null ? s.recent.rate.toFixed(1) : "-" })}</p>
+              <RateTable refRate={s.recent.rate} rows={(s.segments as any[]).map((g) => {
+                const n = ai?.segment_notes?.find((x: any) => x.segment_key === g.key);
+                return {
+                  key: g.key, label: g.label, sub: g.range, pos: g.window.pos, neg: g.window.neg,
+                  note: n ? <><span>{noEmoji(n.summary)}</span><span className="rt-meta muted small">{fill(t.note_basis, { n: String(n.sample_n) })}{!g.window.reliable ? ` · ${t.small_sample}` : ""}</span><Evidence t={t} ids={n.review_ids} ev={ev} topic={g.label} /></> : <span className="muted small">{!g.window.reliable ? t.small_sample : t.seg_note_none}</span>,
+                };
+              })} />
             </Sec>
-
-            {ai?.segment_notes?.length > 0 && (
-              <Sec title={t.ai_title}>
-                <div className="cols2">
-                  {ai.segment_notes.map((n: any) => {
-                    const seg = s.segments.find((g: any) => g.key === n.segment_key);
-                    return (
-                      <div key={n.segment_key} className="tl">
-                        <div className="nm"><b>{seg?.label} ({seg?.range})</b><span>{fill(t.note_basis, { n: String(n.sample_n) })}</span></div>
-                        <p>{noEmoji(n.summary)}</p>
-                        <Evidence t={t} ids={n.review_ids} ev={ev} topic={seg?.label} />
-                      </div>
-                    );
-                  })}
-                </div>
-              </Sec>
-            )}
 
             <Sec title={t.chart_play_share}>
               <PairBars aLabel={t.chart_play_a} bLabel={wl} rows={s.segments.map((g: any) => ({ label: g.label, sub: g.range, a: g.share_all, b: g.share_window }))} />
@@ -361,9 +337,9 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
         <div>
           <Sec title={t.chg_title} lead={s.previous && s.delta_points != null ? fill(t.lead_chg, { days, prev: pct1(s.previous.rate).replace("%", ""), label: wl, now: pct1(s.recent.rate).replace("%", ""), diff: signed(s.delta_points) }) : undefined}>
             {s.previous ? (
-              <RateBars rows={[
-                { label: fill(t.chg_prev, { days }), sub: prevRange, pos: s.previous.pos, neg: s.previous.neg, note: N(s.previous.total) },
-                { label: wl, sub: nowRange, pos: s.recent.pos, neg: s.recent.neg, note: N(s.recent.total) },
+              <RateTable rows={[
+                { key: "prev", label: fill(t.chg_prev, { days }), sub: prevRange, pos: s.previous.pos, neg: s.previous.neg },
+                { key: "now", label: wl, sub: nowRange, pos: s.recent.pos, neg: s.recent.neg },
               ]} />
             ) : <p className="muted">{t.chg_none}</p>}
             {s.delta_points != null && <p className="help">{fill(t.chg_diff, { diff: signed(s.delta_points) })} {s.delta_notable ? (noise != null ? fill(t.chg_notable_n, { noise: nz }) : t.chg_notable) : (noise != null ? fill(t.chg_calm_n, { noise: nz }) : t.chg_calm)}</p>}

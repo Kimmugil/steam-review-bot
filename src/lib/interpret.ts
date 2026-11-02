@@ -79,12 +79,12 @@ export function buildProfileText(stats: Stats, gameName: string): string {
   return L.join("\n");
 }
 
-export function formatSample(samples: SampleReview[], defs: Pick<SegmentDef, "key" | "label" | "min" | "max">[]): string {
+export function formatSample(samples: SampleReview[], defs: Pick<SegmentDef, "key" | "label" | "min" | "max">[], allPeriod: Set<string> = new Set()): string {
   const byLang = new Map<string, SampleReview[]>();
   for (const s of samples) byLang.set(s.lang, [...(byLang.get(s.lang) ?? []), s]);
   const blocks: string[] = [];
   for (const [lang, rows] of byLang) {
-    blocks.push(`## ${langName(lang)} (표본 ${rows.length}건)`);
+    blocks.push(`## ${langName(lang)} (표본 ${rows.length}건${allPeriod.has(lang) ? " — 분석 기간에 이 언어 리뷰가 적어 전체 기간에서 뽑음" : ""})`);
     for (const r of rows) {
       const seg = segmentOfHours(r.playtime_h, defs);
       const segLabel = defs.find((x) => x.key === seg)?.label ?? "?";
@@ -114,13 +114,13 @@ export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], sa
 - 이 분석은 국가가 아니라 '언어' 기준이다. "한국 유저", "미국 유저"가 아니라 "한국어 리뷰", "영어 리뷰"라고 써라.
 - 마크다운 기호(**, # 등)와 이모지·이모티콘은 어떤 항목에도 쓰지 마라. 문장은 한국어로.
 
-[분량] 각 summary 는 1~2문장(80자 안팎). themes 최대 8개, language_notes 는 표본이 8건 이상인 언어 중 표본이 많은 상위 6개까지, quotes 후보 최대 12개. JSON 만 출력.
+[분량] 각 summary 는 1~2문장(80자 안팎). themes 최대 8개, language_notes 는 표본이 8건 이상인 언어 중 표본이 많은 상위 6개까지(여기에 [특별히 살펴볼 언어]는 표본이 5건 이상이면 추가로 반드시 포함), quotes 후보 최대 12개. JSON 만 출력.
 
 [작성 항목]
 - one_liner: 한 줄 요약 (60자 이내, 이모지 없이)
 - headline: 핵심 2~3문장
 - themes: 표본에서 보이는 주제 최대 8개 (label 짧게, polarity, summary 1~2문장, review_ids)
-- language_notes: 표본이 8건 이상인 언어마다 그 언어 리뷰의 특징 (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code는 아래 표본 제목의 언어 코드가 아니라 english, koreana 같은 스팀 코드)
+- language_notes: 표본이 8건 이상인 언어마다 그 언어 리뷰의 특징. [특별히 살펴볼 언어]는 가장 먼저, 다른 언어와 긍정률이 왜 다른지를 그 언어 리뷰어가 직접 언급한 이유로만 설명해라(이유가 표본에서 뚜렷하지 않으면 그렇게 쓰고 지어내지 마라. 전체 기간에서 뽑은 표본이면 그 사실을 한 마디 덧붙여라) (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code는 아래 표본 제목의 언어 코드가 아니라 english, koreana 같은 스팀 코드)
 - segment_notes: 플레이타임 구간(q1~q4, 이 게임 리뷰어의 사분위)별 특징. 표본 구간 분포: ${segCounts}. 5건 미만인 구간은 쓰지 마라. review_ids 는 그 구간 라벨이 붙은 리뷰만, 최대 8개만 써라(다른 구간 리뷰를 섞지 마라). 구간 이름은 "초보/고인물" 같은 표현이 아니라 시간 범위로 불러라.
 - change_notes: [통계]의 '변화' 줄이 '해석해도 된다'일 때만 직전 기간 대비 변화를 해석 (0~3개). 그 외에는 빈 배열.
 - news_notes: [공식 소식]을 본문 기준으로 요약 (소식이 없으면 빈 배열). 제목과 다른 내용을 지어내지 마라.
@@ -136,11 +136,14 @@ ${buildStatsText(stats)}
 [코드가 찾아낸 눈에 띄는 사실 — 숫자에서 규칙으로 뽑은 것. 이유를 리뷰에서 찾아 해석해라]
 ${stats.highlights.length ? stats.highlights.map((h) => `- ${h}`).join("\n") : "- (뚜렷하게 눈에 띄는 격차나 변화는 없음)"}
 
+[특별히 살펴볼 언어 — 다른 언어와 긍정률이 크게 다른 언어. 비중이 작아도 가장 중요한 단서다]
+${(stats.outliers ?? []).length ? (stats.outliers ?? []).map((o) => `- ${o.name}: 긍정률 ${o.rate.toFixed(1)}% (다른 언어들의 중간값 ${o.rest_rate.toFixed(1)}%, 비중 ${o.share.toFixed(0)}%, ${o.total.toLocaleString()}건)`).join("\n") : "- (없음)"}
+
 [공식 소식 — 개발사가 직접 올린 공지]
 ${newsText}
 
 [리뷰 표본 — 번호는 R1부터 R${samples.length}까지만 존재한다. 이 범위 밖의 번호를 쓰지 마라]
-${formatSample(samples, stats.segments)}`;
+${formatSample(samples, stats.segments, new Set((stats.sample?.languages ?? []).filter((l) => l.scope === "all").map((l) => l.code)))}`;
 }
 
 const strArr = { type: "ARRAY", items: { type: "STRING" } };
@@ -171,7 +174,7 @@ export const stripEmoji = (x: string) => x.replace(/[\p{Extended_Pictographic}\p
 const str = (x: unknown, max = 600) => stripEmoji(String(x ?? "").replace(/\*\*/g, "")).trim().slice(0, max);
 
 /** AI 응답을 검증하고, 비중·성향을 근거 리뷰에서 코드가 계산한 값으로 바꿔 저장 형태로 만듭니다. */
-export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, segments: Pick<SegmentDef, "key" | "min" | "max">[], opts: { allowChangeNotes?: boolean; recentRate?: number | null } = {}): AiResult {
+export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, segments: Pick<SegmentDef, "key" | "min" | "max">[], opts: { allowChangeNotes?: boolean; recentRate?: number | null; focusCodes?: string[] } = {}): AiResult {
   const byN = new Map(samples.map((s) => [s.n, s]));
   let unknown = 0;
   let emptyThemes = 0;
@@ -204,9 +207,10 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
 
   const langN = (code: string) => samples.filter((s) => s.lang === code).length;
   const language_notes = (Array.isArray(raw.language_notes) ? raw.language_notes : [])
-    .filter((n) => langN(n.language_code) >= 8)
+    .filter((n) => langN(n.language_code) >= ((opts.focusCodes ?? []).includes(n.language_code) ? 5 : 8))
     .map((n) => ({ language_code: n.language_code, name: langName(n.language_code), summary: str(n.summary), sample_n: langN(n.language_code),
-      review_ids: ids(n.review_ids, (s) => s.lang === n.language_code) }));
+      review_ids: ids(n.review_ids, (s) => s.lang === n.language_code), focus: (opts.focusCodes ?? []).includes(n.language_code) }))
+    .sort((a, b) => Number(b.focus) - Number(a.focus));
 
   const segN = (k: SegmentKey) => samples.filter((s) => segmentOfHours(s.playtime_h, segments) === k).length;
   const segment_notes = (Array.isArray(raw.segment_notes) ? raw.segment_notes : [])
