@@ -66,7 +66,7 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
     else if (cap.used >= cap.cap) stats.data_notes.push(`이번 달 AI 호출 상한(${cap.cap}회)에 도달해 AI 해석은 하지 않고 숫자만 저장했습니다.`);
     else {
       await setStep(id, "ai");
-      const { raw, usage } = await interpret(buildPrompt(info.name, stats, news, reviews));
+      const { raw, usage } = await interpret(buildPrompt(info.name, stats, news, reviews), [...new Set(reviews.map((r) => r.lang))]);
       await recordAi(id, "analysis", usage.input, usage.output);
       ai = finalizeAi(raw, reviews, MODEL, stats.segments, { allowChangeNotes: mayInterpretChange(stats), recentRate: stats.recent.rate, focusCodes: (stats.outliers ?? []).map((o) => o.code) });
       lap(`AI 해석 완료 (주제 ${ai.themes.length}개, 걸러낸 근거 번호 ${ai.dropped.unknown_ids}개)`);
@@ -74,10 +74,13 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
       const focus = buildFocusPrompt(info.name, stats, reviews);
       if (focus) {
         try {
-          const r = await interpretFocus(focus.prompt);
+          const r = await interpretFocus(focus.prompt, focus.codes);
           await recordAi(id, "analysis", r.usage.input, r.usage.output);
           ai = applyFocusNotes(ai, r.raw, reviews, focus.codes);
-          lap(`주목 언어 해석 완료 (${focus.codes.length}개 언어)`);
+          const done = ai.language_notes;
+          const missing = focus.codes.filter((c) => !done.some((n) => n.language_code === c && n.focus));
+          if (missing.length) stats.data_notes.push(`주목 언어(${missing.map((c) => langName(c)).join(", ")})의 이유 해석을 AI가 돌려주지 않았습니다. (AI가 보낸 해석 ${r.raw?.notes?.length ?? 0}건 중 이 언어에 해당하는 것이 없음)`);
+          lap(`주목 언어 해석 ${focus.codes.length - missing.length}/${focus.codes.length}개 언어`);
         } catch (e) {
           stats.data_notes.push(`다른 언어와 긍정률이 크게 다른 언어(${focus.codes.map((c) => langName(c)).join(", ")})의 이유 해석에 실패해, 숫자만 보여 드립니다.`);
           lap(`주목 언어 해석 실패: ${e instanceof Error ? e.message : "오류"}`);

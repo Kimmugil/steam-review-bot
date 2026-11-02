@@ -1,4 +1,4 @@
-import { AI_SCHEMA, FOCUS_SCHEMA } from "./interpret";
+import { aiSchema, focusSchema } from "./interpret";
 import type { AiRaw } from "./types";
 
 export const MODEL = "gemini-2.5-flash";
@@ -33,7 +33,7 @@ async function call(body: unknown, key: string): Promise<{ text: string; usage: 
 }
 
 /** 형식을 강제한 해석 요청. 응답이 형식에 안 맞거나 도중에 잘리면, 더 짧게 써 달라고 하며 한 번 더 시도합니다. */
-export async function interpret(prompt: string): Promise<{ raw: AiRaw; usage: GeminiUsage }> {
+export async function interpret(prompt: string, langCodes: string[] = []): Promise<{ raw: AiRaw; usage: GeminiUsage }> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new GeminiError("GEMINI_API_KEY 가 설정되지 않았습니다.");
   const shorter = "\n\n[분량 주의] 직전 응답이 너무 길어 잘렸다. 이번에는 모든 summary 를 1문장으로, language_notes 는 표본이 많은 상위 5개 언어만, themes 는 최대 6개로 줄여서 써라.";
@@ -42,7 +42,7 @@ export async function interpret(prompt: string): Promise<{ raw: AiRaw; usage: Ge
     const body = {
       contents: [{ role: "user", parts: [{ text: prompt + (i > 0 ? shorter : "") }] }],
       generationConfig: {
-        temperature: 0.3, maxOutputTokens: 16384, responseMimeType: "application/json", responseSchema: AI_SCHEMA,
+        temperature: 0.3, maxOutputTokens: 16384, responseMimeType: "application/json", responseSchema: aiSchema(langCodes),
         thinkingConfig: { thinkingBudget: 0 },   // 비용·시간 절약 (표본 해석에는 긴 사고가 필요 없음)
       },
     };
@@ -59,12 +59,12 @@ export async function interpret(prompt: string): Promise<{ raw: AiRaw; usage: Ge
 }
 
 /** 주목 언어만 따로 해석하는 요청. 실패해도 분석 전체를 멈추지 않도록 호출하는 쪽에서 처리합니다. */
-export async function interpretFocus(prompt: string): Promise<{ raw: { notes: { language_code: string; summary: string; review_ids: string[] }[] }; usage: GeminiUsage }> {
+export async function interpretFocus(prompt: string, langCodes: string[] = []): Promise<{ raw: { notes: { language_code: string; summary: string; review_ids: string[] }[] }; usage: GeminiUsage }> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new GeminiError("GEMINI_API_KEY 가 설정되지 않았습니다.");
   const body = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.3, maxOutputTokens: 4096, responseMimeType: "application/json", responseSchema: FOCUS_SCHEMA, thinkingConfig: { thinkingBudget: 0 } },
+    generationConfig: { temperature: 0.3, maxOutputTokens: 4096, responseMimeType: "application/json", responseSchema: focusSchema(langCodes), thinkingConfig: { thinkingBudget: 0 } },
   };
   const { text, usage } = await call(body, key);
   try { return { raw: JSON.parse(text), usage }; } catch { throw new GeminiError("주목 언어 해석 응답 형식이 맞지 않았습니다."); }

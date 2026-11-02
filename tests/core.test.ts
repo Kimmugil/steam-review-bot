@@ -333,3 +333,12 @@ test("주목 언어: 표본이 있으면 따로 해석을 요청하고, 결과�
   assert.deepEqual(out.language_notes[0].review_ids, [1, 2]);                   // 영어 리뷰(R7)는 근거에서 제외
   assert.equal(out.language_notes.length, 2);
 });
+
+test("주목 언어 해석: 코드를 이름·대소문자로 써도 맞춰 읽고, 문장 속 근거 번호는 지운다", () => {
+  const s = [1, 2, 3, 4, 5].map((n) => ({ n, rid: String(n), lang: "schinese", voted_up: false, playtime_h: 1, text: "리뷰 본문 ".repeat(8), ts: 1 })) as SampleReview[];
+  const out = applyFocusNotes({ language_notes: [], themes: [] } as never, { notes: [{ language_code: "중국어(간체)", summary: "서버 연결 문제(R1, R2)와 버그 R3 에 대한 불만이 많습니다.", review_ids: ["R1", "R2", "R3"] }] }, s, ["schinese"]);
+  assert.equal(out.language_notes.length, 1);
+  assert.equal(out.language_notes[0].language_code, "schinese");
+  assert.ok(!/R\d/.test(out.language_notes[0].summary));
+  assert.deepEqual(out.language_notes[0].review_ids, [1, 2, 3]);
+});

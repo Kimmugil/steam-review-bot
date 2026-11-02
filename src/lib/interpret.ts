@@ -84,7 +84,7 @@ export function formatSample(samples: SampleReview[], defs: Pick<SegmentDef, "ke
   for (const s of samples) byLang.set(s.lang, [...(byLang.get(s.lang) ?? []), s]);
   const blocks: string[] = [];
   for (const [lang, rows] of byLang) {
-    blocks.push(`## ${langName(lang)} (표본 ${rows.length}건${allPeriod.has(lang) ? " — 분석 기간에 이 언어 리뷰가 적어 전체 기간에서 뽑음" : ""})`);
+    blocks.push(`## ${langName(lang)} [language_code: ${lang}] (표본 ${rows.length}건${allPeriod.has(lang) ? " — 분석 기간에 이 언어 리뷰가 적어 전체 기간에서 뽑음" : ""})`);
     for (const r of rows) {
       const seg = segmentOfHours(r.playtime_h, defs);
       const segLabel = defs.find((x) => x.key === seg)?.label ?? "?";
@@ -120,7 +120,7 @@ export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], sa
 - one_liner: 한 줄 요약 (60자 이내, 이모지 없이)
 - headline: 핵심 2~3문장
 - themes: 표본에서 보이는 주제 최대 8개 (label 짧게, polarity, summary 1~2문장, review_ids)
-- language_notes: 표본이 8건 이상인 언어마다 그 언어 리뷰의 특징. [특별히 살펴볼 언어]는 가장 먼저, 다른 언어와 긍정률이 왜 다른지를 그 언어 리뷰어가 직접 언급한 이유로만 설명해라(이유가 표본에서 뚜렷하지 않으면 그렇게 쓰고 지어내지 마라. 전체 기간에서 뽑은 표본이면 그 사실을 한 마디 덧붙여라) (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code는 아래 표본 제목의 언어 코드가 아니라 english, koreana 같은 스팀 코드)
+- language_notes: 표본이 8건 이상인 언어마다 그 언어 리뷰의 특징. [특별히 살펴볼 언어]는 가장 먼저, 다른 언어와 긍정률이 왜 다른지를 그 언어 리뷰어가 직접 언급한 이유로만 설명해라(이유가 표본에서 뚜렷하지 않으면 그렇게 쓰고 지어내지 마라. 전체 기간에서 뽑은 표본이면 그 사실을 한 마디 덧붙여라) (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code 는 아래 표본 제목에 적힌 language_code 값을 그대로 써라)
 - segment_notes: 플레이타임 구간(q1~q4, 이 게임 리뷰어의 사분위)별 특징. 표본 구간 분포: ${segCounts}. 5건 미만인 구간은 쓰지 마라. review_ids 는 그 구간 라벨이 붙은 리뷰만, 최대 8개만 써라(다른 구간 리뷰를 섞지 마라). 구간 이름은 "초보/고인물" 같은 표현이 아니라 시간 범위로 불러라.
 - change_notes: [통계]의 '변화' 줄이 '해석해도 된다'일 때만 직전 기간 대비 변화를 해석 (0~3개). 그 외에는 빈 배열.
 - news_notes: [공식 소식]을 본문 기준으로 요약 (소식이 없으면 빈 배열). 제목과 다른 내용을 지어내지 마라.
@@ -172,6 +172,19 @@ export const FOCUS_SCHEMA = {
   required: ["notes"],
 } as const;
 
+/** language_code 를 실제 표본에 있는 언어 코드로만 고르게 제한한 응답 형식 (AI가 코드를 지어내 해석이 버려지는 것을 막음) */
+const codeProp = (codes: string[]) => (codes.length ? { type: "STRING", enum: codes } : { type: "STRING" });
+export function aiSchema(codes: string[]) {
+  const s = JSON.parse(JSON.stringify(AI_SCHEMA));
+  s.properties.language_notes.items.properties.language_code = codeProp(codes);
+  return s as typeof AI_SCHEMA;
+}
+export function focusSchema(codes: string[]) {
+  const s = JSON.parse(JSON.stringify(FOCUS_SCHEMA));
+  s.properties.notes.items.properties.language_code = codeProp(codes);
+  return s as typeof FOCUS_SCHEMA;
+}
+
 /** 주목 언어 해석용 프롬프트. 표본이 5건 미만인 언어는 뺀다. 해당하는 언어가 없으면 null. */
 export function buildFocusPrompt(gameName: string, stats: Stats, samples: SampleReview[]): { prompt: string; codes: string[] } | null {
   const usable = (stats.outliers ?? []).filter((o) => samples.filter((s) => s.lang === o.code).length >= 5);
@@ -180,7 +193,7 @@ export function buildFocusPrompt(gameName: string, stats: Stats, samples: Sample
   const blocks = usable.map((o) => {
     const mine = samples.filter((s) => s.lang === o.code);
     const pos = mine.filter((s) => s.voted_up).length;
-    return `### ${o.name}: 긍정률 ${o.rate.toFixed(1)}% (다른 언어들의 중간값 ${o.rest_rate.toFixed(1)}%, 비중 ${o.share.toFixed(0)}%, 전체 ${o.total.toLocaleString()}건)\n표본 ${mine.length}건 (추천 ${pos}건, 비추천 ${mine.length - pos}건)${allScope.has(o.code) ? " — 분석 기간에 이 언어 리뷰가 적어 전체 기간에서 뽑은 표본" : ""}\n${formatSample(mine, stats.segments, allScope)}`;
+    return `### ${o.name} [language_code: ${o.code}]: 긍정률 ${o.rate.toFixed(1)}% (다른 언어들의 중간값 ${o.rest_rate.toFixed(1)}%, 비중 ${o.share.toFixed(0)}%, 전체 ${o.total.toLocaleString()}건)\n표본 ${mine.length}건 (추천 ${pos}건, 비추천 ${mine.length - pos}건)${allScope.has(o.code) ? " — 분석 기간에 이 언어 리뷰가 적어 전체 기간에서 뽑은 표본" : ""}\n${formatSample(mine, stats.segments, allScope)}`;
   });
   const prompt = `너는 게임 사업 분석가야. 스팀 게임 '${gameName}'에서, 아래 언어들은 다른 언어들과 긍정률이 크게 다르다. 각 언어 리뷰를 읽고 '왜 다른지'를 설명해라.
 
@@ -191,6 +204,7 @@ export function buildFocusPrompt(gameName: string, stats: Stats, samples: Sample
 - 긍정률이 낮은 언어는 '불만의 내용'을, 높은 언어는 '호평의 내용'을 중심으로 쓰고, 다른 언어와 구분되는 점을 한 마디 덧붙여라.
 - 전체 기간에서 뽑은 표본이라고 표시된 언어는 마지막에 "최근 변화를 반영하지 않을 수 있다"는 말을 붙여라.
 - 숫자는 아래에 있는 값만 그대로 써라. 새 숫자를 만들지 마라. 마크다운 기호와 이모지는 쓰지 마라. 국가가 아니라 '언어' 기준으로 써라(예: 중국어(간체) 리뷰).
+- language_code 는 각 언어 제목에 적힌 값을 그대로 써라. summary 문장 안에는 R번호를 쓰지 말고, 근거 번호는 review_ids 에만 적어라.
 - 언어마다 summary 2~3문장, review_ids 는 그 언어 리뷰만 최대 8개. 모든 언어에 대해 하나씩 써라. JSON 만 출력.
 
 ${blocks.join("\n\n")}`;
@@ -201,8 +215,12 @@ ${blocks.join("\n\n")}`;
 export function applyFocusNotes(ai: AiResult, raw: { notes?: { language_code: string; summary: string; review_ids: string[] }[] }, samples: SampleReview[], codes: string[]): AiResult {
   const byN = new Map(samples.map((s) => [s.n, s]));
   const added: AiResult["language_notes"] = [];
-  for (const n of Array.isArray(raw.notes) ? raw.notes : []) {
-    if (!codes.includes(n.language_code) || added.some((a) => a.language_code === n.language_code)) continue;
+  for (let n of Array.isArray(raw.notes) ? raw.notes : []) {
+    // 코드가 조금 달라도(대소문자·언어 이름) 맞춰 본다
+    const given = String(n.language_code ?? "").trim();
+    const code = codes.find((c) => c === given) ?? codes.find((c) => c.toLowerCase() === given.toLowerCase() || langName(c) === given);
+    if (!code || added.some((a) => a.language_code === code)) continue;
+    n = { ...n, language_code: code };
     const mine = samples.filter((s) => s.lang === n.language_code);
     const rids: number[] = [];
     for (const x of Array.isArray(n.review_ids) ? n.review_ids : []) {
@@ -210,7 +228,8 @@ export function applyFocusNotes(ai: AiResult, raw: { notes?: { language_code: st
       const s = k != null ? byN.get(k) : undefined;
       if (s && s.lang === n.language_code && !rids.includes(s.n)) rids.push(s.n);
     }
-    const summary = str(n.summary);
+    // 문장 속 근거 번호(R12 등)는 화면에서 지저분하니 지운다 (근거는 review_ids 로 따로 연결됨)
+    const summary = str(n.summary, 900).replace(/\s*\(\s*R\d+(?:\s*[,·]\s*R\d+)*\s*\)/g, "").replace(/\s*\bR\d+\b/g, "").replace(/\s{2,}/g, " ").trim();
     if (!summary) continue;
     added.push({ language_code: n.language_code, name: langName(n.language_code), summary, sample_n: mine.length, review_ids: rids, focus: true });
   }
