@@ -1,5 +1,6 @@
-import { GeminiError, MODEL, interpret } from "./gemini";
-import { buildPrompt, finalizeAi, mayInterpretChange } from "./interpret";
+import { GeminiError, MODEL, interpret, interpretFocus } from "./gemini";
+import { langName } from "./config";
+import { applyFocusNotes, buildFocusPrompt, buildPrompt, finalizeAi, mayInterpretChange } from "./interpret";
 import { collectSample } from "./sample";
 import { collectStats } from "./stats";
 import { SteamError, getGameInfo, getOfficialNews, notAnalyzableReason } from "./steam";
@@ -69,6 +70,19 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
       await recordAi(id, "analysis", usage.input, usage.output);
       ai = finalizeAi(raw, reviews, MODEL, stats.segments, { allowChangeNotes: mayInterpretChange(stats), recentRate: stats.recent.rate, focusCodes: (stats.outliers ?? []).map((o) => o.code) });
       lap(`AI 해석 완료 (주제 ${ai.themes.length}개, 걸러낸 근거 번호 ${ai.dropped.unknown_ids}개)`);
+      // 주목 언어(다른 언어와 긍정률이 크게 다른 언어)는 본 해석에 맡기지 않고 따로 한 번 더 해석한다. (본 해석이 길어지면 뒤로 밀려 빠지는 일이 있었음)
+      const focus = buildFocusPrompt(info.name, stats, reviews);
+      if (focus) {
+        try {
+          const r = await interpretFocus(focus.prompt);
+          await recordAi(id, "analysis", r.usage.input, r.usage.output);
+          ai = applyFocusNotes(ai, r.raw, reviews, focus.codes);
+          lap(`주목 언어 해석 완료 (${focus.codes.length}개 언어)`);
+        } catch (e) {
+          stats.data_notes.push(`다른 언어와 긍정률이 크게 다른 언어(${focus.codes.map((c) => langName(c)).join(", ")})의 이유 해석에 실패해, 숫자만 보여 드립니다.`);
+          lap(`주목 언어 해석 실패: ${e instanceof Error ? e.message : "오류"}`);
+        }
+      }
     }
 
     // 6) 저장

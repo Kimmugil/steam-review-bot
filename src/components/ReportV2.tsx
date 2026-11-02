@@ -245,7 +245,8 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
               const odd = (s.outliers ?? []).some((o: any) => o.code === l.code);
               return {
                 key: l.code, label: noEmoji(l.name), sub: `${t.lang_col_share} ${l.share.toFixed(0)}%`, pos: l.all.pos, neg: l.all.neg, flag: odd ? t.lang_flag : undefined,
-                note: n ? <><span>{noEmoji(n.summary)}</span><span className="rt-meta muted small">{fill(t.note_basis, { n: String(n.sample_n) })}</span><Evidence t={t} ids={n.review_ids} ev={ev} topic={noEmoji(n.name)} /></> : <span className="muted small">{t.lang_note_none}</span>,
+                note: n ? <><span>{noEmoji(n.summary)}</span><span className="rt-meta muted small">{fill(t.note_basis, { n: String(n.sample_n) })}{s.sample?.languages?.find((x: any) => x.code === l.code)?.scope === "all" ? ` · ${t.note_all_period}` : ""}</span><Evidence t={t} ids={n.review_ids} ev={ev} topic={noEmoji(n.name)} /></>
+                  : <span className={odd ? "small" : "muted small"}>{odd && langN(l.code) >= 5 ? fill(t.lang_note_focus_missing, { n: String(langN(l.code)) }) : langN(l.code) < 8 ? fill(t.lang_note_none, { n: String(langN(l.code)) }) : fill(t.lang_note_skip, { n: String(langN(l.code)) })}</span>,
               };
             })} />
             <p className="help">{fill(t.chart_ref_line, { label: t.chart_lang_all, rate: s.all?.rate != null ? s.all.rate.toFixed(1) : "-" })}</p>

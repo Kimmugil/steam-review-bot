@@ -316,3 +316,20 @@ test("눈에 띄는 사실은 '발견'과 '읽을 때 주의'로 나뉜다", () 
   assert.equal(findings.length, 3);
   assert.ok(findings.some((x) => x.includes("플레이타임")) && findings.some((x) => x.includes("중국어")) && findings.some((x) => x.includes("올랐습니다")));
 });
+
+import { applyFocusNotes, buildFocusPrompt } from "../src/lib/interpret";
+test("주목 언어: 표본이 있으면 따로 해석을 요청하고, 결과는 맨 앞에 합쳐지며 다른 언어의 근거 번호는 버린다", () => {
+  const mk = (n: number, lang: string, up: boolean): SampleReview => ({ n, rid: String(n), lang, voted_up: up, playtime_h: 5, text: "리뷰 본문 ".repeat(8), ts: 1 });
+  const samples = [...[1, 2, 3, 4, 5, 6].map((n) => mk(n, "schinese", false)), mk(7, "english", true), mk(8, "english", true)];
+  const stats = { outliers: [{ code: "schinese", name: "중국어(간체)", rate: 28.5, rest_rate: 78, diff: -49.5, share: 4, total: 1029, pos: 293 }, { code: "thai", name: "태국어", rate: 20, rest_rate: 78, diff: -58, share: 1, total: 200, pos: 40 }],
+    sample: { total: 8, languages: [{ code: "schinese", name: "중국어(간체)", n: 6, window_total: 51, scope: "all" }], method: "" }, segments: [] } as never;
+  const f = buildFocusPrompt("게임", stats, samples);
+  assert.ok(f && f.codes.length === 1 && f.codes[0] === "schinese");           // 표본이 5건 미만인 태국어는 빠짐
+  assert.ok(f!.prompt.includes("전체 기간에서 뽑은 표본") && f!.prompt.includes("R1]") && !f!.prompt.includes("R7]"));
+  const ai = { language_notes: [{ language_code: "english", name: "영어", summary: "x", sample_n: 2, review_ids: [7] }], themes: [] } as never;
+  const out = applyFocusNotes(ai, { notes: [{ language_code: "schinese", summary: "서버 불안정을 이유로 든 리뷰가 많습니다.", review_ids: ["R1", "R2", "R7"] }] }, samples, f!.codes);
+  assert.equal(out.language_notes[0].language_code, "schinese");
+  assert.equal(out.language_notes[0].focus, true);
+  assert.deepEqual(out.language_notes[0].review_ids, [1, 2]);                   // 영어 리뷰(R7)는 근거에서 제외
+  assert.equal(out.language_notes.length, 2);
+});

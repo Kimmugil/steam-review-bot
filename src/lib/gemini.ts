@@ -1,4 +1,4 @@
-import { AI_SCHEMA } from "./interpret";
+import { AI_SCHEMA, FOCUS_SCHEMA } from "./interpret";
 import type { AiRaw } from "./types";
 
 export const MODEL = "gemini-2.5-flash";
@@ -56,4 +56,16 @@ export async function interpret(prompt: string): Promise<{ raw: AiRaw; usage: Ge
     }
   }
   throw new GeminiError(`AI 응답 형식이 맞지 않았습니다 (${lastErr}). 잠시 뒤 다시 시도해 주세요.`);
+}
+
+/** 주목 언어만 따로 해석하는 요청. 실패해도 분석 전체를 멈추지 않도록 호출하는 쪽에서 처리합니다. */
+export async function interpretFocus(prompt: string): Promise<{ raw: { notes: { language_code: string; summary: string; review_ids: string[] }[] }; usage: GeminiUsage }> {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new GeminiError("GEMINI_API_KEY 가 설정되지 않았습니다.");
+  const body = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 4096, responseMimeType: "application/json", responseSchema: FOCUS_SCHEMA, thinkingConfig: { thinkingBudget: 0 } },
+  };
+  const { text, usage } = await call(body, key);
+  try { return { raw: JSON.parse(text), usage }; } catch { throw new GeminiError("주목 언어 해석 응답 형식이 맞지 않았습니다."); }
 }

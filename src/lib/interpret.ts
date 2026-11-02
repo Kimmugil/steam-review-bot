@@ -165,6 +165,59 @@ export const AI_SCHEMA = {
   required: ["one_liner", "headline", "themes", "language_notes", "segment_notes", "change_notes", "news_notes", "quotes", "caveats"],
 } as const;
 
+/** 주목 언어(다른 언어와 긍정률이 크게 다른 언어)만 따로 해석하는 두 번째 요청의 응답 형식 */
+export const FOCUS_SCHEMA = {
+  type: "OBJECT",
+  properties: { notes: { type: "ARRAY", items: { type: "OBJECT", properties: { language_code: { type: "STRING" }, summary: { type: "STRING" }, review_ids: strArr }, required: ["language_code", "summary", "review_ids"] } } },
+  required: ["notes"],
+} as const;
+
+/** 주목 언어 해석용 프롬프트. 표본이 5건 미만인 언어는 뺀다. 해당하는 언어가 없으면 null. */
+export function buildFocusPrompt(gameName: string, stats: Stats, samples: SampleReview[]): { prompt: string; codes: string[] } | null {
+  const usable = (stats.outliers ?? []).filter((o) => samples.filter((s) => s.lang === o.code).length >= 5);
+  if (!usable.length) return null;
+  const allScope = new Set((stats.sample?.languages ?? []).filter((l) => l.scope === "all").map((l) => l.code));
+  const blocks = usable.map((o) => {
+    const mine = samples.filter((s) => s.lang === o.code);
+    const pos = mine.filter((s) => s.voted_up).length;
+    return `### ${o.name}: 긍정률 ${o.rate.toFixed(1)}% (다른 언어들의 중간값 ${o.rest_rate.toFixed(1)}%, 비중 ${o.share.toFixed(0)}%, 전체 ${o.total.toLocaleString()}건)\n표본 ${mine.length}건 (추천 ${pos}건, 비추천 ${mine.length - pos}건)${allScope.has(o.code) ? " — 분석 기간에 이 언어 리뷰가 적어 전체 기간에서 뽑은 표본" : ""}\n${formatSample(mine, stats.segments, allScope)}`;
+  });
+  const prompt = `너는 게임 사업 분석가야. 스팀 게임 '${gameName}'에서, 아래 언어들은 다른 언어들과 긍정률이 크게 다르다. 각 언어 리뷰를 읽고 '왜 다른지'를 설명해라.
+
+[규칙]
+- 그 언어 리뷰어가 표본에서 직접 언급한 이유만 써라. 근거 번호(R12 같은)로 뒷받침하고, 한 이유는 서로 다른 리뷰 2건 이상이 말한 것만 써라.
+- 언급되지 않은 이유(문화 차이, 지역 서비스 문제 등)를 네가 추측해서 붙이지 마라. 배경지식으로 사실을 보충하지 마라.
+- 표본에서 뚜렷한 이유가 확인되지 않으면 "표본에서 뚜렷한 이유가 확인되지 않는다"고 써라.
+- 긍정률이 낮은 언어는 '불만의 내용'을, 높은 언어는 '호평의 내용'을 중심으로 쓰고, 다른 언어와 구분되는 점을 한 마디 덧붙여라.
+- 전체 기간에서 뽑은 표본이라고 표시된 언어는 마지막에 "최근 변화를 반영하지 않을 수 있다"는 말을 붙여라.
+- 숫자는 아래에 있는 값만 그대로 써라. 새 숫자를 만들지 마라. 마크다운 기호와 이모지는 쓰지 마라. 국가가 아니라 '언어' 기준으로 써라(예: 중국어(간체) 리뷰).
+- 언어마다 summary 2~3문장, review_ids 는 그 언어 리뷰만 최대 8개. 모든 언어에 대해 하나씩 써라. JSON 만 출력.
+
+${blocks.join("\n\n")}`;
+  return { prompt, codes: usable.map((o) => o.code) };
+}
+
+/** 주목 언어 해석을 검증해서 언어별 해석 목록에 합친다 (같은 언어가 이미 있으면 이것으로 바꾼다). */
+export function applyFocusNotes(ai: AiResult, raw: { notes?: { language_code: string; summary: string; review_ids: string[] }[] }, samples: SampleReview[], codes: string[]): AiResult {
+  const byN = new Map(samples.map((s) => [s.n, s]));
+  const added: AiResult["language_notes"] = [];
+  for (const n of Array.isArray(raw.notes) ? raw.notes : []) {
+    if (!codes.includes(n.language_code) || added.some((a) => a.language_code === n.language_code)) continue;
+    const mine = samples.filter((s) => s.lang === n.language_code);
+    const rids: number[] = [];
+    for (const x of Array.isArray(n.review_ids) ? n.review_ids : []) {
+      const k = parseId(x);
+      const s = k != null ? byN.get(k) : undefined;
+      if (s && s.lang === n.language_code && !rids.includes(s.n)) rids.push(s.n);
+    }
+    const summary = str(n.summary);
+    if (!summary) continue;
+    added.push({ language_code: n.language_code, name: langName(n.language_code), summary, sample_n: mine.length, review_ids: rids, focus: true });
+  }
+  const keep = ai.language_notes.filter((x) => !added.some((a) => a.language_code === x.language_code)).map((x) => ({ ...x, focus: codes.includes(x.language_code) ? false : x.focus }));
+  return { ...ai, language_notes: [...added, ...keep].sort((a, b) => Number(!!b.focus) - Number(!!a.focus)) };
+}
+
 const parseId = (x: unknown): number | null => {
   const m = String(x).match(/\d+/);
   return m ? Number(m[0]) : null;
