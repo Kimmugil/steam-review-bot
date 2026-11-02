@@ -58,3 +58,12 @@ export function wilsonPct(k: number, n: number): [number, number] {
   const c = p + (z * z) / (2 * n), m = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
   return [Math.max(0, (100 * (c - m)) / d), Math.min(100, (100 * (c + m)) / d)];
 }
+
+/**
+ * 코드가 숫자에서 뽑은 문장을 '발견'(이 게임에 대해 알려 주는 것)과 '주의'(숫자를 읽을 때 조심할 것)로 나눈다.
+ * 리뷰량이 평소와 다르다, 비교 대상이 평소와 다르다, 리뷰 쓴 사람의 구성이 다르다는 말은 해석에 붙는 단서지 핵심 발견이 아니다.
+ */
+export function splitHighlights(list: string[]): { findings: string[]; cautions: string[] } {
+  const caution = (h: string) => /리뷰 수\(.*\)가 .*(평소|직전 같은 길이 기간)/.test(h) || /직전 기간\(.*\)은 .*평소/.test(h) || /구성이 평소와 다릅니다/.test(h);
+  return { findings: list.filter((h) => !caution(h)), cautions: list.filter(caution) };
+}

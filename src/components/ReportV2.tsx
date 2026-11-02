@@ -6,7 +6,7 @@ import { Info } from "./Info";
 import HistoryPicker from "./HistoryPicker";
 import { Bullets, Rich } from "./Rich";
 import { Modal, RatingPill, Thumb } from "./ui";
-import { addDays, ageKo, dateKo, fill, noEmoji, num, pct1, signed, wilsonPct } from "@/lib/format";
+import { addDays, ageKo, dateKo, fill, noEmoji, num, pct1, signed, splitHighlights, wilsonPct } from "@/lib/format";
 import { langName } from "@/lib/config";
 import type { Texts } from "@/lib/text-defs";
 
@@ -85,6 +85,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
   const offOk = s.official.total >= 10;
   const base = offOk ? s.official : s.all;
   const baseTitle = offOk ? t.kpi_official : t.kpi_all;
+  const { findings, cautions } = splitHighlights(s.highlights ?? []);
   const langs: any[] = s.languages ?? [];
   const langsOk = langs.filter((l) => l.all.total >= 30 && l.all.rate != null);
   const topLangs = langs.slice(0, 6);
@@ -181,17 +182,17 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                 </div>
               </div>
             </div>
-            {s.data_notes?.length > 0 && (
-              <div className="callout warn" style={{ marginTop: 12 }}><h3>{t.notes_title}</h3><ul>{s.data_notes.map((n: string, i: number) => <li key={i}>{n}</li>)}</ul></div>
+            {(s.data_notes?.length > 0 || cautions.length > 0) && (
+              <div className="callout warn" style={{ marginTop: 12 }}><h3>{t.notes_title}</h3><ul>{[...(s.data_notes ?? []), ...cautions].map((n: string, i: number) => <li key={i}>{n}</li>)}</ul></div>
             )}
           </section>
 
-          {s.highlights?.length > 0 && (
+          {findings.length > 0 && (
             <Sec title={t.highlights_title} sub={t.highlights_sub}>
-              <ul className="pts">{s.highlights.slice(0, 5).map((h: string, i: number) => <li key={i}><span>{h}</span></li>)}</ul>
-              {s.highlights.length > 5 && (
-                <details style={{ marginTop: 10 }}><summary className="muted small" style={{ cursor: "pointer" }}>+{s.highlights.length - 5}</summary>
-                  <ul className="pts" style={{ marginTop: 8 }}>{s.highlights.slice(5).map((h: string, i: number) => <li key={i}><span>{h}</span></li>)}</ul></details>
+              <ul className="pts">{findings.slice(0, 5).map((h: string, i: number) => <li key={i}><span>{h}</span></li>)}</ul>
+              {findings.length > 5 && (
+                <details style={{ marginTop: 10 }}><summary className="muted small" style={{ cursor: "pointer" }}>+{findings.length - 5}</summary>
+                  <ul className="pts" style={{ marginTop: 8 }}>{findings.slice(5).map((h: string, i: number) => <li key={i}><span>{h}</span></li>)}</ul></details>
               )}
             </Sec>
           )}

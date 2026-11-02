@@ -301,3 +301,18 @@ test("눈에 띄는 언어: 비중이 작아도(4%) 나머지와 크게 다르�
   assert.ok(out[0].diff < -30);
   assert.deepEqual(findLangOutliers([lang("a", 700, 300), lang("b", 720, 280)], makeRate(1420, 580)), []);
 });
+
+import { splitHighlights } from "../src/lib/format";
+test("눈에 띄는 사실은 '발견'과 '읽을 때 주의'로 나뉜다", () => {
+  const { findings, cautions } = splitHighlights([
+    "최근 14일 리뷰 수(2,136건)가 이 게임의 평소(과거 3개 기간 중앙값)의 0.2배입니다. 리뷰가 줄어든 때라 이 기간 숫자는 평소와 구성이 다를 수 있어요.",
+    "비교 대상인 직전 기간(3,422건)은 이 게임의 평소의 0.3배로 리뷰가 적었던 때였어요.",
+    "플레이타임에 따라 평가가 갈립니다(최근 14일): 중간 위 86.1% vs 플레이 짧은 편 39.6%.",
+    "분석 기간에 리뷰를 쓴 사람의 구성이 평소와 다릅니다: 4시간 이하 13%.",
+    "중국어(간체) 리뷰의 긍정률이 28.5%로, 다른 언어들의 중간값(78%)보다 50%p 낮습니다.",
+    "직전 같은 길이 기간보다 긍정률이 올랐습니다 (+4.0%p). 이 게임이 평소 흔들리는 폭(±1.0%p)으로도 설명하기 어려운 변화입니다.",
+  ]);
+  assert.equal(cautions.length, 3);
+  assert.equal(findings.length, 3);
+  assert.ok(findings.some((x) => x.includes("플레이타임")) && findings.some((x) => x.includes("중국어")) && findings.some((x) => x.includes("올랐습니다")));
+});
