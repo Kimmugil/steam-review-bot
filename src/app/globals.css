@@ -532,3 +532,29 @@ a.btn { display: inline-block; }
 .qcard .orig summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .qcard .orig div { margin-top: 4px; color: var(--muted); white-space: pre-wrap; }
 .chart-pairs { max-width: 640px; }
+
+/* ══ 리포트 UI 규칙 (읽기 쉬운 문서형 페이지를 참고) ══
+   1) 본문은 한 칼럼, 폭 940px   2) 섹션 모양은 모두 같음: 큰 제목 → 회색 설명 → 상자 1개, 간격 일정
+   3) 상자는 한 종류(배경·테두리·모서리 하나), 상자 안에 상자를 넣지 않음   4) 글 위계 4단계: 제목 / 큰 숫자 / 본문 / 회색 보조 */
+.rpt { max-width: 940px; margin-inline: auto; gap: 18px; font-size: 15px; }
+.rpt .rsec { margin-top: 56px; padding-top: 0; border-top: 0; }
+.rpt .rsec:first-child { margin-top: 28px; }
+.rpt .sec-head { margin-bottom: 14px; }
+.rpt .rsec > .sec-head h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.25; margin: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rpt .sec-head .sub, .rpt .sec-head .lead { margin: 6px 0 0; font-size: 15px; font-weight: 400; color: var(--muted); line-height: 1.55; }
+.rbox { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+.rpt .rbox .help { color: var(--muted); font-size: 13px; }
+.verdict2.rbox { padding: 22px 24px; }
+.rpt .fold { border-radius: 12px; margin-top: 56px; }
+.rpt .callout { border-radius: 12px; }
+.rpt .rbox .rt-row:first-child { padding-top: 2px; }
+.rpt .rbox .rt-row:last-child { padding-bottom: 2px; }
+.rpt .qcard { border: 0; border-left: 4px solid var(--line); border-radius: 0; background: none; padding: 4px 0 4px 14px; }
+.rpt .qcard.pos { border-left-color: var(--good); } .rpt .qcard.neg { border-left-color: var(--bad); }
+.rpt .qgrid { gap: 18px 28px; }
+.rpt .thm { margin-bottom: 4px; padding-bottom: 14px; }
+.rpt .pts { gap: 14px; }
+.rpt .rt-note { font-size: 14.5px; }
+.rpt .back { margin-bottom: 0; }
+.rpt .tabs { margin-bottom: 0; }
+@media (max-width: 640px) { .rpt .rsec > .sec-head h2 { font-size: 22px; } .rpt .rsec { margin-top: 40px; } .rbox { padding: 14px 14px; } }

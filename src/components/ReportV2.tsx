@@ -54,13 +54,19 @@ function Evidence({ ids, ev, t, topic }: { ids: number[]; ev: Ev; t: Texts; topi
   );
 }
 
-/** 읽기 흐름의 한 덩어리: 제목 + (있으면) 한 줄 요약 + 내용. 박스 없이 구분선으로만 나눔 */
-function Sec({ title, sub, lead, info, children }: { title: string; sub?: string; lead?: React.ReactNode; info?: React.ReactNode; children: React.ReactNode }) {
+/**
+ * 읽기 흐름의 한 덩어리. 모든 섹션이 같은 모양: 큰 제목(박스 밖) → 회색 한 줄 설명 → 내용 상자 1개.
+ * 박스는 '내용을 묶어 보여 줄 때'만 쓰고, 박스 안에 박스를 또 넣지 않습니다. (bare: 방법 창처럼 이미 창 안일 때 상자 생략)
+ */
+function Sec({ title, sub, lead, info, bare, children }: { title: string; sub?: string; lead?: React.ReactNode; info?: React.ReactNode; bare?: boolean; children: React.ReactNode }) {
   return (
     <section className="rsec">
-      <h2>{title}{sub && <span className="muted" style={{ fontSize: 13, fontWeight: 400, marginLeft: 8 }}>{sub}</span>}{info && <span style={{ marginLeft: 8 }}>{info}</span>}</h2>
-      {lead && <p className="lead">{lead}</p>}
-      {children}
+      <div className="sec-head">
+        <h2>{title}{info && <span className="ih">{info}</span>}</h2>
+        {sub && <p className="sub">{sub}</p>}
+        {lead && <p className="lead">{lead}</p>}
+      </div>
+      {bare ? children : <div className="rbox">{children}</div>}
     </section>
   );
 }
@@ -117,7 +123,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
   };
 
   return (
-    <div className="stack">
+    <div className="stack rpt">
       <Link href="/" className="back">{t.back_list}</Link>
       <div className="rhead">
         <Thumb appid={Number(a.app_id)} name={a.game_name} src={a.header_image} size="xl" />
@@ -143,7 +149,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
       {tab === "sum" && (
         <div>
           <section className="rsec">
-            <div className="verdict2">
+            <div className="verdict2 rbox">
               <div className="vmain">
                 <div className="t">{fill(t.kpi_recent, { label: wl })}</div>
                 <div className="big num">{s.recent.rate != null ? pct1(s.recent.rate) : "-"}</div>
@@ -375,17 +381,17 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
       {showHow && (
         <Modal wide title={t.tab_how} onClose={() => setShowHow(false)}>
           <div className="evlist" style={{ maxHeight: "72vh" }}>
-          <Sec title={t.how_title}>
+          <Sec bare title={t.how_title}>
             <Bullets text={fill(t.how_body, { method: s.sample?.method ?? "" })} />
           </Sec>
-          <Sec title={fill(t.how_sample_title, { n: num(sampleTotal) })}>
+          <Sec bare title={fill(t.how_sample_title, { n: num(sampleTotal) })}>
             <div className="tbl-wrap"><table>
               <thead><tr><th>{t.how_sample_col1}</th><th className="n">{t.how_sample_col2}</th><th className="n">{t.how_sample_col3}</th></tr></thead>
               <tbody>{(s.sample?.languages ?? []).map((x: any) => <tr key={x.code}><td>{noEmoji(x.name)}</td><td className="n num">{x.n}</td><td className="n num">{num(x.window_total)}</td></tr>)}</tbody>
             </table></div>
           </Sec>
           {ai && (
-            <Sec title={t.how_ai_title}>
+            <Sec bare title={t.how_ai_title}>
               <ul>
                 <li>{fill(t.how_model, { model: ai.model })}</li>
                 <li>{fill(t.how_dropped, { a: String(ai.dropped?.unknown_ids ?? 0), b: String(ai.dropped?.empty_themes ?? 0) })}</li>
