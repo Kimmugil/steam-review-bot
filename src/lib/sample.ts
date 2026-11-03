@@ -1,8 +1,8 @@
-import { SAMPLE, langName, minChars } from "./config";
+import { CJK_LANGS, SAMPLE, isAbusive, langName, minChars } from "./config";
 import { getReviewPage, SteamError, type RawReview } from "./steam";
 import { allocateSamples } from "./stats";
 import type { WindowPlan } from "./profile";
-import type { SampleInfo, SampleReview } from "./types";
+import type { QuoteCand, SampleInfo, SampleReview } from "./types";
 
 export function shuffle<T>(arr: T[], rng: () => number = Math.random): T[] {
   const a = [...arr];
@@ -104,4 +104,42 @@ export async function collectSample(
       method: `분석 기간(${plan.label}) 안의 리뷰를 시간 순 5구간으로 나눠 구간마다 무작위로 뽑았습니다. 리뷰가 많은 언어 최대 ${SAMPLE.maxLanguages}개(한국어 포함)를 기간 리뷰 수 비중대로 배분했고, 각 언어 안에서는 긍정·부정을 그 언어의 실제 비율대로 나눠 뽑았습니다. 너무 짧은 글(영어 등 20자, 한·중·일·태 8자 미만)은 해석할 수 없어 먼저 제외했습니다.${focus.length ? " 다른 언어와 긍정률이 크게 다른 언어와 한국어는 이유를 읽을 수 있도록 더 많이 뽑았고, 분석 기간에 그 언어 리뷰가 적으면 전체 기간에서 뽑았습니다." : ""}`,
     },
   };
+}
+
+/**
+ * 대표 리뷰 후보: 분석 기간에 '도움이 됨'을 많이 받은 리뷰를 추천·비추천 따로 가져옵니다 (한국어는 조금 더).
+ * 주제 비중 계산에는 쓰지 않습니다(도움순은 길고 비판적인 글에 치우침). 대표 리뷰를 고르는 데만 씁니다.
+ * 욕설·혐오 표현, 너무 짧은 글, 앞부분이 같은 글(복사해 붙인 단체 리뷰)은 뺍니다.
+ */
+export async function collectQuoteCandidates(appId: number, plan: WindowPlan, notes: string[]): Promise<QuoteCand[]> {
+  const reqs: { lang?: string; type: 1 | 2; n: number }[] = [{ type: 1, n: 12 }, { type: 2, n: 12 }, { lang: "koreana", type: 1, n: 4 }, { lang: "koreana", type: 2, n: 4 }];
+  const pages = await Promise.all(reqs.map(async (r) => {
+    try {
+      const p = await getReviewPage({ appId, languages: r.lang ? [r.lang] : undefined, filter: 0, reviewType: r.type, purchaseType: 1, startTs: plan.startTs, endTs: plan.endTs, perPage: 40 },
+        `대표 리뷰 후보 ${r.lang ?? "전체"}/${r.type === 1 ? "추천" : "비추천"}`);
+      return { r, list: p.reviews };
+    } catch (e) {
+      if (!(e instanceof SteamError)) throw e;
+      return { r, list: [] as RawReview[] };
+    }
+  }));
+  const out: QuoteCand[] = [];
+  const seenId = new Set<string>(), seenHead = new Set<string>();
+  for (const { r, list } of pages) {
+    let taken = 0;
+    for (const x of list) {
+      if (taken >= r.n) break;
+      const text = clean(x.review ?? "");
+      const head = text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "").slice(0, 60);
+      if (!text || seenId.has(x.recommendationid) || seenHead.has(head)) continue;
+      if (text.length < (CJK_LANGS.has(x.language) ? 15 : 40) || isAbusive(text)) continue;
+      seenId.add(x.recommendationid); seenHead.add(head);
+      const pt = x.author?.playtime_at_review;
+      out.push({ q: out.length + 1, rid: x.recommendationid, lang: x.language, voted_up: Boolean(x.voted_up), votes_up: Number(x.votes_up ?? 0),
+        playtime_h: pt != null ? Math.round((pt / 60) * 10) / 10 : null, text: text.slice(0, 1000), ts: x.timestamp_created });
+      taken++;
+    }
+  }
+  if (!out.length) notes.push("분석 기간에 '도움이 됨'을 받은 리뷰를 가져오지 못해, 대표 리뷰는 무작위 표본에서 골랐습니다.");
+  return out;
 }

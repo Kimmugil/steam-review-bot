@@ -1,7 +1,7 @@
-import { CJK_LANGS, SAMPLE, SEGMENT_KEYS, langName, type SegmentKey } from "./config";
+import { CJK_LANGS, SAMPLE, SEGMENT_KEYS, isAbusive, langName, type SegmentKey } from "./config";
 import { segmentOfHours } from "./profile";
 import { notableChange } from "./rating";
-import type { AiRaw, AiResult, NewsItem, SampleReview, SegmentDef, Stats } from "./types";
+import type { AiRaw, AiResult, NewsItem, QuoteCand, SampleReview, SegmentDef, Stats, TabSummaries } from "./types";
 
 /**
  * AI 해석. 역할 분담:
@@ -33,7 +33,7 @@ export function changeDirective(stats: Stats): string {
   if (stats.delta_notable && !odd) return "뚜렷한 변화(표본 크기로도, 이 게임이 평소 흔들리는 폭으로도 설명되지 않음). 해석해도 된다.";
   if (stats.delta_notable && odd)
     return `통계적으로는 뚜렷하지만, 비교 대상인 직전 기간이 이 게임의 평소의 ${stats.profile.previous_vs_typical!.toFixed(1)}배로 이례적이었다. '개선/악화'로 단정하지 말고 "직전 기간이 이례적이었다"는 점을 함께 써라. change_notes 는 비워라.`;
-  return `의미 없는 변화(이 게임이 평소 흔들리는 폭 안이거나 표본이 작음${odd ? `, 게다가 직전 기간이 평소의 ${stats.profile.previous_vs_typical!.toFixed(1)}배로 이례적` : ""}). headline·one_liner·change_notes 어디에서도 이 변화를 상승/하락/개선/악화로 해석하지 마라. change_notes 는 비워라.`;
+  return `의미 없는 변화(이 게임이 평소 흔들리는 폭 안이거나 표본이 작음${odd ? `, 게다가 직전 기간이 평소의 ${stats.profile.previous_vs_typical!.toFixed(1)}배로 이례적` : ""}). headline·one_liner·change_notes·tab_summaries.change 어디에서도 이 변화를 상승/하락/개선/악화로 해석하지 마라. change_notes 는 비워라.`;
 }
 
 export function buildStatsText(stats: Stats): string {
@@ -94,7 +94,7 @@ export function formatSample(samples: SampleReview[], defs: Pick<SegmentDef, "ke
   return blocks.join("\n");
 }
 
-export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], samples: SampleReview[]): string {
+export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], samples: SampleReview[], quoteCands: QuoteCand[] = []): string {
   const newsText = news.length
     ? news.map((n, i) => `(${i + 1}) [${n.date}] ${n.title}\n${n.text}`).join("\n\n")
     : "(최근 개발사 공식 공지가 없습니다)";
@@ -115,19 +115,31 @@ export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], sa
 - 이 분석은 국가가 아니라 '언어' 기준이다. "한국 유저", "미국 유저"가 아니라 "한국어 리뷰", "영어 리뷰"라고 써라.
 - 마크다운 기호(**, # 등)와 이모지·이모티콘은 어떤 항목에도 쓰지 마라. 문장은 한국어로.
 
-[분량] 각 summary 는 1~2문장(80자 안팎). key_points 3~5개, themes 최대 8개, language_notes 는 표본이 8건 이상인 모든 언어(많은 순으로 최대 열 개)에 더해 한국어(koreana)는 표본이 3건 이상이면 반드시, [특별히 살펴볼 언어]는 표본이 5건 이상이면 반드시 포함, quotes 후보 최대 12개. JSON 만 출력.
+[분량] 각 summary 는 1~2문장(80자 안팎). key_points 3~5개, tab_summaries 는 각 1~2문장(90자 안팎), themes 최대 8개, language_notes 는 표본이 8건 이상인 모든 언어(많은 순으로 최대 열 개)에 더해 한국어(koreana)는 표본이 3건 이상이면 반드시, [특별히 살펴볼 언어]는 표본이 5건 이상이면 반드시 포함, quotes 후보 최대 12개. JSON 만 출력.
 
 [작성 항목]
 - one_liner: 한 줄 요약 (60자 이내, 이모지 없이)
-- headline: 전체 결론 2~3문장. 유저가 무엇을 좋아하고 무엇에 불만인지를 주제로 말하고, 언어나 플레이타임에 따라 평가가 갈리면 그 이유(그 리뷰들이 직접 말한 것)를 함께 써라. 언어 이름과 긍정률을 나열하지 마라. 숫자는 꼭 필요할 때 1개까지.
-- key_points: 이 리포트의 주요 평가 3~5개, 중요한 순. title 은 결론 한 줄(30자 안팎), body 는 그 결론의 이유 1~2문장(표본 리뷰가 직접 말한 것), review_ids 는 그 근거 리뷰 2건 이상(가장 잘 보여 주는 것 위주로 8개 안팎). [코드가 찾아낸 눈에 띄는 사실]과 [특별히 살펴볼 언어]의 사실은 하나씩 항목으로 다루되, title 에 사실을, body 에 그 차이가 왜 생기는지를 그 언어·구간 리뷰가 말한 이유로 써라(이유가 표본에서 보이지 않으면 "표본에서 뚜렷한 이유는 보이지 않는다"고 써라). 남는 자리는 가장 큰 호평·불만 주제로 채워라. 숫자는 [통계]·[코드가 찾아낸 눈에 띄는 사실]·[특별히 살펴볼 언어]에 있는 값만 그대로, 항목당 2개까지. title·body 문장 안에는 R번호나 번호 목록을 절대 쓰지 마라(근거는 review_ids 에만).
+- headline: 이 게임에 대한 유저 평가의 결론 2~3문장. 유저가 이 게임의 무엇을 좋아하고 무엇에 불만인지를 구체적으로 말하고, 언어나 플레이타임에 따라 평가가 갈리면 그 이유를 한 마디로 덧붙여라. 숫자와 언어 이름 나열은 쓰지 마라(숫자는 화면에 따로 나온다).
+- key_points: 이 게임에 대한 유저들의 주요 평가 3~5개, 중요한 순. 주요 평가란 '유저들이 이 게임의 무엇을 좋아하고 무엇에 불만인지'다. 가장 큰 호평과 가장 큰 불만부터 써라.
+  · 언어 간 차이([특별히 살펴볼 언어], 언어 격차)는 언어가 여럿이어도 전부 합쳐 1개 항목으로만 써라. 언어마다 따로 항목을 만들지 마라.
+  · 플레이타임에 따른 차이도 있으면 1개 항목으로.
+  · title 은 굵은 글씨만 읽어도 이 게임에서 무슨 일이 있는지 보이는 한 문장 결론(25~45자). 어느 게임에나 붙일 수 있는 제목은 안 된다.
+    나쁜 예: "플레이타임에 따른 평가 차이", "중국어(간체) 리뷰의 낮은 긍정률", "그래픽 호평", "버그 문제"
+    좋은 예: "4시간 안에 그만둔 유저는 긴 튜토리얼과 복잡한 메뉴에 지쳐 비추천", "중국어·일본어 리뷰는 서버 끊김과 확률 운영 불만으로 평가가 낮다", "귀여운 생명체 디자인과 넓은 세계 탐험이 가장 큰 호평"
+  · body 는 유저들이 구체적으로 무엇을 말하는지 1~2문장(표본 리뷰가 직접 말한 것). 숫자는 꼭 필요할 때만 항목당 1개까지, [통계]·[코드가 찾아낸 눈에 띄는 사실]·[특별히 살펴볼 언어]에 있는 값 그대로.
+  · review_ids 는 그 근거 리뷰 2건 이상(가장 잘 보여 주는 것 위주로 8개 안팎). title·body 안에는 R번호나 번호 목록을 절대 쓰지 마라.
+- tab_summaries: 리포트의 각 탭 맨 위에 붙을 요약. 각 1~2문장, 숫자는 쓰지 말고 '무엇이 어떻다'를 써라.
+  · reviews: 리뷰 주제 전체 — 호평은 무엇에, 불만은 무엇에 몰려 있는지
+  · languages: 언어별로 평가가 어떻게 다르고 왜 다른지 (비슷하면 비슷하다고)
+  · playtime: 플레이타임 구간별로 평가가 어떻게 다르고 왜 다른지 (플레이타임 정보가 없으면 빈 문자열)
+  · change: 직전 기간 대비 변화와 공식 소식 (아래 '변화' 줄의 지시를 따른다. 의미 없는 변화면 "평소 범위 안에서 큰 변화는 없다" 정도로만)
 - themes: 표본에서 보이는 주제 최대 8개 (label 짧게, polarity, summary 1~2문장, review_ids). themes 의 review_ids 에는 그 주제를 언급한 표본 리뷰 번호를 개수 제한 없이 빠짐없이 모두 적어라(수십 건이어도 된다). 주제 비중을 코드가 이 개수로 계산하므로 일부만 적으면 비중이 틀린다. 다른 항목의 '최대 8개' 제한은 themes 에는 적용되지 않는다.
 - 표본 제목에 '전체 기간에서 뽑음'이라고 표시된 언어의 리뷰는 language_notes 와 key_points 의 그 언어 설명에만 써라. themes·segment_notes·quotes 의 근거로는 쓰지 마라(분석 기간의 리뷰가 아니다).
 - language_notes: 언어마다 그 언어 리뷰가 무엇을 좋아하고 무엇에 불만인지, 다른 언어와 다른 점. 긍정률·비중 같은 숫자는 화면에 이미 있으니 쓰지 마라. [특별히 살펴볼 언어]는 가장 먼저, 다른 언어와 긍정률이 왜 다른지를 그 언어 리뷰어가 직접 언급한 이유로만 설명해라(이유가 표본에서 뚜렷하지 않으면 그렇게 쓰고 지어내지 마라. 전체 기간에서 뽑은 표본이면 그 사실을 한 마디 덧붙여라) (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code 는 아래 표본 제목에 적힌 language_code 값을 그대로 써라)
 - segment_notes: 플레이타임 구간(q1~q4, 이 게임 리뷰어의 사분위)별 특징. 표본 구간 분포: ${segCounts}. 5건 미만인 구간은 쓰지 마라. review_ids 는 그 구간 라벨이 붙은 리뷰만, 최대 8개만 써라(다른 구간 리뷰를 섞지 마라). 구간 이름은 "초보/고인물" 같은 표현이 아니라 시간 범위로 불러라.
 - change_notes: [통계]의 '변화' 줄이 '해석해도 된다'일 때만 직전 기간 대비 변화를 해석 (0~3개). 그 외에는 빈 배열.
 - news_notes: [공식 소식]을 본문 기준으로 요약 (소식이 없으면 빈 배열). 제목과 다른 내용을 지어내지 마라.
-- quotes: 인용할 만한 리뷰 후보 최대 12개의 번호와 한국어 번역(한국어 리뷰도 그대로 적어도 됨). 추천 리뷰와 비추천 리뷰를 모두 넣고, 서로 다른 주제·서로 다른 언어에서 고르고, 너무 짧거나 내용이 없는 글은 피해라. 최종 6개는 코드가 조건에 맞춰 고른다.
+- quotes: [대표 리뷰 후보](Q번호)에서 주요 평가를 잘 보여 주는 글을 '추천' 후보에서 6개, '비추천' 후보에서 6개(모자라면 있는 만큼) 골라 번호(예: Q3)와 한국어 번역을 적어라(한국어 리뷰는 그대로 적어도 됨). 한쪽으로 치우치지 말고 반드시 양쪽에서 골라라. 서로 다른 평가·서로 다른 언어에서 골라라. 욕설·비하·혐오 표현이 있는 글, 게임과 상관없는 글, 내용이 없는 글은 절대 고르지 마라. 후보가 없다고 표시되어 있을 때만 [리뷰 표본]의 R번호에서 골라라. 최종 6개는 코드가 조건에 맞춰 고른다.
 - caveats: 이 해석을 읽을 때 조심할 점 (표본이 적은 언어 등)
 
 [이 게임의 상황 — 코드가 이 게임 자신의 데이터로 알아낸 것. 모든 판단은 이 상황 안에서 해라]
@@ -145,6 +157,9 @@ ${(stats.outliers ?? []).length ? (stats.outliers ?? []).map((o) => `- ${o.name}
 [공식 소식 — 개발사가 직접 올린 공지]
 ${newsText}
 
+[대표 리뷰 후보 — 분석 기간에 '도움이 됨'을 많이 받은 리뷰. quotes 에만 쓴다]
+${quoteCands.length ? quoteCands.map((c) => `[Q${c.q}] ${c.voted_up ? "추천" : "비추천"} | 도움 ${c.votes_up} | ${langName(c.lang)} | ${c.playtime_h ?? "?"}시간 | ${c.text.slice(0, 400)}`).join("\n") : "(가져오지 못함 — quotes 는 [리뷰 표본]의 R번호에서 골라라)"}
+
 [리뷰 표본 — 번호는 R1부터 R${samples.length}까지만 존재한다. 이 범위 밖의 번호를 쓰지 마라]
 ${formatSample(samples, stats.segments, new Set((stats.sample?.languages ?? []).filter((l) => l.scope === "all").map((l) => l.code)))}`;
 }
@@ -155,6 +170,7 @@ export const AI_SCHEMA = {
   properties: {
     one_liner: { type: "STRING" },
     headline: { type: "STRING" },
+    tab_summaries: { type: "OBJECT", properties: { reviews: { type: "STRING" }, languages: { type: "STRING" }, playtime: { type: "STRING" }, change: { type: "STRING" } }, required: ["reviews", "languages", "playtime", "change"] },
     key_points: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, body: { type: "STRING" }, review_ids: strArr }, required: ["title", "body", "review_ids"] } },
     themes: { type: "ARRAY", items: { type: "OBJECT", properties: {
       label: { type: "STRING" }, polarity: { type: "STRING", enum: ["positive", "negative", "mixed"] }, summary: { type: "STRING" }, review_ids: strArr,
@@ -166,7 +182,7 @@ export const AI_SCHEMA = {
     quotes: { type: "ARRAY", items: { type: "OBJECT", properties: { review_id: { type: "STRING" }, korean: { type: "STRING" } }, required: ["review_id", "korean"] } },
     caveats: strArr,
   },
-  required: ["one_liner", "headline", "key_points", "themes", "language_notes", "segment_notes", "change_notes", "news_notes", "quotes", "caveats"],
+  required: ["one_liner", "headline", "key_points", "tab_summaries", "themes", "language_notes", "segment_notes", "change_notes", "news_notes", "quotes", "caveats"],
 } as const;
 
 /** 주목 언어(다른 언어와 긍정률이 크게 다른 언어)만 따로 해석하는 두 번째 요청의 응답 형식 */
@@ -250,11 +266,13 @@ export const stripEmoji = (x: string) => x.replace(/[\p{Extended_Pictographic}\p
 const str = (x: unknown, max = 600) => stripEmoji(String(x ?? "").replace(/\*\*/g, "")).trim().slice(0, max);
 /** 문장 속 근거 번호(R12 등)는 화면에서 지저분하니 지운다 (근거는 review_ids 로 따로 연결됨) */
 export const stripR = (x: string) => x
-  .replace(/\s*\bR\d+\b/g, "")
-  .replace(/\s*\(\s*[,·\sR]*(?:\)|$)/g, "")         // 번호를 지우고 남은 빈 괄호, 잘려서 닫히지 않은 괄호 (끝에 잘린 'R' 포함)
+  .replace(/\s*\b[RQ]\d+\b/g, "")
+  .replace(/\s*\(\s*[,·\sRQ]*(?:\)|$)/g, "")         // 번호를 지우고 남은 빈 괄호, 잘려서 닫히지 않은 괄호 (끝에 잘린 'R' 포함)
   .replace(/\s*[,·](?:\s*[,·])+/g, "")
   .replace(/(많은|대부분의|대다수의) (?=(유저|사용자|플레이어|리뷰어))/g, "")   // 표본으로는 비중을 말할 수 없음
   .replace(/\s{2,}/g, " ").trim();
+/** 어느 게임에나 붙일 수 있는 주요 평가 제목 (이런 제목은 굵은 글씨만 읽어서는 아무것도 알 수 없음) */
+const GENERIC_TITLE = /(에 따른 평가 차이|평가 차이|평가가 갈림|의 (낮은|높은) 긍정률|긍정률 (차이|격차)|^(그래픽|버그|최적화|과금|스토리) (호평|문제|불만))\s*$/;
 /** 글 속 퍼센트 숫자 중 코드가 준 숫자에 없는 것 (AI가 숫자를 지어냈는지 확인) */
 export function unknownPercents(text: string, allowed: string): string[] {
   const ok = new Set([...allowed.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((m) => String(Number(m[1]))));
@@ -262,7 +280,7 @@ export function unknownPercents(text: string, allowed: string): string[] {
 }
 
 /** AI 응답을 검증하고, 비중·성향을 근거 리뷰에서 코드가 계산한 값으로 바꿔 저장 형태로 만듭니다. */
-export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, segments: Pick<SegmentDef, "key" | "min" | "max">[], opts: { allowChangeNotes?: boolean; recentRate?: number | null; focusCodes?: string[]; facts?: string; outOfWindow?: string[] } = {}): AiResult {
+export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, segments: Pick<SegmentDef, "key" | "min" | "max">[], opts: { allowChangeNotes?: boolean; recentRate?: number | null; focusCodes?: string[]; facts?: string; outOfWindow?: string[]; quoteCands?: QuoteCand[] } = {}): AiResult {
   const byN = new Map(samples.map((s) => [s.n, s]));
   // 전체 기간에서 뽑은 언어(주목 언어·한국어의 추가 표본)는 언어별 해석에만 쓰고, 이 기간의 주제 비중·구간·대표 리뷰에는 넣지 않는다
   const outSet = new Set(opts.outOfWindow ?? []);
@@ -298,17 +316,25 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
   themes.sort((a, b) => b.support - a.support);
 
   // 주요 평가: 근거 리뷰 2건 이상, 숫자는 코드가 준 값만 (지어낸 퍼센트가 있으면 그 항목은 버림)
-  let badNumbers = 0;
+  let badNumbers = 0, genericTitles = 0, langItems = 0;
+  const langWords = [...new Set(samples.map((x) => langName(x.lang).replace(/\(.*\)/, "")))].filter((w) => w.length >= 2);
   const key_points: NonNullable<AiResult["key_points"]> = [];
   for (const k of Array.isArray(raw.key_points) ? raw.key_points : []) {
     const title = stripR(str(k.title, 120)), body = stripR(str(k.body, 500));
     const rids = ids(k.review_ids);
     if (!title || rids.length < 2) { emptyThemes++; continue; }
+    if (GENERIC_TITLE.test(title)) { genericTitles++; continue; }
+    // 언어 차이는 한 항목으로만 (언어마다 항목을 만들어 주요 평가 자리를 다 차지하던 일이 있었음)
+    if (langWords.some((w) => title.includes(w)) && ++langItems > 1) { genericTitles++; continue; }
     if (opts.facts != null && unknownPercents(`${title} ${body}`, opts.facts).length) { badNumbers++; continue; }
     key_points.push({ title, body, review_ids: rids.slice(0, 8) });
     if (key_points.length >= 5) break;
   }
   if (opts.facts != null) badNumbers += unknownPercents(String(raw.headline ?? ""), opts.facts).length ? 1 : 0;
+  // 탭 요약: 숫자를 지어냈으면 그 탭 요약은 버림 (코드가 만든 숫자 한 줄만 나감)
+  const tsRaw = (raw.tab_summaries ?? {}) as Partial<TabSummaries>;
+  const tabText = (x: unknown) => { const v = stripR(str(x, 300)); if (opts.facts != null && unknownPercents(v, opts.facts).length) { badNumbers++; return ""; } return v; };
+  const tab_summaries: TabSummaries = { reviews: tabText(tsRaw.reviews), languages: tabText(tsRaw.languages), playtime: segments.length ? tabText(tsRaw.playtime) : "", change: tabText(tsRaw.change) };
 
   const langN = (code: string) => samples.filter((s) => s.lang === code).length;
   // 한국어는 상위 언어가 아니어도 항상 보여 준다(표본 3건 이상), 주목 언어는 5건, 그 밖은 8건 이상
@@ -326,43 +352,59 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
       review_ids: ids(n.review_ids, (s) => inWin(s) && segmentOfHours(s.playtime_h, segments) === n.segment_key) }));
 
   // 대표 리뷰: AI는 후보(최대 12)와 번역만 내고, 최종 6건은 코드가 공개된 조건으로 고른다.
-  //  - 글자 수가 너무 짧지 않은 것(한·중·일·태 15자, 그 밖 40자 이상)
-  //  - 추천/비추천 개수를 이 기간의 실제 긍정률에 맞춤 (AI가 부정 리뷰만 고르는 등 쏠림 방지)
-  //  - 같은 언어는 최대 2건, 가능하면 서로 다른 주제에서
+  //  - 후보는 분석 기간에 '도움이 됨'을 많이 받은 리뷰(Q번호). 그 후보를 못 가져왔을 때만 무작위 표본(R번호)에서
+  //  - 욕설·혐오 표현, 너무 짧은 글(한·중·일·태 15자, 그 밖 40자 미만)은 제외
+  //  - 추천/비추천 개수를 이 기간의 실제 긍정률에 맞춤 (AI가 한쪽만 고르는 쏠림 방지), 같은 언어는 최대 2건, 도움 수가 많은 글 먼저
   const themeOf = new Map<number, number>();
   themes.forEach((th, i) => th.review_ids.forEach((n) => { if (!themeOf.has(n)) themeOf.set(n, i); }));
-  const cands: { s: SampleReview; korean: string }[] = [];
+  const qById = new Map((opts.quoteCands ?? []).map((c) => [c.q, c]));
+  type Cand = { key: string; id: number; lang: string; voted_up: boolean; playtime_h: number | null; text: string; votes_up?: number; ts?: number; korean: string; theme?: number };
+  const cands: Cand[] = [];
   for (const q of Array.isArray(raw.quotes) ? raw.quotes : []) {
-    const n = parseId(q.review_id);
-    const s = n != null ? byN.get(n) : undefined;
-    if (!s) { unknown++; continue; }
-    if (cands.some((x) => x.s.n === s.n) || !inWin(s)) continue;
-    if (s.text.length < (CJK_LANGS.has(s.lang) ? 15 : 40)) continue;
-    cands.push({ s, korean: s.lang === "koreana" ? "" : str(q.korean) });
+    const id = String(q.review_id ?? "").trim().toUpperCase();
+    const k = parseId(id);
+    if (k == null) { unknown++; continue; }
+    let c: Cand | null = null;
+    if (id.startsWith("Q")) {
+      const x = qById.get(k);
+      if (x) c = { key: `Q${k}`, id: k, lang: x.lang, voted_up: x.voted_up, playtime_h: x.playtime_h, text: x.text, votes_up: x.votes_up, ts: x.ts, korean: "" };
+      else unknown++;
+    } else if (!qById.size) {
+      const x = byN.get(k);
+      if (x && inWin(x)) c = { key: `R${k}`, id: k, lang: x.lang, voted_up: x.voted_up, playtime_h: x.playtime_h, text: x.text, korean: "", theme: themeOf.get(x.n) };
+      else if (!x) unknown++;
+    }
+    if (!c || cands.some((x) => x.key === c!.key)) continue;
+    c.korean = c.lang === "koreana" ? "" : str(q.korean);
+    if (c.text.length < (CJK_LANGS.has(c.lang) ? 15 : 40) || isAbusive(c.text) || isAbusive(c.korean)) continue;
+    cands.push(c);
   }
+  cands.sort((x, y) => (y.votes_up ?? 0) - (x.votes_up ?? 0));   // 같은 조건이면 도움 수가 많은 글 먼저 (표본 후보는 모두 0이라 AI 순서 유지)
   const QUOTE_MAX = 6;
   const total = Math.min(QUOTE_MAX, cands.length);
   const rate = opts.recentRate ?? null;
-  const upCands = cands.filter((c) => c.s.voted_up).length, downCands = cands.length - upCands;
+  const upCands = cands.filter((c) => c.voted_up).length, downCands = cands.length - upCands;
   let upTarget = rate != null ? Math.round((total * rate) / 100) : Math.round(total * (upCands / Math.max(1, cands.length)));
   upTarget = Math.max(total - downCands, Math.min(upCands, upTarget));      // 후보가 모자라면 있는 쪽으로
-  const chosen: typeof cands = [];
+  const chosen: Cand[] = [];
   const langCount = new Map<string, number>(), themeUsed = new Set<number>();
-  const take = (c: (typeof cands)[number]) => { chosen.push(c); langCount.set(c.s.lang, (langCount.get(c.s.lang) ?? 0) + 1); const t = themeOf.get(c.s.n); if (t != null) themeUsed.add(t); };
-  const room = (up: boolean) => chosen.filter((c) => c.s.voted_up === up).length < (up ? upTarget : total - upTarget);
-  for (const strict of [true, false]) {
+  const take = (c: Cand) => { chosen.push(c); langCount.set(c.lang, (langCount.get(c.lang) ?? 0) + 1); if (c.theme != null) themeUsed.add(c.theme); };
+  const room = (up: boolean) => chosen.filter((c) => c.voted_up === up).length < (up ? upTarget : total - upTarget);
+  // 조건을 하나씩 풀어 가며 채움: (주제 다양성+언어 2건) → (언어 2건) → (추천/비추천 비율만) → 남은 후보
+  for (const pass of [0, 1, 2]) {
     for (const c of cands) {
       if (chosen.length >= total || chosen.includes(c)) continue;
-      if (!room(c.s.voted_up)) continue;
-      if ((langCount.get(c.s.lang) ?? 0) >= 2) continue;
-      const t = themeOf.get(c.s.n);
-      if (strict && t != null && themeUsed.has(t)) continue;
+      if (!room(c.voted_up)) continue;
+      if (pass < 2 && (langCount.get(c.lang) ?? 0) >= 2) continue;
+      if (pass === 0 && c.theme != null && themeUsed.has(c.theme)) continue;
       take(c);
     }
   }
   for (const c of cands) if (chosen.length < total && !chosen.includes(c)) take(c);   // 그래도 모자라면 남은 후보로 채움
-  const quotes: AiResult["quotes"] = chosen.map(({ s, korean }) => ({ review_id: s.n, language: s.lang, voted_up: s.voted_up, playtime_h: s.playtime_h, original: s.text.slice(0, 600), korean }));
-  const quote_rule = { rate, pos: quotes.filter((q) => q.voted_up).length, neg: quotes.filter((q) => !q.voted_up).length };
+  const source: "helpful" | "sample" = qById.size ? "helpful" : "sample";
+  const quotes: AiResult["quotes"] = chosen.map((c) => ({ review_id: c.id, language: c.lang, voted_up: c.voted_up, playtime_h: c.playtime_h, original: c.text.slice(0, 600), korean: c.korean,
+    ...(c.votes_up != null ? { votes_up: c.votes_up } : {}), ...(c.ts != null ? { ts: c.ts } : {}), source }));
+  const quote_rule = { rate, pos: quotes.filter((q) => q.voted_up).length, neg: quotes.filter((q) => !q.voted_up).length, source, pool: qById.size };
 
   // 변화 해석 문장 속의 R번호(예: R98)가 실제 표본에 있는지 확인한다. 없는 번호를 인용한 문장은 버린다.
   const changeNotes: AiResult["change_notes"] = [];
@@ -378,10 +420,10 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
 
   return {
     one_liner: str(raw.one_liner, 90), headline: stripR(str(raw.headline, 800)),
-    key_points, themes, language_notes, segment_notes,
+    key_points, tab_summaries, themes, language_notes, segment_notes,
     change_notes: changeNotes,
     news_notes: (Array.isArray(raw.news_notes) ? raw.news_notes : []).map((n) => ({ title: str(n.title, 200), summary: str(n.summary, 800) })).slice(0, 3),
     quotes, quote_rule, caveats: (Array.isArray(raw.caveats) ? raw.caveats : []).map((x) => str(x)).filter(Boolean).slice(0, 5),
-    theme_base: winN, model, dropped: { unknown_ids: unknown, empty_themes: emptyThemes, bad_numbers: badNumbers },
+    theme_base: winN, model, dropped: { unknown_ids: unknown, empty_themes: emptyThemes, bad_numbers: badNumbers, generic_titles: genericTitles },
   };
 }

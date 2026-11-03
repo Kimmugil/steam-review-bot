@@ -82,7 +82,7 @@ async function fetchJson(url: string, label: string, retries = 5): Promise<Json>
 export type ReviewQuery = {
   appId: number;
   languages?: string[];          // 기본: 전체
-  filter?: 0 | 1 | 2;            // 0 도움순, 1 최신순, 2 수정순.  이 프로그램은 항상 1(최신순)을 씁니다.
+  filter?: 0 | 1 | 2;            // 0 도움순, 1 최신순, 2 수정순.  표본은 1(최신순), 대표 리뷰 후보만 0(도움순)
   purchaseType?: 0 | 1;          // 0 스팀 구매만, 1 전부
   reviewType?: 0 | 1 | 2;
   startTs?: number;              // 작성 시각 범위 (초)
@@ -100,6 +100,7 @@ export type RawReview = {
   review: string;
   timestamp_created: number;
   voted_up: boolean;
+  votes_up?: number;             // '도움이 됨'을 누른 사람 수
 };
 
 export type ReviewPage = {

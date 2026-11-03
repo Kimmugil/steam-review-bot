@@ -1,7 +1,7 @@
 import { GeminiError, MODEL, interpret, interpretFocus } from "./gemini";
 import { langName } from "./config";
 import { applyFocusNotes, buildFocusPrompt, buildProfileText, buildPrompt, buildStatsText, finalizeAi, mayInterpretChange } from "./interpret";
-import { collectSample } from "./sample";
+import { collectQuoteCandidates, collectSample } from "./sample";
 import { collectStats } from "./stats";
 import { SteamError, getGameInfo, getOfficialNews, notAnalyzableReason } from "./steam";
 import { aiCallsThisMonth, getAnalysis, markFailed, markRunning, recordAi, refundSlotFor, saveDone, setStep, upsertGame } from "./repo";
@@ -58,6 +58,9 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
     const { reviews, info: sampleInfo } = await collectSample(row.app_id, plan, windowTotals, stats.data_notes, Math.random, boost);
     stats.sample = sampleInfo;
     lap(`표본 ${reviews.length}건 (${sampleInfo.languages.length}개 언어)`);
+    // 대표 리뷰 후보: 분석 기간에 '도움이 됨'을 많이 받은 리뷰 (주제 비중에는 쓰지 않음)
+    const quoteCands = await collectQuoteCandidates(row.app_id, plan, stats.data_notes);
+    lap(`대표 리뷰 후보 ${quoteCands.length}건`);
     // 일부러 더 뽑은 언어(주목 언어·한국어)는 빼고 비교 (그 언어들 때문에 표본 비율이 달라지는 건 의도한 것)
     const boosted = new Set(boost.map((b) => b.code));
     const plain = reviews.filter((r) => !boosted.has(r.lang));
@@ -74,9 +77,10 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
     else if (cap.used >= cap.cap) stats.data_notes.push(`이번 달 AI 호출 상한(${cap.cap}회)에 도달해 AI 해석은 하지 않고 숫자만 저장했습니다.`);
     else {
       await setStep(id, "ai");
-      const { raw, usage } = await interpret(buildPrompt(info.name, stats, news, reviews), [...new Set(reviews.map((r) => r.lang))]);
+      const { raw, usage } = await interpret(buildPrompt(info.name, stats, news, reviews, quoteCands), [...new Set(reviews.map((r) => r.lang))]);
       await recordAi(id, "analysis", usage.input, usage.output);
       ai = finalizeAi(raw, reviews, MODEL, stats.segments, { allowChangeNotes: mayInterpretChange(stats), recentRate: stats.recent.rate, focusCodes: (stats.outliers ?? []).map((o) => o.code),
+        quoteCands,
         outOfWindow: sampleInfo.languages.filter((l) => l.scope === "all").map((l) => l.code),
         facts: [buildStatsText(stats), buildProfileText(stats, info.name), ...stats.highlights, ...(stats.outliers ?? []).map((o) => `${o.rate.toFixed(1)}% ${o.rest_rate.toFixed(1)}% ${o.share.toFixed(0)}% ${Math.abs(o.diff).toFixed(1)}%`)].join("\n") });
       lap(`AI 해석 완료 (주요 평가 ${ai.key_points?.length ?? 0}개, 주제 ${ai.themes.length}개, 걸러낸 근거 번호 ${ai.dropped.unknown_ids}개, 지어낸 숫자로 버린 항목 ${ai.dropped.bad_numbers ?? 0}개)`);

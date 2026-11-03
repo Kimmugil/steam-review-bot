@@ -370,3 +370,44 @@ test("전체 기간에서 더 뽑은 언어는 주제 비중·대표 리뷰에�
   assert.equal(ai.themes[0].support, 2);                            // 한국어 근거(R1, R2)는 비중 계산에서 빠짐
   assert.ok(ai.quotes.every((q) => q.language !== "koreana"));
 });
+
+test("대표 리뷰: 도움순 후보(Q)에서 고르고, 욕설·혐오 표현은 빼고, 도움 수를 함께 저장", () => {
+  const raw = baseRaw();
+  const long = "이 게임은 수집하는 재미가 있고 세계를 탐험하는 즐거움이 큽니다. ".repeat(2);
+  const quoteCands = [
+    { q: 1, rid: "a", lang: "english", voted_up: true, votes_up: 30, playtime_h: 10, text: "Great creature collecting and a beautiful open world to explore every day.", ts: 1760000000 },
+    { q: 2, rid: "b", lang: "koreana", voted_up: true, votes_up: 50, playtime_h: 18, text: "넥슨 같은 조센징 새끼들이 만든겜보다 훨씬남 진짜로 그렇다", ts: 1760000000 },
+    { q: 3, rid: "c", lang: "koreana", voted_up: false, votes_up: 12, playtime_h: 5, text: long, ts: 1760000000 },
+  ];
+  raw.quotes = [{ review_id: "Q1", korean: "번역" }, { review_id: "Q2", korean: "" }, { review_id: "Q3", korean: "" }, { review_id: "R4", korean: "표본" }];
+  const ai = finalizeAi(raw, samples(), "m", segmentDefs([10, 40, 100]), { quoteCands, recentRate: 50 });
+  assert.deepEqual(ai.quotes.map((q) => q.review_id).sort(), [1, 3]);       // 혐오 표현(Q2)과 표본 번호(R4)는 제외
+  assert.equal(ai.quotes.find((q) => q.review_id === 1)!.votes_up, 30);
+  assert.equal(ai.quote_rule!.source, "helpful");
+});
+
+test("주요 평가: 어느 게임에나 붙는 제목은 버리고, 언어 차이 항목은 하나만", () => {
+  const raw = baseRaw();
+  raw.key_points = [
+    { title: "플레이타임에 따른 평가 차이", body: "x", review_ids: ["R4", "R5"] },
+    { title: "영어 리뷰는 서버 끊김 불만으로 평가가 낮다", body: "x", review_ids: ["R4", "R5"] },
+    { title: "한국어·영어 리뷰는 과금 불만이 크다", body: "x", review_ids: ["R1", "R2"] },
+    { title: "넓은 세계 탐험과 수집이 가장 큰 호평", body: "x", review_ids: ["R6", "R9"] },
+  ];
+  raw.tab_summaries = { reviews: "호평은 탐험에, 불만은 버그에 몰려 있다", languages: "지어낸 숫자 41%", playtime: "", change: "" };
+  const ai = finalizeAi(raw, samples(), "m", segmentDefs([10, 40, 100]), { facts: "" });
+  assert.deepEqual(ai.key_points!.map((k) => k.title), ["영어 리뷰는 서버 끊김 불만으로 평가가 낮다", "넓은 세계 탐험과 수집이 가장 큰 호평"]);
+  assert.equal(ai.dropped.generic_titles, 2);
+  assert.equal(ai.tab_summaries!.reviews, "호평은 탐험에, 불만은 버그에 몰려 있다");
+  assert.equal(ai.tab_summaries!.languages, "");                       // 코드가 주지 않은 숫자를 쓴 탭 요약은 버림
+});
+
+test("대표 리뷰: 같은 언어 제한보다 추천/비추천 비율을 먼저 지킨다", () => {
+  const raw = baseRaw();
+  const txt = (i: number) => `Review number ${i} talks about exploring the world and collecting creatures for hours.`;
+  const quoteCands = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => ({ q: i, rid: String(i), lang: i <= 5 ? "english" : "french", voted_up: i <= 4, votes_up: 10 - i, playtime_h: 1, text: txt(i), ts: 1 }));
+  raw.quotes = quoteCands.map((c) => ({ review_id: `Q${c.q}`, korean: "번역" }));
+  const ai = finalizeAi(raw, samples(), "m", segmentDefs([10, 40, 100]), { quoteCands, recentRate: 75 });
+  assert.equal(ai.quote_rule!.pos, 4);                                // 6건 × 75% = 추천 4건 (영어가 3건이 되더라도)
+  assert.equal(ai.quote_rule!.neg, 2);
+});

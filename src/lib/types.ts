@@ -85,10 +85,16 @@ export type Stats = {
 export type NewsItem = { title: string; date: string; url: string; text: string; feed: string };
 
 /** AI가 돌려주는 해석. 숫자와 인용 원문은 AI가 쓰지 않고, '표본 번호'만 가리킵니다. */
+export type TabSummaries = { reviews: string; languages: string; playtime: string; change: string };
+
+/** 대표 리뷰 후보: 분석 기간에 '도움이 됨'을 많이 받은 리뷰 (Q1, Q2, …) */
+export type QuoteCand = { q: number; rid: string; lang: string; voted_up: boolean; votes_up: number; playtime_h: number | null; text: string; ts: number };
+
 export type AiRaw = {
   one_liner: string;
   headline: string;
   key_points?: { title: string; body: string; review_ids: string[] }[];
+  tab_summaries?: TabSummaries;
   themes: { label: string; polarity: "positive" | "negative" | "mixed"; summary: string; review_ids: string[] }[];
   language_notes: { language_code: string; summary: string; review_ids: string[] }[];
   segment_notes: { segment_key: SegmentKey; summary: string; review_ids: string[] }[];
@@ -104,18 +110,21 @@ export type AiResult = {
   headline: string;
   /** 주요 평가: 결론 + 리뷰가 말하는 이유 (숫자는 코드가 준 값만, 근거 리뷰 2건 이상) */
   key_points?: { title: string; body: string; review_ids: number[] }[];
+  /** 탭마다 맨 위에 붙는 AI 요약 (예전 분석에는 없음) */
+  tab_summaries?: TabSummaries;
   themes: { label: string; polarity: "positive" | "negative" | "mixed"; stance: "recommend" | "against" | "split"; summary: string; support: number; support_share: number; pos_share: number; review_ids: number[] }[];
   language_notes: { language_code: string; name: string; summary: string; sample_n: number; review_ids: number[]; focus?: boolean }[];
   segment_notes: { segment_key: SegmentKey; summary: string; sample_n: number; review_ids: number[] }[];
   change_notes: { text: string; review_ids: number[] }[];
   news_notes: { title: string; summary: string }[];
-  quotes: { review_id: number; language: string; voted_up: boolean; playtime_h: number | null; original: string; korean: string }[];
-  quote_rule?: { rate: number | null; pos: number; neg: number };   // 대표 리뷰를 고른 조건 (예전 분석에는 없음)
+  /** source: helpful = 분석 기간 '도움이 됨' 많은 순 후보에서, sample = 무작위 표본에서 (예전 분석은 없음) */
+  quotes: { review_id: number; language: string; voted_up: boolean; playtime_h: number | null; original: string; korean: string; votes_up?: number; ts?: number; source?: "helpful" | "sample" }[];
+  quote_rule?: { rate: number | null; pos: number; neg: number; source?: "helpful" | "sample"; pool?: number };   // 대표 리뷰를 고른 조건 (예전 분석에는 없음)
   caveats: string[];
   /** 주제 비중의 분모: 분석 기간 표본 수 (전체 기간에서 더 뽑은 표본 제외). 예전 분석에는 없음 */
   theme_base?: number;
   model: string;
-  dropped: { unknown_ids: number; empty_themes: number; bad_numbers?: number };   // 검증에서 걸러낸 것(투명성)
+  dropped: { unknown_ids: number; empty_themes: number; bad_numbers?: number; generic_titles?: number };   // 검증에서 걸러낸 것(투명성)
 };
 
 /** 표본 한 건 (DB 저장 단위) */

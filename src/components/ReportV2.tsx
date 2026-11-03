@@ -7,7 +7,7 @@ import HistoryPicker from "./HistoryPicker";
 import { Bullets, Rich } from "./Rich";
 import { Modal, RatingPill, Thumb } from "./ui";
 import { addDays, ageKo, dateKo, fill, noEmoji, num, pct1, signed, splitHighlights, wilsonPct } from "@/lib/format";
-import { langName } from "@/lib/config";
+import { isAbusive, langName } from "@/lib/config";
 import type { Texts } from "@/lib/text-defs";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -71,10 +71,26 @@ function Sec({ title, sub, lead, info, bare, children }: { title: string; sub?: 
   );
 }
 
-const TAB_KEYS = ["sum", "lang", "play", "chg"] as const;
+const TAB_KEYS = ["sum", "rev", "lang", "play", "chg"] as const;
+type TabKey = (typeof TAB_KEYS)[number];
+
+/** 탭 맨 위 요약: AI가 쓴 한두 문장 + 코드가 계산한 숫자 한 줄 + 'AI 해석이니 직접 판단' 안내 (작게, 회색) */
+function TabLead({ t, ai, fact }: { t: Texts; ai?: string; fact?: React.ReactNode }) {
+  if (!ai && !fact) return null;
+  return (
+    <section className="rsec">
+      <div className="tablead">
+        <span className="lab">{t.tablead_title}</span>
+        {ai && <p className="tl-text">{noEmoji(ai)}</p>}
+        {fact && <p className="tl-fact">{fact}</p>}
+        {ai && <p className="ai-judge">{t.ai_judge}</p>}
+      </div>
+    </section>
+  );
+}
 
 export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, versions = [] }: { a: any; stats: any; ai: any; news: any[]; ev: Ev; texts: Texts; admin?: boolean; versions?: any[] }) {
-  const [tab, setTab] = useState<(typeof TAB_KEYS)[number]>("sum");
+  const [tab, setTab] = useState<TabKey>("sum");
   const [showHow, setShowHow] = useState(false);
   const sampleTotal = s.sample?.total ?? 0;
   const themeBase: number = ai?.theme_base ?? sampleTotal;   // 주제 비중의 분모 (분석 기간 표본만)
@@ -99,7 +115,6 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
   const keyPts: any[] = ai?.key_points ?? [];
   const langs: any[] = s.languages ?? [];
   const langsOk = langs.filter((l) => l.all.total >= 30 && l.all.rate != null);
-  const topLangs = langs.slice(0, 6);
   const themes: any[] = ai?.themes ?? [];
   const themePos = themes.filter((x) => x.polarity === "positive"), themeNeg = themes.filter((x) => x.polarity === "negative"), themeMix = themes.filter((x) => x.polarity !== "positive" && x.polarity !== "negative");
 
@@ -126,6 +141,32 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
     const sorted = [...list].sort((x, y) => get(y) - get(x));
     return { best: sorted[0], worst: sorted[sorted.length - 1] };
   };
+
+  // 탭마다 코드가 만든 숫자 한 줄 (AI 요약이 없는 예전 분석에도 나옴)
+  const tabSum: Record<string, string> = ai?.tab_summaries ?? {};
+  const revLead = (() => {
+    if (!themes.length) return null;
+    const p = [...themePos].sort((x, y) => y.support - x.support)[0], n = [...themeNeg].sort((x, y) => y.support - x.support)[0];
+    if (p && n) return fill(t.lead_rev, { n: num(themeBase), pos: noEmoji(p.label), p: (p.support_share * 100).toFixed(0), neg: noEmoji(n.label), q: (n.support_share * 100).toFixed(0) });
+    const top = p ?? n ?? themes[0];
+    return fill(t.lead_rev_one, { n: num(themeBase), top: noEmoji(top.label), p: (top.support_share * 100).toFixed(0) });
+  })();
+  const langLead = (() => {
+    if (!langs.length) return null;
+    const top = langs[0];
+    if (langsOk.length < 2) return fill(t.lead_lang_one, { top: noEmoji(top.name), share: top.share.toFixed(0) });
+    const { best, worst } = bestWorst(langsOk, (l) => l.all.rate);
+    return fill(t.lead_lang, { top: noEmoji(top.name), share: top.share.toFixed(0), best: noEmoji(best.name), bestRate: best.all.rate.toFixed(1), worst: noEmoji(worst.name), worstRate: worst.all.rate.toFixed(1) });
+  })();
+  const playLead = (() => {
+    const ok = (s.segments as any[]).filter((g) => g.window.total >= 30 && g.window.rate != null);
+    if (ok.length < 2) return null;
+    const { best, worst } = bestWorst(ok, (g) => g.window.rate);
+    return fill(t.lead_play, { best: best.label, bestRange: best.range, bestRate: best.window.rate.toFixed(1), worst: worst.label, worstRange: worst.range, worstRate: worst.window.rate.toFixed(1) });
+  })();
+  const chgLead = s.previous && s.delta_points != null ? fill(t.lead_chg, { days, prev: pct1(s.previous.rate).replace("%", ""), label: wl, now: pct1(s.recent.rate).replace("%", ""), diff: signed(s.delta_points) }) : null;
+  const go = (k: TabKey) => { setTab(k); if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const ymd = (ts: number) => new Date(ts * 1000).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
 
   return (
     <div className="stack rpt">
@@ -166,6 +207,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                   <div className="aibox">
                     <span className="lab">{t.ai_title}<Info title={t.ai_title}><p>{t.ai_notice}</p></Info></span>
                     <p className="headline">{noEmoji(ai.headline)}</p>
+                    <p className="ai-judge">{t.ai_judge}</p>
                   </div>
                 ) : (
                   <div className="aibox"><span className="lab">{t.ai_none_title}</span><p>{t.ai_none_body}</p></div>
@@ -199,12 +241,13 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
           </section>
 
           {keyPts.length > 0 && (
-            <Sec title={t.keypts_title} sub={t.keypts_sub}>
+            <Sec title={t.keypts_title}>
               <ol className="kpts">
                 {keyPts.map((k: any, i: number) => (
                   <li key={i}><div><b>{noEmoji(k.title)}</b>{k.body && <p>{noEmoji(k.body)}</p>}<Evidence t={t} ids={k.review_ids} ev={ev} topic={noEmoji(k.title)} /></div></li>
                 ))}
               </ol>
+              <p className="ai-judge" style={{ marginTop: 14 }}>{t.ai_judge}</p>
             </Sec>
           )}
 
@@ -218,7 +261,21 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
             </Sec>
           )}
 
-          {ai && (
+          <Sec bare title={t.tabs_title}>
+            <div className="tabcards">
+              {([["rev", tabSum.reviews || revLead], ["lang", tabSum.languages || langLead], ["play", pt ? tabSum.playtime || playLead : t.play_none_title], ["chg", tabSum.change || chgLead || t.chg_none]] as [TabKey, string | null][])
+                .filter(([, text]) => !!text).map(([k, text]) => (
+                  <button key={k} className="tabcard" onClick={() => go(k)}><b>{t[`tab_${k}`]}</b><span>{noEmoji(String(text))}</span><em>{t.tabs_more}</em></button>
+                ))}
+            </div>
+          </Sec>
+        </div>
+      )}
+
+      {tab === "rev" && (
+        <div>
+          <TabLead t={t} ai={tabSum.reviews} fact={revLead} />
+          {ai ? (
             <Sec title={t.themes_title} sub={fill(t.themes_sub, { n: num(themeBase) })}>
               {themes.length === 0 && <div className="empty">{t.themes_empty}</div>}
               <div className="cols2">
@@ -227,19 +284,22 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
               </div>
               {themeMix.length > 0 && <div style={{ marginTop: 8 }}><h3>{t.themes_mix_title}</h3>{themeMix.map((th, i) => <Theme key={i} th={th} />)}</div>}
             </Sec>
-          )}
+          ) : <div className="aibox"><span className="lab">{t.ai_none_title}</span><p>{t.ai_none_body}</p></div>}
 
           {ai?.quotes?.length > 0 && (
-            <Sec title={t.quotes_title} sub={t.quotes_sub} info={<Info title={t.quotes_title}><p>{ai.quote_rule ? fill(t.quotes_rule, { rate: ai.quote_rule.rate != null ? ai.quote_rule.rate.toFixed(1) : "-", pos: String(ai.quote_rule.pos), neg: String(ai.quote_rule.neg) }) : t.quotes_rule_old}</p></Info>}>
+            <Sec title={t.quotes_title}
+              sub={ai.quote_rule?.source === "helpful" ? fill(t.quotes_rule_helpful, { rate: ai.quote_rule.rate != null ? ai.quote_rule.rate.toFixed(1) : "-", pos: String(ai.quote_rule.pos), neg: String(ai.quote_rule.neg), pool: String(ai.quote_rule.pool ?? "") })
+                : ai.quote_rule ? fill(t.quotes_rule, { rate: ai.quote_rule.rate != null ? ai.quote_rule.rate.toFixed(1) : "-", pos: String(ai.quote_rule.pos), neg: String(ai.quote_rule.neg) }) : t.quotes_rule_old}
+              info={<Info title={t.quotes_title}><p>{t.quotes_sub}</p></Info>}>
               <div className="qcols">
                 {[true, false].map((up) => {
-                  const list = ai.quotes.filter((q: any) => !!q.voted_up === up);
+                  const list = ai.quotes.filter((q: any) => !!q.voted_up === up && !isAbusive(`${q.original} ${q.korean ?? ""}`));   // 예전 분석에 저장된 혐오 표현 글도 가림
                   return (
                     <div key={String(up)} className="qcol">
                       <h3 className={up ? "pos-t" : "neg-t"}>{up ? t.ev_up : t.ev_down} <span className="muted small num">{list.length}</span></h3>
                       {list.map((q: any) => (
-                        <div key={q.review_id} className={`qcard ${q.voted_up ? "pos" : "neg"}`}>
-                          <div className="m"><span>{langName(q.language)}</span>{q.playtime_h != null && <span>{q.playtime_h}시간</span>}</div>
+                        <div key={`${q.source ?? "r"}${q.review_id}`} className={`qcard ${q.voted_up ? "pos" : "neg"}`}>
+                          <div className="m"><span>{langName(q.language)}</span>{q.playtime_h != null && <span>{q.playtime_h}시간</span>}{q.votes_up != null && <span>{fill(t.quote_votes, { n: num(q.votes_up) })}</span>}{q.ts != null && <span>{ymd(q.ts)}</span>}</div>
                           <div className="qtx">{q.korean || q.original}</div>
                           {q.korean && <details className="orig"><summary>{t.quotes_orig}</summary><div>{q.original}</div><div className="muted small">{t.quotes_ai_tr}</div></details>}
                         </div>
@@ -250,19 +310,13 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
               </div>
             </Sec>
           )}
-
         </div>
       )}
 
       {tab === "lang" && (
         <div>
-          <Sec title={t.chart_lang_rate} info={<Info title={t.lang_warn_title}><p>{t.lang_notice}</p><p>{t.chart_bar_help} {t.chart_lang_help}</p><p>{t.ai_lang_sub}</p></Info>} lead={(() => {
-            if (!langs.length) return null;
-            const top = langs[0];
-            if (langsOk.length < 2) return fill(t.lead_lang_one, { top: noEmoji(top.name), share: top.share.toFixed(0) });
-            const { best, worst } = bestWorst(langsOk, (l) => l.all.rate);
-            return fill(t.lead_lang, { top: noEmoji(top.name), share: top.share.toFixed(0), best: noEmoji(best.name), bestRate: best.all.rate.toFixed(1), worst: noEmoji(worst.name), worstRate: worst.all.rate.toFixed(1) });
-          })()}>
+          <TabLead t={t} ai={tabSum.languages} fact={langLead} />
+          <Sec title={t.chart_lang_rate} info={<Info title={t.lang_warn_title}><p>{t.lang_notice}</p><p>{t.chart_bar_help} {t.chart_lang_help}</p><p>{t.ai_lang_sub}</p></Info>}>
             <RateTable refRate={s.all?.rate ?? null} rows={langsOk.filter((l, i) => i < 10 || l.code === "koreana" || (s.outliers ?? []).some((o: any) => o.code === l.code) || ai?.language_notes?.some((x: any) => x.language_code === l.code)).map((l) => {
               const n = ai?.language_notes?.find((x: any) => x.language_code === l.code);
               const odd = (s.outliers ?? []).some((o: any) => o.code === l.code);
@@ -317,12 +371,8 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
           <div className="callout warn"><h3>{t.play_none_title}</h3><p>{fill(t.play_none_body, { pct: (s.profile.playtime_coverage * 100).toFixed(1) })}</p></div>
         ) : (
           <div>
-            <Sec title={fill(t.chart_play_rate, { label: wl })} info={<Info title={t.chart_play_rate_info}><p>{t.chart_bar_help}</p><p>{fill(t.chart_ref_line, { label: wl, rate: s.recent.rate != null ? s.recent.rate.toFixed(1) : "-" })}</p></Info>} lead={(() => {
-              const ok = (s.segments as any[]).filter((g) => g.window.total >= 30 && g.window.rate != null);
-              if (ok.length < 2) return null;
-              const { best, worst } = bestWorst(ok, (g) => g.window.rate);
-              return fill(t.lead_play, { best: best.label, bestRange: best.range, bestRate: best.window.rate.toFixed(1), worst: worst.label, worstRange: worst.range, worstRate: worst.window.rate.toFixed(1) });
-            })()}>
+            <TabLead t={t} ai={tabSum.playtime} fact={playLead} />
+            <Sec title={fill(t.chart_play_rate, { label: wl })} info={<Info title={t.chart_play_rate_info}><p>{t.chart_bar_help}</p><p>{fill(t.chart_ref_line, { label: wl, rate: s.recent.rate != null ? s.recent.rate.toFixed(1) : "-" })}</p></Info>}>
               <RateTable refRate={s.recent.rate} rows={(s.segments as any[]).map((g) => {
                 const n = ai?.segment_notes?.find((x: any) => x.segment_key === g.key);
                 return {
@@ -366,7 +416,8 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
 
       {tab === "chg" && (
         <div>
-          <Sec title={t.chg_title} lead={s.previous && s.delta_points != null ? fill(t.lead_chg, { days, prev: pct1(s.previous.rate).replace("%", ""), label: wl, now: pct1(s.recent.rate).replace("%", ""), diff: signed(s.delta_points) }) : undefined}>
+          <TabLead t={t} ai={tabSum.change} fact={chgLead} />
+          <Sec title={t.chg_title}>
             {s.previous ? (
               <RateTable rows={[
                 { key: "prev", label: fill(t.chg_prev, { days }), sub: prevRange, pos: s.previous.pos, neg: s.previous.neg },

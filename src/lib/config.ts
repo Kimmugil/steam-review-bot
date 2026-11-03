@@ -66,6 +66,9 @@ export const WINDOW = { target: 1000, candidates: [14, 30, 60, 90, 180], minDays
 
 /** 한 글자에 담기는 뜻이 많은 언어는 짧은 글도 해석할 수 있어서 최소 글자 수를 낮춥니다. */
 export const CJK_LANGS = new Set(["schinese", "tchinese", "japanese", "koreana", "thai"]);
+/** 욕설·비하·혐오 표현 (대표 리뷰로 보여 주지 않음). AI에게도 금지하지만 코드가 한 번 더 막는다 */
+const ABUSE = /(조센징|짱깨|쪽바리|한남충|김치녀|틀딱|병신|씨발|시발|ㅅㅂ|ㅂㅅ|좆|개새끼|새끼들|니애미|느금|\bn[i1]gg|faggot|\bretard|\bchink|傻逼|操你|尼玛|支那)/i;
+export const isAbusive = (x: string) => ABUSE.test(x);
 export const minChars = (lang: string) => (CJK_LANGS.has(lang) ? 8 : 20);
 
 /** 분석 방법 버전. 1 = 예전(구글 시트) 방식, 2 = 이번 개편. */
