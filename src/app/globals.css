@@ -558,3 +558,15 @@ a.btn { display: inline-block; }
 .rpt .back { margin-bottom: 0; }
 .rpt .tabs { margin-bottom: 0; }
 @media (max-width: 640px) { .rpt .rsec > .sec-head h2 { font-size: 22px; } .rpt .rsec { margin-top: 40px; } .rbox { padding: 14px 14px; } }
+
+/* 주요 평가: 번호 + 결론 굵게 + 이유 */
+.kpts { margin: 0; padding: 0; list-style: none; counter-reset: kp; display: grid; gap: 18px; }
+.kpts li { counter-increment: kp; display: flex; gap: 14px; align-items: flex-start; }
+.kpts li::before { content: counter(kp); flex: none; width: 26px; height: 26px; border-radius: 13px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px; display: grid; place-items: center; margin-top: 1px; }
+.kpts b { font-size: 16px; line-height: 1.5; }
+.kpts p { margin: 4px 0 6px; line-height: 1.65; color: var(--ink); }
+/* 대표 리뷰: 왼쪽 추천, 오른쪽 비추천 */
+.qcols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.qcol { display: grid; gap: 16px; align-content: start; }
+.qcol h3 { margin: 0; font-size: 14px; }
+@media (max-width: 720px) { .qcols { grid-template-columns: 1fr; } }

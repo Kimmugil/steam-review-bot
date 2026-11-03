@@ -88,6 +88,7 @@ export type NewsItem = { title: string; date: string; url: string; text: string;
 export type AiRaw = {
   one_liner: string;
   headline: string;
+  key_points?: { title: string; body: string; review_ids: string[] }[];
   themes: { label: string; polarity: "positive" | "negative" | "mixed"; summary: string; review_ids: string[] }[];
   language_notes: { language_code: string; summary: string; review_ids: string[] }[];
   segment_notes: { segment_key: SegmentKey; summary: string; review_ids: string[] }[];
@@ -101,6 +102,8 @@ export type AiRaw = {
 export type AiResult = {
   one_liner: string;
   headline: string;
+  /** 주요 평가: 결론 + 리뷰가 말하는 이유 (숫자는 코드가 준 값만, 근거 리뷰 2건 이상) */
+  key_points?: { title: string; body: string; review_ids: number[] }[];
   themes: { label: string; polarity: "positive" | "negative" | "mixed"; stance: "recommend" | "against" | "split"; summary: string; support: number; support_share: number; pos_share: number; review_ids: number[] }[];
   language_notes: { language_code: string; name: string; summary: string; sample_n: number; review_ids: number[]; focus?: boolean }[];
   segment_notes: { segment_key: SegmentKey; summary: string; sample_n: number; review_ids: number[] }[];
@@ -110,7 +113,7 @@ export type AiResult = {
   quote_rule?: { rate: number | null; pos: number; neg: number };   // 대표 리뷰를 고른 조건 (예전 분석에는 없음)
   caveats: string[];
   model: string;
-  dropped: { unknown_ids: number; empty_themes: number };   // 검증에서 걸러낸 것(투명성)
+  dropped: { unknown_ids: number; empty_themes: number; bad_numbers?: number };   // 검증에서 걸러낸 것(투명성)
 };
 
 /** 표본 한 건 (DB 저장 단위) */

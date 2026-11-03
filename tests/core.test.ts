@@ -160,18 +160,11 @@ test("눈에 띄는 사실: 우연이 아니고 이 게임의 평소 변동보�
   assert.ok(!noisy.some((x) => x.includes("전체 기간")));
   assert.ok(!noisy.some((x) => x.includes("플레이타임에 따라")));
   assert.ok(noisy.some((x) => x.includes("언어 간 격차")));                      // 언어 격차(60%p)는 여전히 큼
-  // 리뷰량이 몰렸을 때
-  const spike = findHighlights({ ...base, languages: [], segments: [], delta_notable: false, profile: profile(null, 3.2), previous: makeRate(400, 100) } as never);
-  assert.ok(spike.some((x) => x.includes("3.2배")));
-  // 평소 대비: 이번 기간이 평소의 3배면 알리고, 직전 기간이 평소의 2.7배(몰린 때)였다면 비교가 왜곡될 수 있다고 알린다
-  const typ = findHighlights({ ...base, languages: [], segments: [], delta_notable: false, profile: profile(null, 0.3, 3.1, 2.7), previous: makeRate(400, 100) } as never);
-  assert.ok(typ.some((x) => x.includes("평소") && x.includes("3.1배")));
-  assert.ok(typ.some((x) => x.includes("직전 기간") && x.includes("2.7배") && x.includes("몰린")));
-  const calmVol = findHighlights({ ...base, all: makeRate(900, 100), languages: [], segments: [], delta_notable: false, profile: profile(null, 0.3, 0.9, 1.0), previous: makeRate(400, 100) } as never);
-  assert.equal(calmVol.length, 0);                                  // 평소 대비가 있으면 그것을 우선: 평소 범위면 직전 대비 0.3배여도 따로 알리지 않음
-  // 구성 변화: 플레이 짧은 편 비중이 평소(25%)보다 크게 늘었을 때
+  // 리뷰량·구성 변화 문구는 해석에 도움이 안 돼 더 이상 만들지 않는다
+  const spike = findHighlights({ ...base, languages: [], segments: [], delta_notable: false, profile: profile(null, 3.2, 3.1, 2.7), previous: makeRate(400, 100) } as never);
+  assert.ok(!spike.some((x) => x.includes("배입니다") || x.includes("평소의")));
   const mix = findHighlights({ ...base, languages: [], delta_notable: false, profile: profile(null), segments: [{ ...base.segments[0], share_window: 42 }, base.segments[1], base.segments[1], base.segments[1]] } as never);
-  assert.ok(mix.some((x) => x.includes("구성이 평소와 다릅니다") && x.includes("42%")));
+  assert.ok(!mix.some((x) => x.includes("구성이 평소와 다릅니다")));
   const quiet = findHighlights({ ...base, recent: makeRate(600, 400), all: makeRate(600, 400), delta_notable: false, segments: [], languages: [lr("영어", 90, 800, 200), lr("중국어", 10, 70, 30)], profile: profile(2) } as never);
   assert.equal(quiet.length, 0);                                    // 격차·변화가 없으면 아무것도 만들지 않음
 });
@@ -217,8 +210,8 @@ test("AI 검증: 없는 번호는 걸러내고, 주제 성격은 AI 것을 쓰�
   assert.equal(ai.quotes.length, 2);
   assert.ok(ai.quotes.find((q) => q.review_id === 4)!.original.startsWith("리뷰 4:"));      // 원문은 AI가 아니라 DB 표본에서
   assert.equal(ai.quotes.find((q) => q.review_id === 1)!.korean, "");              // 한국어 리뷰는 번역 불필요
-  assert.deepEqual(ai.language_notes.map((n) => n.language_code), ["english"]);    // 표본 8건 미만 언어(한국어 3건)는 제외
-  assert.deepEqual(ai.language_notes[0].review_ids, [4]);                          // 다른 언어 번호(R1)는 걸러짐
+  assert.deepEqual(ai.language_notes.map((n) => n.language_code), ["koreana", "english"]);    // 한국어는 표본 3건이어도 항상 포함
+  assert.deepEqual(ai.language_notes[1].review_ids, [4]);                          // 다른 언어 번호(R1)는 걸러짐
   assert.deepEqual(ai.segment_notes.map((n) => n.segment_key), ["q3"]);            // 표본 5건 미만 구간(q4) 제외
   assert.deepEqual(ai.segment_notes[0].review_ids, [3, 4]);                        // 다른 구간 번호(R1)는 걸러짐
 });
@@ -341,4 +334,20 @@ test("주목 언어 해석: 코드를 이름·대소문자로 써도 맞춰 읽�
   assert.equal(out.language_notes[0].language_code, "schinese");
   assert.ok(!/R\d/.test(out.language_notes[0].summary));
   assert.deepEqual(out.language_notes[0].review_ids, [1, 2, 3]);
+});
+
+import { unknownPercents } from "../src/lib/interpret";
+test("주요 평가: 근거 2건 이상, 코드가 준 숫자만 허용, 문장 속 R번호는 지움", () => {
+  const raw = baseRaw();
+  raw.key_points = [
+    { title: "중국어(간체) 리뷰는 서버 문제로 28.4%에 그칩니다", body: "연결 끊김과 버그 불만이 많습니다 (R4, R5).", review_ids: ["R4", "R5"] },
+    { title: "지어낸 숫자 41.2%", body: "x", review_ids: ["R4", "R5"] },
+    { title: "근거 1건", body: "x", review_ids: ["R4"] },
+  ];
+  const ai = finalizeAi(raw, samples(), "m", segmentDefs([10, 40, 100]), { facts: "중국어(간체) 28.4% / 다른 언어 79.0%" });
+  assert.equal(ai.key_points!.length, 1);
+  assert.ok(!/R\d/.test(ai.key_points![0].body));
+  assert.equal(ai.dropped.bad_numbers, 1);
+  assert.deepEqual(unknownPercents("28.4% 와 79%", "28.4% 79.0%"), []);
+  assert.deepEqual(unknownPercents("50%", "28.4%"), ["50"]);
 });

@@ -90,8 +90,12 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
   // 스팀 구매로 표시된 리뷰가 거의 없는 게임(무료 배포 등)은 스팀 상점 기준 대신 전체 기준을 씁니다
   const offOk = s.official.total >= 10;
   const base = offOk ? s.official : s.all;
-  const baseTitle = offOk ? t.kpi_official : t.kpi_all;
-  const { findings, cautions } = splitHighlights(s.highlights ?? []);
+  const free = !!s.profile.is_free;
+  const baseTitle = offOk ? t.kpi_official : free ? t.kpi_all_free : t.kpi_all;
+  // 예전 분석에 저장된 리뷰량·구성 주의 문구는 해석에 도움이 안 돼 보여 주지 않음 (splitHighlights 가 걸러냄)
+  const findings = splitHighlights(s.highlights ?? []).findings.map((h) => h.replace(" 비중이 작아도 평소와 크게 다른 언어라 이유를 리뷰에서 찾아볼 가치가 있습니다.", ""));
+  const dataNotes: string[] = (s.data_notes ?? []).filter((n: string) => !(free && n.startsWith("스팀 구매로 표시된 리뷰가")));
+  const keyPts: any[] = ai?.key_points ?? [];
   const langs: any[] = s.languages ?? [];
   const langsOk = langs.filter((l) => l.all.total >= 30 && l.all.rate != null);
   const topLangs = langs.slice(0, 6);
@@ -166,7 +170,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                   <div className="aibox"><span className="lab">{t.ai_none_title}</span><p>{t.ai_none_body}</p></div>
                 )}
                 <div className="cmpline">
-                  <span><em>{baseTitle}</em> <b className="num">{base.rate != null ? pct1(base.rate) : "-"}</b> <span className="muted small">{N(base.total)}{offOk ? ` · ${t.kpi_official_sub}` : ` · ${t.stat_all_note}`}</span></span>
+                  <span><em>{baseTitle}</em> <b className="num">{base.rate != null ? pct1(base.rate) : "-"}</b> <span className="muted small">{N(base.total)}{offOk ? ` · ${t.kpi_official_sub}` : ` · ${free ? t.stat_all_free : t.stat_all_note}`}</span></span>
                   {s.previous && <span><em>{fill(t.chart_row_prev, { days })}</em> <b className="num">{s.previous.rate != null ? pct1(s.previous.rate) : "-"}</b> <span className="muted small">{N(s.previous.total)}</span></span>}
                   {!s.previous && <span className="muted small">{t.kpi_no_prev}</span>}
                   <span className={`dchip ${s.delta_points != null ? (s.delta_notable ? (s.delta_points >= 0 ? "up" : "down") : "flat") : "flat"}`}>
@@ -188,12 +192,22 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
                 </div>
               </div>
             </div>
-            {(s.data_notes?.length > 0 || cautions.length > 0) && (
-              <div className="callout warn" style={{ marginTop: 12 }}><h3>{t.notes_title}</h3><ul>{[...(s.data_notes ?? []), ...cautions].map((n: string, i: number) => <li key={i}>{n}</li>)}</ul></div>
+            {dataNotes.length > 0 && (
+              <div className="callout warn" style={{ marginTop: 12 }}><h3>{t.notes_title}</h3><ul>{dataNotes.map((n: string, i: number) => <li key={i}>{n}</li>)}</ul></div>
             )}
           </section>
 
-          {findings.length > 0 && (
+          {keyPts.length > 0 && (
+            <Sec title={t.keypts_title} sub={t.keypts_sub}>
+              <ol className="kpts">
+                {keyPts.map((k: any, i: number) => (
+                  <li key={i}><div><b>{noEmoji(k.title)}</b>{k.body && <p>{noEmoji(k.body)}</p>}<Evidence t={t} ids={k.review_ids} ev={ev} topic={noEmoji(k.title)} /></div></li>
+                ))}
+              </ol>
+            </Sec>
+          )}
+
+          {keyPts.length === 0 && findings.length > 0 && (
             <Sec title={t.highlights_title} sub={t.highlights_sub}>
               <ul className="pts">{findings.slice(0, 5).map((h: string, i: number) => <li key={i}><span>{h}</span></li>)}</ul>
               {findings.length > 5 && (
@@ -216,14 +230,22 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
 
           {ai?.quotes?.length > 0 && (
             <Sec title={t.quotes_title} sub={t.quotes_sub} info={<Info title={t.quotes_title}><p>{ai.quote_rule ? fill(t.quotes_rule, { rate: ai.quote_rule.rate != null ? ai.quote_rule.rate.toFixed(1) : "-", pos: String(ai.quote_rule.pos), neg: String(ai.quote_rule.neg) }) : t.quotes_rule_old}</p></Info>}>
-              <div className="qgrid">
-                {ai.quotes.map((q: any) => (
-                  <div key={q.review_id} className={`qcard ${q.voted_up ? "pos" : "neg"}`}>
-                    <div className="m"><span>{langName(q.language)}</span><span className={q.voted_up ? "pos-t" : "neg-t"}>{q.voted_up ? t.ev_up : t.ev_down}</span>{q.playtime_h != null && <span>{q.playtime_h}시간</span>}</div>
-                    <div className="qtx">{q.korean || q.original}</div>
-                    {q.korean && <details className="orig"><summary>{t.quotes_orig}</summary><div>{q.original}</div><div className="muted small">{t.quotes_ai_tr}</div></details>}
-                  </div>
-                ))}
+              <div className="qcols">
+                {[true, false].map((up) => {
+                  const list = ai.quotes.filter((q: any) => !!q.voted_up === up);
+                  return (
+                    <div key={String(up)} className="qcol">
+                      <h3 className={up ? "pos-t" : "neg-t"}>{up ? t.ev_up : t.ev_down} <span className="muted small num">{list.length}</span></h3>
+                      {list.map((q: any) => (
+                        <div key={q.review_id} className={`qcard ${q.voted_up ? "pos" : "neg"}`}>
+                          <div className="m"><span>{langName(q.language)}</span>{q.playtime_h != null && <span>{q.playtime_h}시간</span>}</div>
+                          <div className="qtx">{q.korean || q.original}</div>
+                          {q.korean && <details className="orig"><summary>{t.quotes_orig}</summary><div>{q.original}</div><div className="muted small">{t.quotes_ai_tr}</div></details>}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             </Sec>
           )}
@@ -240,7 +262,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
             const { best, worst } = bestWorst(langsOk, (l) => l.all.rate);
             return fill(t.lead_lang, { top: noEmoji(top.name), share: top.share.toFixed(0), best: noEmoji(best.name), bestRate: best.all.rate.toFixed(1), worst: noEmoji(worst.name), worstRate: worst.all.rate.toFixed(1) });
           })()}>
-            <RateTable refRate={s.all?.rate ?? null} rows={langsOk.slice(0, 10).map((l) => {
+            <RateTable refRate={s.all?.rate ?? null} rows={langsOk.filter((l, i) => i < 10 || l.code === "koreana" || (s.outliers ?? []).some((o: any) => o.code === l.code) || ai?.language_notes?.some((x: any) => x.language_code === l.code)).map((l) => {
               const n = ai?.language_notes?.find((x: any) => x.language_code === l.code);
               const odd = (s.outliers ?? []).some((o: any) => o.code === l.code);
               return {

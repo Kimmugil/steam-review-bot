@@ -74,16 +74,6 @@ export function findHighlights(s: Pick<Stats, "languages" | "recent" | "all" | "
   const noise = s.profile.noise_points;
   const floor = (min: number) => Math.max(min, noise != null ? 2 * noise : min);   // 최소 폭과 '평소 변동의 2배' 중 큰 값
 
-  // 리뷰량: 평소(과거 기간 중앙값) 대비를 우선, 모르면 직전 기간 대비. 세일·업데이트·화제로 리뷰가 몰리면 그 기간 숫자는 평소와 구성이 다릅니다.
-  const p = s.profile;
-  const spiky = (r: number) => r >= 2 || r <= 0.5;
-  if (p.volume_vs_typical != null && s.recent.total >= 100 && spiky(p.volume_vs_typical))
-    out.push(`${s.window.label} 리뷰 수(${s.recent.total.toLocaleString()}건)가 이 게임의 평소(과거 ${p.baseline_windows}개 기간 중앙값)의 ${p.volume_vs_typical.toFixed(1)}배입니다. 리뷰가 ${p.volume_vs_typical >= 1 ? "몰린" : "줄어든"} 때라 이 기간 숫자는 평소와 구성이 다를 수 있어요.`);
-  else if (p.volume_vs_typical == null && p.volume_ratio != null && s.recent.total >= 100 && s.previous && s.previous.total >= 100 && spiky(p.volume_ratio))
-    out.push(`${s.window.label} 리뷰 수(${s.recent.total.toLocaleString()}건)가 직전 같은 길이 기간(${s.previous.total.toLocaleString()}건)의 ${p.volume_ratio.toFixed(1)}배입니다. 리뷰가 ${p.volume_ratio >= 1 ? "몰린" : "줄어든"} 때라 이 기간 숫자는 평소와 구성이 다를 수 있어요.`);
-  if (p.previous_vs_typical != null && s.previous && s.previous.total >= 100 && spiky(p.previous_vs_typical))
-    out.push(`비교 대상인 직전 기간(${s.previous.total.toLocaleString()}건)은 이 게임의 평소의 ${p.previous_vs_typical.toFixed(1)}배로 리뷰가 ${p.previous_vs_typical >= 1 ? "몰린" : "적었던"} 때였어요. 직전 기간과의 비교는 평소 모습과의 비교가 아닐 수 있어요.`);
-
   const big = s.languages.filter((l) => l.share >= 5 && l.all.rate != null && l.all.total >= 100);
   if (big.length >= 2) {
     const hi = big.reduce((a, b) => ((b.all.rate ?? 0) > (a.all.rate ?? 0) ? b : a));
@@ -93,7 +83,7 @@ export function findHighlights(s: Pick<Stats, "languages" | "recent" | "all" | "
   }
 
   for (const o of findLangOutliers(s.languages, s.all))
-    out.push(`${o.name} 리뷰의 긍정률이 ${o.rate.toFixed(1)}%로, 다른 언어들의 중간값(${o.rest_rate.toFixed(1)}%)보다 ${Math.abs(o.diff).toFixed(1)}%p ${o.diff < 0 ? "낮습니다" : "높습니다"} (비중 ${o.share.toFixed(0)}%, ${o.total.toLocaleString()}건). 비중이 작아도 평소와 크게 다른 언어라 이유를 리뷰에서 찾아볼 가치가 있습니다.`);
+    out.push(`${o.name} 리뷰의 긍정률이 ${o.rate.toFixed(1)}%로, 다른 언어들의 중간값(${o.rest_rate.toFixed(1)}%)보다 ${Math.abs(o.diff).toFixed(1)}%p ${o.diff < 0 ? "낮습니다" : "높습니다"} (비중 ${o.share.toFixed(0)}%, ${o.total.toLocaleString()}건).`);
 
   if (s.recent.reliable && s.all.reliable && s.recent.rate != null && s.all.rate != null) {
     const d = s.recent.rate - s.all.rate;
@@ -108,12 +98,6 @@ export function findHighlights(s: Pick<Stats, "languages" | "recent" | "all" | "
     if (hi.window.rate! - lo.window.rate! >= floor(8) && Math.abs(twoPropZ(hi.window, lo.window)) >= 1.96)
       out.push(`플레이타임에 따라 평가가 갈립니다(${s.window.label}, 이 게임 리뷰어 기준): ${hi.label}(${hi.range}) ${hi.window.rate!.toFixed(1)}% vs ${lo.label}(${lo.range}) ${lo.window.rate!.toFixed(1)}%.`);
   }
-
-  const q1 = s.segments[0], q4 = s.segments[3];   // 플레이타임이 기록되지 않는 게임은 구간이 없어 둘 다 없음
-  if (q1 && Math.abs(q1.share_window - q1.share_all) >= 8 && s.recent.total >= 100)
-    out.push(`분석 기간에 리뷰를 쓴 사람의 구성이 평소와 다릅니다: 플레이 시간이 짧은 상태(${q1.range})에서 쓴 리뷰가 ${q1.share_window.toFixed(0)}%로, 전체 기간(${q1.share_all.toFixed(0)}%)보다 ${q1.share_window > q1.share_all ? "많습니다" : "적습니다"}.`);
-  else if (q4 && Math.abs(q4.share_window - q4.share_all) >= 8 && s.recent.total >= 100)
-    out.push(`분석 기간에 리뷰를 쓴 사람의 구성이 평소와 다릅니다: 오래 플레이한 뒤(${q4.range})에 쓴 리뷰가 ${q4.share_window.toFixed(0)}%로, 전체 기간(${q4.share_all.toFixed(0)}%)보다 ${q4.share_window > q4.share_all ? "많습니다" : "적습니다"}.`);
 
   if (s.delta_points != null && s.delta_notable)
     out.push(`직전 같은 길이 기간보다 긍정률이 ${s.delta_points >= 0 ? "올랐습니다" : "내렸습니다"} (${s.delta_points >= 0 ? "+" : ""}${s.delta_points.toFixed(1)}%p). 표본 크기로도, 이 게임이 평소 흔들리는 폭${noise != null ? `(±${noise.toFixed(1)}%p)` : ""}으로도 설명하기 어려운 변화입니다.`);
@@ -204,7 +188,8 @@ export async function collectStats(appId: number, info: GameInfo, onStep?: (s: s
   }
 
   // 6) 안내문 — 숨기지 않고 화면에 그대로 보여 줌
-  if (official.total < 10 && all.total >= 30)
+  // 무료 게임은 원래 '스팀 구매'가 없어 안내할 필요가 없음 (화면은 전체 기준을 씀)
+  if (official.total < 10 && all.total >= 30 && !info.isFree)
     notes.push(`스팀 구매로 표시된 리뷰가 ${official.total}건뿐이라(무료 배포·외부 구매가 대부분인 게임) 스팀 상점 기준 평가는 의미가 없습니다. 스팀 밖 구매까지 포함한 전체(${all.total.toLocaleString()}건) 기준으로 봐 주세요.`);
   else if (official.rate != null && all.rate != null && Math.abs(official.rate - all.rate) >= 2)
     notes.push(`스팀 상점 평가 기준(스팀 구매만) 긍정률은 ${official.rate.toFixed(1)}%, 스팀 밖 구매(키 등)까지 합치면 ${all.rate.toFixed(1)}%로 다릅니다.`);

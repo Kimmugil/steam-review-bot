@@ -70,7 +70,7 @@ export function buildProfileText(stats: Stats, gameName: string): string {
   const L = [
     `- 장르: ${p.genres.length ? p.genres.join(", ") : "알 수 없음"} / ${p.is_free ? "무료 게임" : "유료 게임"}${p.early_access ? " / 얼리 액세스" : ""}`,
     `- 리뷰가 쌓인 기간: ${age}${p.release_days != null && Math.abs(p.release_days - p.history_days) > 60 ? ` (스토어 표시 출시일은 ${p.release_days}일 전이지만 리뷰는 더 오래전부터 있음 — 정식 출시·재출시일 수 있음)` : ""}`,
-    ...(p.volume_vs_typical != null ? [`- 이번 기간 리뷰량은 이 게임의 평소의 ${p.volume_vs_typical.toFixed(1)}배${p.previous_vs_typical != null && (p.previous_vs_typical >= 2 || p.previous_vs_typical <= 0.5) ? `이고, 비교 대상인 직전 기간은 평소의 ${p.previous_vs_typical.toFixed(1)}배였습니다(직전 기간이 평소와 달라 비교에 주의)` : ""}.`] : []),
+    ...(p.volume_vs_typical != null && p.history_days >= 120 ? [`- 이번 기간 리뷰량은 이 게임의 평소의 ${p.volume_vs_typical.toFixed(1)}배${p.previous_vs_typical != null && (p.previous_vs_typical >= 2 || p.previous_vs_typical <= 0.5) ? `이고, 비교 대상인 직전 기간은 평소의 ${p.previous_vs_typical.toFixed(1)}배였습니다(직전 기간이 평소와 달라 비교에 주의)` : ""}.`] : []),
     `- 규모: ${SIZE_KO[p.size_class]} (최근 7일 ${p.volume.d7.toLocaleString()}건, 30일 ${p.volume.d30.toLocaleString()}건, 90일 ${p.volume.d90.toLocaleString()}건)`,
     `- 분석 기간: ${stats.window.label} — ${stats.window.reason}`,
     p.noise_points != null ? `- 이 게임의 긍정률은 평소 기간마다 ±${p.noise_points.toFixed(1)}%p 정도 흔들립니다(과거 ${p.baseline_windows}개 기간 기준). 이보다 작은 변화는 의미를 두지 마세요.` : "- 평소 변동 폭을 알 만한 과거 기간이 부족합니다.",
@@ -110,17 +110,19 @@ export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], sa
 - 데이터에 없는 것은 "확인할 수 없다"고 써라. 게임에 대한 배경지식으로 사실을 보충하지 마라(검색 도구가 없다).
 - 변화(직전 기간 대비)가 '작은 변화'이면 원인을 설명하려 들지 마라. (그 게임이 평소 흔들리는 폭 안의 변화는 아무 일도 아니다) 언어별 변화도 '뚜렷한 변화'로 표시된 것만 언급하고, 나머지는 쓰지 마라. 뚜렷한 변화여도 업데이트나 소식 때문이라고 단정하지 말고 "시기가 겹친다" 정도로만 써라.
 - 원인을 추측하지 마라. "~했을 가능성도 있다", "~때문으로 보인다" 같은 문장은 쓰지 마라. 숫자가 보여 주는 사실과, 표본 리뷰에서 유저가 직접 언급한 이유(근거 번호가 있는 것)만 써라. 유저가 언급하지 않은 이유를 네가 만들어 붙이지 마라.
-- headline 과 one_liner 는 [통계]의 등급과 [코드가 찾아낸 눈에 띄는 사실]과 어긋나면 안 된다. 예를 들어 전체 등급이 '복합적'인데 "호평"이라고 쓰지 말고, 언어 간 격차가 있으면 headline 에서 그 사실을 먼저 짚어라. 최근 기간과 전체 기간의 평가가 다르면 둘 다 써라.
+- headline 과 one_liner 는 [통계]의 등급과 어긋나면 안 된다. 예를 들어 전체 등급이 '복합적'인데 "호평"이라고 쓰지 마라. 최근 기간과 전체 기간의 평가가 다르면 둘 다 써라.
+- 숫자를 되풀이하는 것은 해석이 아니다. 숫자는 화면에 이미 표로 나온다. 네가 쓸 것은 유저가 무엇을 좋아하고 무엇에 불만인지, 그리고 평가가 갈리는 곳에서는 '왜 갈리는지'(그 리뷰들이 직접 말한 이유)다. "차이가 난다", "엇갈린다"에서 멈추지 말고 이유까지 써라. "찾아볼 가치가 있다", "살펴볼 필요가 있다" 같은 말은 쓰지 마라.
 - 이 분석은 국가가 아니라 '언어' 기준이다. "한국 유저", "미국 유저"가 아니라 "한국어 리뷰", "영어 리뷰"라고 써라.
 - 마크다운 기호(**, # 등)와 이모지·이모티콘은 어떤 항목에도 쓰지 마라. 문장은 한국어로.
 
-[분량] 각 summary 는 1~2문장(80자 안팎). themes 최대 8개, language_notes 는 표본이 8건 이상인 언어 중 표본이 많은 상위 6개까지(여기에 [특별히 살펴볼 언어]는 표본이 5건 이상이면 추가로 반드시 포함), quotes 후보 최대 12개. JSON 만 출력.
+[분량] 각 summary 는 1~2문장(80자 안팎). key_points 3~5개, themes 최대 8개, language_notes 는 표본이 8건 이상인 모든 언어(많은 순으로 최대 열 개)에 더해 한국어(koreana)는 표본이 3건 이상이면 반드시, [특별히 살펴볼 언어]는 표본이 5건 이상이면 반드시 포함, quotes 후보 최대 12개. JSON 만 출력.
 
 [작성 항목]
 - one_liner: 한 줄 요약 (60자 이내, 이모지 없이)
-- headline: 핵심 2~3문장
+- headline: 전체 결론 2~3문장. 유저가 무엇을 좋아하고 무엇에 불만인지를 주제로 말하고, 언어나 플레이타임에 따라 평가가 갈리면 그 이유(그 리뷰들이 직접 말한 것)를 함께 써라. 언어 이름과 긍정률을 나열하지 마라. 숫자는 꼭 필요할 때 1개까지.
+- key_points: 이 리포트의 주요 평가 3~5개, 중요한 순. title 은 결론 한 줄(30자 안팎), body 는 그 결론의 이유 1~2문장(표본 리뷰가 직접 말한 것), review_ids 는 그 근거 리뷰 2~8개. [코드가 찾아낸 눈에 띄는 사실]과 [특별히 살펴볼 언어]의 사실은 하나씩 항목으로 다루되, title 에 사실을, body 에 그 차이가 왜 생기는지를 그 언어·구간 리뷰가 말한 이유로 써라(이유가 표본에서 보이지 않으면 "표본에서 뚜렷한 이유는 보이지 않는다"고 써라). 남는 자리는 가장 큰 호평·불만 주제로 채워라. 숫자는 [통계]·[코드가 찾아낸 눈에 띄는 사실]·[특별히 살펴볼 언어]에 있는 값만 그대로, 항목당 2개까지. 문장 안에 R번호를 쓰지 마라.
 - themes: 표본에서 보이는 주제 최대 8개 (label 짧게, polarity, summary 1~2문장, review_ids)
-- language_notes: 표본이 8건 이상인 언어마다 그 언어 리뷰의 특징. [특별히 살펴볼 언어]는 가장 먼저, 다른 언어와 긍정률이 왜 다른지를 그 언어 리뷰어가 직접 언급한 이유로만 설명해라(이유가 표본에서 뚜렷하지 않으면 그렇게 쓰고 지어내지 마라. 전체 기간에서 뽑은 표본이면 그 사실을 한 마디 덧붙여라) (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code 는 아래 표본 제목에 적힌 language_code 값을 그대로 써라)
+- language_notes: 언어마다 그 언어 리뷰가 무엇을 좋아하고 무엇에 불만인지, 다른 언어와 다른 점. 긍정률·비중 같은 숫자는 화면에 이미 있으니 쓰지 마라. [특별히 살펴볼 언어]는 가장 먼저, 다른 언어와 긍정률이 왜 다른지를 그 언어 리뷰어가 직접 언급한 이유로만 설명해라(이유가 표본에서 뚜렷하지 않으면 그렇게 쓰고 지어내지 마라. 전체 기간에서 뽑은 표본이면 그 사실을 한 마디 덧붙여라) (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code 는 아래 표본 제목에 적힌 language_code 값을 그대로 써라)
 - segment_notes: 플레이타임 구간(q1~q4, 이 게임 리뷰어의 사분위)별 특징. 표본 구간 분포: ${segCounts}. 5건 미만인 구간은 쓰지 마라. review_ids 는 그 구간 라벨이 붙은 리뷰만, 최대 8개만 써라(다른 구간 리뷰를 섞지 마라). 구간 이름은 "초보/고인물" 같은 표현이 아니라 시간 범위로 불러라.
 - change_notes: [통계]의 '변화' 줄이 '해석해도 된다'일 때만 직전 기간 대비 변화를 해석 (0~3개). 그 외에는 빈 배열.
 - news_notes: [공식 소식]을 본문 기준으로 요약 (소식이 없으면 빈 배열). 제목과 다른 내용을 지어내지 마라.
@@ -133,7 +135,7 @@ ${buildProfileText(stats, gameName)}
 [통계]
 ${buildStatsText(stats)}
 
-[코드가 찾아낸 눈에 띄는 사실 — 숫자에서 규칙으로 뽑은 것. 이유를 리뷰에서 찾아 해석해라]
+[코드가 찾아낸 눈에 띄는 사실 — 숫자에서 규칙으로 뽑은 것. key_points 에서 각각의 이유를 리뷰에서 찾아라]
 ${stats.highlights.length ? stats.highlights.map((h) => `- ${h}`).join("\n") : "- (뚜렷하게 눈에 띄는 격차나 변화는 없음)"}
 
 [특별히 살펴볼 언어 — 다른 언어와 긍정률이 크게 다른 언어. 비중이 작아도 가장 중요한 단서다]
@@ -152,6 +154,7 @@ export const AI_SCHEMA = {
   properties: {
     one_liner: { type: "STRING" },
     headline: { type: "STRING" },
+    key_points: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, body: { type: "STRING" }, review_ids: strArr }, required: ["title", "body", "review_ids"] } },
     themes: { type: "ARRAY", items: { type: "OBJECT", properties: {
       label: { type: "STRING" }, polarity: { type: "STRING", enum: ["positive", "negative", "mixed"] }, summary: { type: "STRING" }, review_ids: strArr,
     }, required: ["label", "polarity", "summary", "review_ids"] } },
@@ -162,7 +165,7 @@ export const AI_SCHEMA = {
     quotes: { type: "ARRAY", items: { type: "OBJECT", properties: { review_id: { type: "STRING" }, korean: { type: "STRING" } }, required: ["review_id", "korean"] } },
     caveats: strArr,
   },
-  required: ["one_liner", "headline", "themes", "language_notes", "segment_notes", "change_notes", "news_notes", "quotes", "caveats"],
+  required: ["one_liner", "headline", "key_points", "themes", "language_notes", "segment_notes", "change_notes", "news_notes", "quotes", "caveats"],
 } as const;
 
 /** 주목 언어(다른 언어와 긍정률이 크게 다른 언어)만 따로 해석하는 두 번째 요청의 응답 형식 */
@@ -229,7 +232,7 @@ export function applyFocusNotes(ai: AiResult, raw: { notes?: { language_code: st
       if (s && s.lang === n.language_code && !rids.includes(s.n)) rids.push(s.n);
     }
     // 문장 속 근거 번호(R12 등)는 화면에서 지저분하니 지운다 (근거는 review_ids 로 따로 연결됨)
-    const summary = str(n.summary, 900).replace(/\s*\(\s*R\d+(?:\s*[,·]\s*R\d+)*\s*\)/g, "").replace(/\s*\bR\d+\b/g, "").replace(/\s{2,}/g, " ").trim();
+    const summary = stripR(str(n.summary, 900));
     if (!summary) continue;
     added.push({ language_code: n.language_code, name: langName(n.language_code), summary, sample_n: mine.length, review_ids: rids, focus: true });
   }
@@ -244,9 +247,16 @@ const parseId = (x: unknown): number | null => {
 /** AI가 쓴 글에서 이모지(그림 문자)와 마크다운 강조를 지운다. 프롬프트로도 금지하지만 코드가 한 번 더 막는다. */
 export const stripEmoji = (x: string) => x.replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]/gu, "").replace(/ {2,}/g, " ");
 const str = (x: unknown, max = 600) => stripEmoji(String(x ?? "").replace(/\*\*/g, "")).trim().slice(0, max);
+/** 문장 속 근거 번호(R12 등)는 화면에서 지저분하니 지운다 (근거는 review_ids 로 따로 연결됨) */
+const stripR = (x: string) => x.replace(/\s*\(\s*R\d+(?:\s*[,·]\s*R\d+)*\s*\)/g, "").replace(/\s*\bR\d+\b/g, "").replace(/\s{2,}/g, " ").trim();
+/** 글 속 퍼센트 숫자 중 코드가 준 숫자에 없는 것 (AI가 숫자를 지어냈는지 확인) */
+export function unknownPercents(text: string, allowed: string): string[] {
+  const ok = new Set([...allowed.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((m) => String(Number(m[1]))));
+  return [...text.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((m) => String(Number(m[1]))).filter((x) => !ok.has(x));
+}
 
 /** AI 응답을 검증하고, 비중·성향을 근거 리뷰에서 코드가 계산한 값으로 바꿔 저장 형태로 만듭니다. */
-export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, segments: Pick<SegmentDef, "key" | "min" | "max">[], opts: { allowChangeNotes?: boolean; recentRate?: number | null; focusCodes?: string[] } = {}): AiResult {
+export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, segments: Pick<SegmentDef, "key" | "min" | "max">[], opts: { allowChangeNotes?: boolean; recentRate?: number | null; focusCodes?: string[]; facts?: string } = {}): AiResult {
   const byN = new Map(samples.map((s) => [s.n, s]));
   let unknown = 0;
   let emptyThemes = 0;
@@ -277,10 +287,25 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
   }
   themes.sort((a, b) => b.support - a.support);
 
+  // 주요 평가: 근거 리뷰 2건 이상, 숫자는 코드가 준 값만 (지어낸 퍼센트가 있으면 그 항목은 버림)
+  let badNumbers = 0;
+  const key_points: NonNullable<AiResult["key_points"]> = [];
+  for (const k of Array.isArray(raw.key_points) ? raw.key_points : []) {
+    const title = stripR(str(k.title, 120)), body = stripR(str(k.body, 500));
+    const rids = ids(k.review_ids);
+    if (!title || rids.length < 2) { emptyThemes++; continue; }
+    if (opts.facts != null && unknownPercents(`${title} ${body}`, opts.facts).length) { badNumbers++; continue; }
+    key_points.push({ title, body, review_ids: rids.slice(0, 8) });
+    if (key_points.length >= 5) break;
+  }
+  if (opts.facts != null) badNumbers += unknownPercents(String(raw.headline ?? ""), opts.facts).length ? 1 : 0;
+
   const langN = (code: string) => samples.filter((s) => s.lang === code).length;
+  // 한국어는 상위 언어가 아니어도 항상 보여 준다(표본 3건 이상), 주목 언어는 5건, 그 밖은 8건 이상
+  const minFor = (code: string) => (code === "koreana" ? 3 : (opts.focusCodes ?? []).includes(code) ? 5 : 8);
   const language_notes = (Array.isArray(raw.language_notes) ? raw.language_notes : [])
-    .filter((n) => langN(n.language_code) >= ((opts.focusCodes ?? []).includes(n.language_code) ? 5 : 8))
-    .map((n) => ({ language_code: n.language_code, name: langName(n.language_code), summary: str(n.summary), sample_n: langN(n.language_code),
+    .filter((n) => langN(n.language_code) >= minFor(n.language_code))
+    .map((n) => ({ language_code: n.language_code, name: langName(n.language_code), summary: stripR(str(n.summary)), sample_n: langN(n.language_code),
       review_ids: ids(n.review_ids, (s) => s.lang === n.language_code), focus: (opts.focusCodes ?? []).includes(n.language_code) }))
     .sort((a, b) => Number(b.focus) - Number(a.focus));
 
@@ -342,11 +367,11 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
   }
 
   return {
-    one_liner: str(raw.one_liner, 90), headline: str(raw.headline, 800),
-    themes, language_notes, segment_notes,
+    one_liner: str(raw.one_liner, 90), headline: stripR(str(raw.headline, 800)),
+    key_points, themes, language_notes, segment_notes,
     change_notes: changeNotes,
     news_notes: (Array.isArray(raw.news_notes) ? raw.news_notes : []).map((n) => ({ title: str(n.title, 200), summary: str(n.summary, 800) })).slice(0, 3),
     quotes, quote_rule, caveats: (Array.isArray(raw.caveats) ? raw.caveats : []).map((x) => str(x)).filter(Boolean).slice(0, 5),
-    model, dropped: { unknown_ids: unknown, empty_themes: emptyThemes },
+    model, dropped: { unknown_ids: unknown, empty_themes: emptyThemes, bad_numbers: badNumbers },
   };
 }
