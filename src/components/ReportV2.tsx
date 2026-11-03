@@ -77,6 +77,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
   const [tab, setTab] = useState<(typeof TAB_KEYS)[number]>("sum");
   const [showHow, setShowHow] = useState(false);
   const sampleTotal = s.sample?.total ?? 0;
+  const themeBase: number = ai?.theme_base ?? sampleTotal;   // 주제 비중의 분모 (분석 기간 표본만)
   const langN = (code: string) => s.sample?.languages?.find((x: any) => x.code === code)?.n ?? 0;
   const noise: number | null = s.profile.noise_points;
   const nz = noise != null ? noise.toFixed(1) : "";
@@ -104,8 +105,8 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
 
   const maxShare = Math.max(0.01, ...themes.map((x) => x.support_share));
   const Theme = ({ th }: { th: any }) => {
-    const [lo, hi] = wilsonPct(th.support, sampleTotal);
-    const tip = fill(t.theme_share, { n: String(sampleTotal), k: String(th.support), pct: (th.support_share * 100).toFixed(0), lo: lo.toFixed(0), hi: hi.toFixed(0) });
+    const [lo, hi] = wilsonPct(th.support, themeBase);
+    const tip = fill(t.theme_share, { n: String(themeBase), k: String(th.support), pct: (th.support_share * 100).toFixed(0), lo: lo.toFixed(0), hi: hi.toFixed(0) });
     return (
       <div className={`thm ${th.polarity === "positive" ? "pos" : th.polarity === "negative" ? "neg" : "mix"}`}>
         <div className="thm-h">
@@ -218,7 +219,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
           )}
 
           {ai && (
-            <Sec title={t.themes_title} sub={fill(t.themes_sub, { n: num(sampleTotal) })}>
+            <Sec title={t.themes_title} sub={fill(t.themes_sub, { n: num(themeBase) })}>
               {themes.length === 0 && <div className="empty">{t.themes_empty}</div>}
               <div className="cols2">
                 {themePos.length > 0 && <div><h3 style={{ marginTop: 0 }}>{t.theme_pos}</h3>{themePos.map((th, i) => <Theme key={i} th={th} />)}</div>}

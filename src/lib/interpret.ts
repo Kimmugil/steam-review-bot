@@ -122,6 +122,7 @@ export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], sa
 - headline: 전체 결론 2~3문장. 유저가 무엇을 좋아하고 무엇에 불만인지를 주제로 말하고, 언어나 플레이타임에 따라 평가가 갈리면 그 이유(그 리뷰들이 직접 말한 것)를 함께 써라. 언어 이름과 긍정률을 나열하지 마라. 숫자는 꼭 필요할 때 1개까지.
 - key_points: 이 리포트의 주요 평가 3~5개, 중요한 순. title 은 결론 한 줄(30자 안팎), body 는 그 결론의 이유 1~2문장(표본 리뷰가 직접 말한 것), review_ids 는 그 근거 리뷰 2건 이상(가장 잘 보여 주는 것 위주로 8개 안팎). [코드가 찾아낸 눈에 띄는 사실]과 [특별히 살펴볼 언어]의 사실은 하나씩 항목으로 다루되, title 에 사실을, body 에 그 차이가 왜 생기는지를 그 언어·구간 리뷰가 말한 이유로 써라(이유가 표본에서 보이지 않으면 "표본에서 뚜렷한 이유는 보이지 않는다"고 써라). 남는 자리는 가장 큰 호평·불만 주제로 채워라. 숫자는 [통계]·[코드가 찾아낸 눈에 띄는 사실]·[특별히 살펴볼 언어]에 있는 값만 그대로, 항목당 2개까지. title·body 문장 안에는 R번호나 번호 목록을 절대 쓰지 마라(근거는 review_ids 에만).
 - themes: 표본에서 보이는 주제 최대 8개 (label 짧게, polarity, summary 1~2문장, review_ids). themes 의 review_ids 에는 그 주제를 언급한 표본 리뷰 번호를 개수 제한 없이 빠짐없이 모두 적어라(수십 건이어도 된다). 주제 비중을 코드가 이 개수로 계산하므로 일부만 적으면 비중이 틀린다. 다른 항목의 '최대 8개' 제한은 themes 에는 적용되지 않는다.
+- 표본 제목에 '전체 기간에서 뽑음'이라고 표시된 언어의 리뷰는 language_notes 와 key_points 의 그 언어 설명에만 써라. themes·segment_notes·quotes 의 근거로는 쓰지 마라(분석 기간의 리뷰가 아니다).
 - language_notes: 언어마다 그 언어 리뷰가 무엇을 좋아하고 무엇에 불만인지, 다른 언어와 다른 점. 긍정률·비중 같은 숫자는 화면에 이미 있으니 쓰지 마라. [특별히 살펴볼 언어]는 가장 먼저, 다른 언어와 긍정률이 왜 다른지를 그 언어 리뷰어가 직접 언급한 이유로만 설명해라(이유가 표본에서 뚜렷하지 않으면 그렇게 쓰고 지어내지 마라. 전체 기간에서 뽑은 표본이면 그 사실을 한 마디 덧붙여라) (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code 는 아래 표본 제목에 적힌 language_code 값을 그대로 써라)
 - segment_notes: 플레이타임 구간(q1~q4, 이 게임 리뷰어의 사분위)별 특징. 표본 구간 분포: ${segCounts}. 5건 미만인 구간은 쓰지 마라. review_ids 는 그 구간 라벨이 붙은 리뷰만, 최대 8개만 써라(다른 구간 리뷰를 섞지 마라). 구간 이름은 "초보/고인물" 같은 표현이 아니라 시간 범위로 불러라.
 - change_notes: [통계]의 '변화' 줄이 '해석해도 된다'일 때만 직전 기간 대비 변화를 해석 (0~3개). 그 외에는 빈 배열.
@@ -252,7 +253,7 @@ export const stripR = (x: string) => x
   .replace(/\s*\bR\d+\b/g, "")
   .replace(/\s*\(\s*[,·\sR]*(?:\)|$)/g, "")         // 번호를 지우고 남은 빈 괄호, 잘려서 닫히지 않은 괄호 (끝에 잘린 'R' 포함)
   .replace(/\s*[,·](?:\s*[,·])+/g, "")
-  .replace(/(많은|대부분의|대다수의) (유저|사용자|플레이어|리뷰어)들?(이|은|는)/g, "$2들은")
+  .replace(/(많은|대부분의|대다수의) (?=(유저|사용자|플레이어|리뷰어))/g, "")   // 표본으로는 비중을 말할 수 없음
   .replace(/\s{2,}/g, " ").trim();
 /** 글 속 퍼센트 숫자 중 코드가 준 숫자에 없는 것 (AI가 숫자를 지어냈는지 확인) */
 export function unknownPercents(text: string, allowed: string): string[] {
@@ -261,8 +262,12 @@ export function unknownPercents(text: string, allowed: string): string[] {
 }
 
 /** AI 응답을 검증하고, 비중·성향을 근거 리뷰에서 코드가 계산한 값으로 바꿔 저장 형태로 만듭니다. */
-export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, segments: Pick<SegmentDef, "key" | "min" | "max">[], opts: { allowChangeNotes?: boolean; recentRate?: number | null; focusCodes?: string[]; facts?: string } = {}): AiResult {
+export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, segments: Pick<SegmentDef, "key" | "min" | "max">[], opts: { allowChangeNotes?: boolean; recentRate?: number | null; focusCodes?: string[]; facts?: string; outOfWindow?: string[] } = {}): AiResult {
   const byN = new Map(samples.map((s) => [s.n, s]));
+  // 전체 기간에서 뽑은 언어(주목 언어·한국어의 추가 표본)는 언어별 해석에만 쓰고, 이 기간의 주제 비중·구간·대표 리뷰에는 넣지 않는다
+  const outSet = new Set(opts.outOfWindow ?? []);
+  const inWin = (s: SampleReview) => !outSet.has(s.lang);
+  const winN = samples.filter(inWin).length;
   let unknown = 0;
   let emptyThemes = 0;
   const ids = (list: unknown, allow?: (s: SampleReview) => boolean): number[] => {
@@ -278,7 +283,7 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
 
   const themes: AiResult["themes"] = [];
   for (const t of Array.isArray(raw.themes) ? raw.themes.slice(0, 8) : []) {
-    const rids = ids(t.review_ids);
+    const rids = ids(t.review_ids).filter((n) => inWin(byN.get(n)!));
     if (rids.length < 2) { emptyThemes++; continue; }
     const posShare = rids.filter((n) => byN.get(n)!.voted_up).length / rids.length;
     themes.push({
@@ -287,7 +292,7 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
       // (불만을 말한 리뷰도 대부분 '추천'일 수 있어서, 둘을 섞으면 오해가 생긴다)
       polarity: t.polarity === "positive" || t.polarity === "negative" ? t.polarity : "mixed",
       stance: posShare >= 0.7 ? "recommend" : posShare <= 0.3 ? "against" : "split",
-      support: rids.length, support_share: rids.length / Math.max(1, samples.length), pos_share: posShare, review_ids: rids,
+      support: rids.length, support_share: rids.length / Math.max(1, winN), pos_share: posShare, review_ids: rids,
     });
   }
   themes.sort((a, b) => b.support - a.support);
@@ -314,11 +319,11 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
       review_ids: ids(n.review_ids, (s) => s.lang === n.language_code), focus: (opts.focusCodes ?? []).includes(n.language_code) }))
     .sort((a, b) => Number(b.focus) - Number(a.focus));
 
-  const segN = (k: SegmentKey) => samples.filter((s) => segmentOfHours(s.playtime_h, segments) === k).length;
+  const segN = (k: SegmentKey) => samples.filter((s) => inWin(s) && segmentOfHours(s.playtime_h, segments) === k).length;
   const segment_notes = (Array.isArray(raw.segment_notes) ? raw.segment_notes : [])
     .filter((n) => SEGMENT_KEYS.includes(n.segment_key) && segN(n.segment_key) >= 5)
     .map((n) => ({ segment_key: n.segment_key, summary: str(n.summary), sample_n: segN(n.segment_key),
-      review_ids: ids(n.review_ids, (s) => segmentOfHours(s.playtime_h, segments) === n.segment_key) }));
+      review_ids: ids(n.review_ids, (s) => inWin(s) && segmentOfHours(s.playtime_h, segments) === n.segment_key) }));
 
   // 대표 리뷰: AI는 후보(최대 12)와 번역만 내고, 최종 6건은 코드가 공개된 조건으로 고른다.
   //  - 글자 수가 너무 짧지 않은 것(한·중·일·태 15자, 그 밖 40자 이상)
@@ -331,7 +336,7 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
     const n = parseId(q.review_id);
     const s = n != null ? byN.get(n) : undefined;
     if (!s) { unknown++; continue; }
-    if (cands.some((x) => x.s.n === s.n)) continue;
+    if (cands.some((x) => x.s.n === s.n) || !inWin(s)) continue;
     if (s.text.length < (CJK_LANGS.has(s.lang) ? 15 : 40)) continue;
     cands.push({ s, korean: s.lang === "koreana" ? "" : str(q.korean) });
   }
@@ -377,6 +382,6 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
     change_notes: changeNotes,
     news_notes: (Array.isArray(raw.news_notes) ? raw.news_notes : []).map((n) => ({ title: str(n.title, 200), summary: str(n.summary, 800) })).slice(0, 3),
     quotes, quote_rule, caveats: (Array.isArray(raw.caveats) ? raw.caveats : []).map((x) => str(x)).filter(Boolean).slice(0, 5),
-    model, dropped: { unknown_ids: unknown, empty_themes: emptyThemes, bad_numbers: badNumbers },
+    theme_base: winN, model, dropped: { unknown_ids: unknown, empty_themes: emptyThemes, bad_numbers: badNumbers },
   };
 }

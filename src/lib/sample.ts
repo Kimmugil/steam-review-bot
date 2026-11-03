@@ -25,7 +25,7 @@ const clean = (s: string) => s.replace(/\u0000/g, "").replace(/\s+/g, " ").trim(
 export async function collectSample(
   appId: number, plan: WindowPlan, windowTotals: { code: string; total: number; pos: number }[], notes: string[],
   rng: () => number = Math.random,
-  focus: { code: string; pos: number; total: number }[] = [],
+  focus: { code: string; pos: number; total: number; minWindow?: number }[] = [],
 ): Promise<{ reviews: SampleReview[]; info: SampleInfo }> {
   // 기본 배분 + 주목 언어(다른 언어와 긍정률이 크게 다른 언어)는 이유를 읽을 수 있게 더 뽑는다.
   // 분석 기간에 그 언어 리뷰가 적으면(비중이 작은 언어는 기간 통계가 아예 없을 수 있음) 전체 기간에서 뽑는다.
@@ -35,7 +35,7 @@ export async function collectSample(
   for (const f of focus) {
     const i = alloc.findIndex((x) => x.code === f.code);
     const w = windowTotals.find((x) => x.code === f.code);
-    const entry: Plan = w && w.total >= SAMPLE.focusMin * 2
+    const entry: Plan = w && w.total >= (f.minWindow ?? SAMPLE.focusMin * 2)
       ? { code: f.code, n: Math.min(SAMPLE.focusMin, w.total), scope: "window", pos: w.pos, total: w.total }
       : { code: f.code, n: Math.min(SAMPLE.focusMin, f.total), scope: "all", pos: f.pos, total: f.total };
     if (i < 0) alloc.push(entry);

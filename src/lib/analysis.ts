@@ -1,6 +1,6 @@
 import { GeminiError, MODEL, interpret, interpretFocus } from "./gemini";
 import { langName } from "./config";
-import { applyFocusNotes, buildFocusPrompt, buildPrompt, buildStatsText, finalizeAi, mayInterpretChange } from "./interpret";
+import { applyFocusNotes, buildFocusPrompt, buildProfileText, buildPrompt, buildStatsText, finalizeAi, mayInterpretChange } from "./interpret";
 import { collectSample } from "./sample";
 import { collectStats } from "./stats";
 import { SteamError, getGameInfo, getOfficialNews, notAnalyzableReason } from "./steam";
@@ -51,9 +51,10 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
     await setStep(id, "reviews");
     const windowTotals = stats.languages.filter((l) => l.window).map((l) => ({ code: l.code, total: l.window!.total, pos: l.window!.pos }));
     // 주목 언어와 한국어는 이유를 읽을 수 있게 더 뽑는다 (한국어는 상위 언어가 아니어도 항상 해석)
-    const boost = (stats.outliers ?? []).map((o) => ({ code: o.code, pos: o.pos, total: o.total }));
+    const boost: { code: string; pos: number; total: number; minWindow?: number }[] = (stats.outliers ?? []).map((o) => ({ code: o.code, pos: o.pos, total: o.total }));
     const ko = stats.languages.find((l) => l.code === "koreana");
-    if (ko && !boost.some((b) => b.code === "koreana")) boost.push({ code: "koreana", pos: ko.all.pos, total: ko.all.total });
+    // 한국어는 분석 기간 리뷰가 15건만 있어도 기간 안에서 뽑는다 (전체 기간 표본은 최근 모습이 아닐 수 있어 최후 수단)
+    if (ko && !boost.some((b) => b.code === "koreana")) boost.push({ code: "koreana", pos: ko.all.pos, total: ko.all.total, minWindow: 15 });
     const { reviews, info: sampleInfo } = await collectSample(row.app_id, plan, windowTotals, stats.data_notes, Math.random, boost);
     stats.sample = sampleInfo;
     lap(`표본 ${reviews.length}건 (${sampleInfo.languages.length}개 언어)`);
@@ -76,7 +77,8 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
       const { raw, usage } = await interpret(buildPrompt(info.name, stats, news, reviews), [...new Set(reviews.map((r) => r.lang))]);
       await recordAi(id, "analysis", usage.input, usage.output);
       ai = finalizeAi(raw, reviews, MODEL, stats.segments, { allowChangeNotes: mayInterpretChange(stats), recentRate: stats.recent.rate, focusCodes: (stats.outliers ?? []).map((o) => o.code),
-        facts: [buildStatsText(stats), ...stats.highlights, ...(stats.outliers ?? []).map((o) => `${o.rate.toFixed(1)}% ${o.rest_rate.toFixed(1)}% ${o.share.toFixed(0)}% ${Math.abs(o.diff).toFixed(1)}%`)].join("\n") });
+        outOfWindow: sampleInfo.languages.filter((l) => l.scope === "all").map((l) => l.code),
+        facts: [buildStatsText(stats), buildProfileText(stats, info.name), ...stats.highlights, ...(stats.outliers ?? []).map((o) => `${o.rate.toFixed(1)}% ${o.rest_rate.toFixed(1)}% ${o.share.toFixed(0)}% ${Math.abs(o.diff).toFixed(1)}%`)].join("\n") });
       lap(`AI 해석 완료 (주요 평가 ${ai.key_points?.length ?? 0}개, 주제 ${ai.themes.length}개, 걸러낸 근거 번호 ${ai.dropped.unknown_ids}개, 지어낸 숫자로 버린 항목 ${ai.dropped.bad_numbers ?? 0}개)`);
       // 주목 언어(다른 언어와 긍정률이 크게 다른 언어)는 본 해석에 맡기지 않고 따로 한 번 더 해석한다. (본 해석이 길어지면 뒤로 밀려 빠지는 일이 있었음)
       const focus = buildFocusPrompt(info.name, stats, reviews);

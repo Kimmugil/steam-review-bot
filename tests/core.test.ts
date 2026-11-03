@@ -356,6 +356,17 @@ import { stripR } from "../src/lib/interpret";
 test("근거 번호 지우기: 잘린 번호 목록과 비중 표현도 정리", () => {
   assert.equal(stripR("재미를 느낍니다. (R1, R2, R3, R"), "재미를 느낍니다.");
   assert.equal(stripR("불만이 있습니다 (R4, R5)."), "불만이 있습니다.");
-  assert.equal(stripR("많은 유저들이 버그를 말합니다."), "유저들은 버그를 말합니다.");
+  assert.equal(stripR("많은 유저들이 버그를 말합니다."), "유저들이 버그를 말합니다.");
+  assert.equal(stripR("대부분의 유저들이 지적한 버그"), "유저들이 지적한 버그");
   assert.ok(!/,,/.test(stripR("좋습니다. (" + "R1, ".repeat(40))));
+});
+
+test("전체 기간에서 더 뽑은 언어는 주제 비중·대표 리뷰에서 빠진다", () => {
+  const raw = baseRaw();
+  raw.themes = [{ label: "버그", polarity: "negative", summary: "x", review_ids: ["R1", "R2", "R4", "R5"] }];
+  raw.quotes = [{ review_id: "R1", korean: "" }, { review_id: "R4", korean: "번역" }];
+  const ai = finalizeAi(raw, samples(), "m", segmentDefs([10, 40, 100]), { outOfWindow: ["koreana"] });
+  assert.equal(ai.theme_base, 9);                                   // 표본 12건 중 한국어 3건 제외
+  assert.equal(ai.themes[0].support, 2);                            // 한국어 근거(R1, R2)는 비중 계산에서 빠짐
+  assert.ok(ai.quotes.every((q) => q.language !== "koreana"));
 });

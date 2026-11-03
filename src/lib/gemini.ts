@@ -42,7 +42,7 @@ export async function interpret(prompt: string, langCodes: string[] = []): Promi
     const body = {
       contents: [{ role: "user", parts: [{ text: prompt + (i > 0 ? shorter : "") }] }],
       generationConfig: {
-        temperature: 0.3, maxOutputTokens: 16384, responseMimeType: "application/json", responseSchema: aiSchema(langCodes),
+        temperature: 0.3, maxOutputTokens: 32768, responseMimeType: "application/json", responseSchema: aiSchema(langCodes),
         thinkingConfig: { thinkingBudget: 0 },   // 비용·시간 절약 (표본 해석에는 긴 사고가 필요 없음)
       },
     };

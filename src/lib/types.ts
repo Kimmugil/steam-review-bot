@@ -112,6 +112,8 @@ export type AiResult = {
   quotes: { review_id: number; language: string; voted_up: boolean; playtime_h: number | null; original: string; korean: string }[];
   quote_rule?: { rate: number | null; pos: number; neg: number };   // 대표 리뷰를 고른 조건 (예전 분석에는 없음)
   caveats: string[];
+  /** 주제 비중의 분모: 분석 기간 표본 수 (전체 기간에서 더 뽑은 표본 제외). 예전 분석에는 없음 */
+  theme_base?: number;
   model: string;
   dropped: { unknown_ids: number; empty_themes: number; bad_numbers?: number };   // 검증에서 걸러낸 것(투명성)
 };
