@@ -402,6 +402,22 @@ test("주요 평가: 어느 게임에나 붙는 제목은 버리고, 언어 차�
   assert.equal(ai.tab_summaries!.languages, "");                       // 코드가 주지 않은 숫자를 쓴 탭 요약은 버림
 });
 
+test("주요 평가: 긍정률이 높으면 불만 항목 수를 제한한다", () => {
+  const raw = baseRaw();
+  raw.key_points = [
+    { title: "넓은 세계 탐험과 수집이 가장 큰 호평", body: "x", polarity: "positive", review_ids: ["R6", "R9"] },
+    { title: "짧게 한 유저는 튜토리얼에 지쳐 비추천, 오래 한 유저는 만족", body: "x", polarity: "mixed", review_ids: ["R4", "R5"] },
+    { title: "잦은 버그와 서버 끊김에 불만", body: "x", polarity: "negative", review_ids: ["R4", "R5"] },
+    { title: "과금 유도와 불투명한 확률에 불만", body: "x", polarity: "negative", review_ids: ["R4", "R5"] },
+    { title: "엔드 콘텐츠가 부족해 반복이 지루함", body: "x", polarity: "negative", review_ids: ["R4", "R5"] },
+    { title: "협동 플레이는 호스트만 진행돼 불편", body: "x", polarity: "negative", review_ids: ["R4", "R5"] },
+  ];
+  const ai = finalizeAi(raw, samples(), "m", segmentDefs([10, 40, 100]), { recentRate: 80 });
+  // 긍정률 80% → 불만은 ceil(5 × 0.2) + 1 = 2개까지
+  assert.deepEqual(ai.key_points!.map((k) => k.polarity), ["positive", "mixed", "negative", "negative"]);
+  assert.equal(ai.dropped.unbalanced, 2);
+});
+
 test("대표 리뷰: 같은 언어 제한보다 추천/비추천 비율을 먼저 지킨다", () => {
   const raw = baseRaw();
   const txt = (i: number) => `Review number ${i} talks about exploring the world and collecting creatures for hours.`;

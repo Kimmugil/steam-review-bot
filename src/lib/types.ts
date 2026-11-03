@@ -93,7 +93,7 @@ export type QuoteCand = { q: number; rid: string; lang: string; voted_up: boolea
 export type AiRaw = {
   one_liner: string;
   headline: string;
-  key_points?: { title: string; body: string; review_ids: string[] }[];
+  key_points?: { title: string; body: string; polarity?: "positive" | "negative" | "mixed"; review_ids: string[] }[];
   tab_summaries?: TabSummaries;
   themes: { label: string; polarity: "positive" | "negative" | "mixed"; summary: string; review_ids: string[] }[];
   language_notes: { language_code: string; summary: string; review_ids: string[] }[];
@@ -109,7 +109,7 @@ export type AiResult = {
   one_liner: string;
   headline: string;
   /** 주요 평가: 결론 + 리뷰가 말하는 이유 (숫자는 코드가 준 값만, 근거 리뷰 2건 이상) */
-  key_points?: { title: string; body: string; review_ids: number[] }[];
+  key_points?: { title: string; body: string; polarity?: "positive" | "negative" | "mixed"; review_ids: number[] }[];
   /** 탭마다 맨 위에 붙는 AI 요약 (예전 분석에는 없음) */
   tab_summaries?: TabSummaries;
   themes: { label: string; polarity: "positive" | "negative" | "mixed"; stance: "recommend" | "against" | "split"; summary: string; support: number; support_share: number; pos_share: number; review_ids: number[] }[];
@@ -124,7 +124,7 @@ export type AiResult = {
   /** 주제 비중의 분모: 분석 기간 표본 수 (전체 기간에서 더 뽑은 표본 제외). 예전 분석에는 없음 */
   theme_base?: number;
   model: string;
-  dropped: { unknown_ids: number; empty_themes: number; bad_numbers?: number; generic_titles?: number };   // 검증에서 걸러낸 것(투명성)
+  dropped: { unknown_ids: number; empty_themes: number; bad_numbers?: number; generic_titles?: number; unbalanced?: number };   // 검증에서 걸러낸 것(투명성)
 };
 
 /** 표본 한 건 (DB 저장 단위) */

@@ -115,12 +115,14 @@ export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], sa
 - 이 분석은 국가가 아니라 '언어' 기준이다. "한국 유저", "미국 유저"가 아니라 "한국어 리뷰", "영어 리뷰"라고 써라.
 - 마크다운 기호(**, # 등)와 이모지·이모티콘은 어떤 항목에도 쓰지 마라. 문장은 한국어로.
 
-[분량] 각 summary 는 1~2문장(80자 안팎). key_points 3~5개, tab_summaries 는 각 1~2문장(90자 안팎), themes 최대 8개, language_notes 는 표본이 8건 이상인 모든 언어(많은 순으로 최대 열 개)에 더해 한국어(koreana)는 표본이 3건 이상이면 반드시, [특별히 살펴볼 언어]는 표본이 5건 이상이면 반드시 포함, quotes 후보 최대 12개. JSON 만 출력.
+[분량] 각 summary 는 1~2문장(80자 안팎). key_points 3~5개, tab_summaries 는 각 1~2문장(90자 안팎), themes 최대 8개, language_notes 는 표본이 8건 이상인 모든 언어(많은 순으로 최대 열 개)에 더해 한국어(koreana)는 표본이 3건 이상이면 반드시, [특별히 살펴볼 언어]는 표본이 5건 이상이면 반드시 포함, quotes 후보 최대 14개. JSON 만 출력.
 
 [작성 항목]
 - one_liner: 한 줄 요약 (60자 이내, 이모지 없이)
 - headline: 이 게임에 대한 유저 평가의 결론 2~3문장. 유저가 이 게임의 무엇을 좋아하고 무엇에 불만인지를 구체적으로 말하고, 언어나 플레이타임에 따라 평가가 갈리면 그 이유를 한 마디로 덧붙여라. 숫자와 언어 이름 나열은 쓰지 마라(숫자는 화면에 따로 나온다).
 - key_points: 이 게임에 대한 유저들의 주요 평가 3~5개, 중요한 순. 주요 평가란 '유저들이 이 게임의 무엇을 좋아하고 무엇에 불만인지'다. 가장 큰 호평과 가장 큰 불만부터 써라.
+  · 호평과 불만의 개수는 이 기간의 실제 평가에 맞춰라. 긍정률이 높은 게임(예: 70% 이상)이면 호평 항목이 불만 항목보다 적으면 안 된다. 불만은 많은 리뷰가 함께 말하는 것만 쓰고, 소수 의견을 여러 항목으로 쪼개지 마라(예: 버그·서버·최적화는 한 항목으로). 비판적인 리뷰가 길고 구체적이라고 해서 더 중요하게 다루지 마라. 무엇을 좋아하는지도 리뷰가 실제로 말한 구체적인 이유로 써라(수집, 전투, 협동, 꾸미기 등).
+  · polarity: 호평이면 positive, 불만이면 negative, 언어·플레이타임처럼 유저에 따라 갈리는 항목이면 mixed. 갈리는 항목은 좋게 본 쪽과 나쁘게 본 쪽을 함께 써라(예: '짧게 한 유저는 튜토리얼에 지쳐 비추천, 오래 한 유저는 수집과 육성에 만족').
   · 언어 간 차이([특별히 살펴볼 언어], 언어 격차)는 언어가 여럿이어도 전부 합쳐 1개 항목으로만 써라. 언어마다 따로 항목을 만들지 마라.
   · 플레이타임에 따른 차이도 있으면 1개 항목으로.
   · title 은 굵은 글씨만 읽어도 이 게임에서 무슨 일이 있는지 보이는 한 문장 결론(25~45자). 어느 게임에나 붙일 수 있는 제목은 안 된다.
@@ -139,7 +141,7 @@ export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], sa
 - segment_notes: 플레이타임 구간(q1~q4, 이 게임 리뷰어의 사분위)별 특징. 표본 구간 분포: ${segCounts}. 5건 미만인 구간은 쓰지 마라. review_ids 는 그 구간 라벨이 붙은 리뷰만, 최대 8개만 써라(다른 구간 리뷰를 섞지 마라). 구간 이름은 "초보/고인물" 같은 표현이 아니라 시간 범위로 불러라.
 - change_notes: [통계]의 '변화' 줄이 '해석해도 된다'일 때만 직전 기간 대비 변화를 해석 (0~3개). 그 외에는 빈 배열.
 - news_notes: [공식 소식]을 본문 기준으로 요약 (소식이 없으면 빈 배열). 제목과 다른 내용을 지어내지 마라.
-- quotes: [대표 리뷰 후보](Q번호)에서 주요 평가를 잘 보여 주는 글을 '추천' 후보에서 6개, '비추천' 후보에서 6개(모자라면 있는 만큼) 골라 번호(예: Q3)와 한국어 번역을 적어라(한국어 리뷰는 그대로 적어도 됨). 한쪽으로 치우치지 말고 반드시 양쪽에서 골라라. 서로 다른 평가·서로 다른 언어에서 골라라. 욕설·비하·혐오 표현이 있는 글, 게임과 상관없는 글, 내용이 없는 글은 절대 고르지 마라. 후보가 없다고 표시되어 있을 때만 [리뷰 표본]의 R번호에서 골라라. 최종 6개는 코드가 조건에 맞춰 고른다.
+- quotes: [대표 리뷰 후보](Q번호)에서 주요 평가를 잘 보여 주는 글을 '추천' 후보에서 8개, '비추천' 후보에서 6개(모자라면 있는 만큼, 영어 등은 40자 이상인 글) 골라 번호(예: Q3)와 한국어 번역을 적어라(한국어 리뷰는 그대로 적어도 됨). 한쪽으로 치우치지 말고 반드시 양쪽에서 골라라. 서로 다른 평가·서로 다른 언어에서 골라라. 욕설·비하·혐오 표현이 있는 글, 게임과 상관없는 글, 내용이 없는 글은 절대 고르지 마라. 후보가 없다고 표시되어 있을 때만 [리뷰 표본]의 R번호에서 골라라. 최종 6개는 코드가 조건에 맞춰 고른다.
 - caveats: 이 해석을 읽을 때 조심할 점 (표본이 적은 언어 등)
 
 [이 게임의 상황 — 코드가 이 게임 자신의 데이터로 알아낸 것. 모든 판단은 이 상황 안에서 해라]
@@ -171,7 +173,7 @@ export const AI_SCHEMA = {
     one_liner: { type: "STRING" },
     headline: { type: "STRING" },
     tab_summaries: { type: "OBJECT", properties: { reviews: { type: "STRING" }, languages: { type: "STRING" }, playtime: { type: "STRING" }, change: { type: "STRING" } }, required: ["reviews", "languages", "playtime", "change"] },
-    key_points: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, body: { type: "STRING" }, review_ids: strArr }, required: ["title", "body", "review_ids"] } },
+    key_points: { type: "ARRAY", items: { type: "OBJECT", properties: { title: { type: "STRING" }, body: { type: "STRING" }, polarity: { type: "STRING", enum: ["positive", "negative", "mixed"] }, review_ids: strArr }, required: ["title", "body", "polarity", "review_ids"] } },
     themes: { type: "ARRAY", items: { type: "OBJECT", properties: {
       label: { type: "STRING" }, polarity: { type: "STRING", enum: ["positive", "negative", "mixed"] }, summary: { type: "STRING" }, review_ids: strArr,
     }, required: ["label", "polarity", "summary", "review_ids"] } },
@@ -316,7 +318,7 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
   themes.sort((a, b) => b.support - a.support);
 
   // 주요 평가: 근거 리뷰 2건 이상, 숫자는 코드가 준 값만 (지어낸 퍼센트가 있으면 그 항목은 버림)
-  let badNumbers = 0, genericTitles = 0, langItems = 0;
+  let badNumbers = 0, genericTitles = 0, langItems = 0, unbalanced = 0;
   const langWords = [...new Set(samples.map((x) => langName(x.lang).replace(/\(.*\)/, "")))].filter((w) => w.length >= 2);
   const key_points: NonNullable<AiResult["key_points"]> = [];
   for (const k of Array.isArray(raw.key_points) ? raw.key_points : []) {
@@ -327,9 +329,16 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
     // 언어 차이는 한 항목으로만 (언어마다 항목을 만들어 주요 평가 자리를 다 차지하던 일이 있었음)
     if (langWords.some((w) => title.includes(w)) && ++langItems > 1) { genericTitles++; continue; }
     if (opts.facts != null && unknownPercents(`${title} ${body}`, opts.facts).length) { badNumbers++; continue; }
-    key_points.push({ title, body, review_ids: rids.slice(0, 8) });
-    if (key_points.length >= 5) break;
+    const polarity = k.polarity === "positive" || k.polarity === "negative" ? k.polarity : "mixed";
+    key_points.push({ title, body, polarity, review_ids: rids.slice(0, 8) });
   }
+  // 호평/불만 쏠림 막기: 긍정률 73%인데 불만 4개·호평 1개가 나온 일이 있었음.
+  //  불만 항목은 (5 × 부정률)을 올림한 수 + 1 까지만 (예: 긍정률 73% → 3개, 50% → 4개). 넘치면 덜 중요한(뒤쪽) 불만부터 뺌
+  const kpRate = opts.recentRate;
+  const maxNeg = kpRate != null ? Math.ceil(5 * (1 - kpRate / 100)) + 1 : 5;
+  let negSeen = 0;
+  const kpBalanced = key_points.filter((k) => { if (k.polarity !== "negative") return true; if (++negSeen <= maxNeg) return true; unbalanced++; return false; });
+  key_points.splice(0, key_points.length, ...kpBalanced.slice(0, 5));
   if (opts.facts != null) badNumbers += unknownPercents(String(raw.headline ?? ""), opts.facts).length ? 1 : 0;
   // 탭 요약: 숫자를 지어냈으면 그 탭 요약은 버림 (코드가 만든 숫자 한 줄만 나감)
   const tsRaw = (raw.tab_summaries ?? {}) as Partial<TabSummaries>;
@@ -424,6 +433,6 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
     change_notes: changeNotes,
     news_notes: (Array.isArray(raw.news_notes) ? raw.news_notes : []).map((n) => ({ title: str(n.title, 200), summary: str(n.summary, 800) })).slice(0, 3),
     quotes, quote_rule, caveats: (Array.isArray(raw.caveats) ? raw.caveats : []).map((x) => str(x)).filter(Boolean).slice(0, 5),
-    theme_base: winN, model, dropped: { unknown_ids: unknown, empty_themes: emptyThemes, bad_numbers: badNumbers, generic_titles: genericTitles },
+    theme_base: winN, model, dropped: { unknown_ids: unknown, empty_themes: emptyThemes, bad_numbers: badNumbers, generic_titles: genericTitles, unbalanced },
   };
 }

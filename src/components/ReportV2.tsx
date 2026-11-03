@@ -244,7 +244,7 @@ export default function ReportV2({ a, stats: s, ai, news, ev, texts: t, admin, v
             <Sec title={t.keypts_title}>
               <ol className="kpts">
                 {keyPts.map((k: any, i: number) => (
-                  <li key={i}><div><b>{noEmoji(k.title)}</b>{k.body && <p>{noEmoji(k.body)}</p>}<Evidence t={t} ids={k.review_ids} ev={ev} topic={noEmoji(k.title)} /></div></li>
+                  <li key={i}><div>{k.polarity && <span className={`kp-tag ${k.polarity}`}>{k.polarity === "positive" ? t.kp_pos : k.polarity === "negative" ? t.kp_neg : t.kp_mixed}</span>}<b>{noEmoji(k.title)}</b>{k.body && <p>{noEmoji(k.body)}</p>}<Evidence t={t} ids={k.review_ids} ev={ev} topic={noEmoji(k.title)} /></div></li>
                 ))}
               </ol>
               <p className="ai-judge" style={{ marginTop: 14 }}>{t.ai_judge}</p>
