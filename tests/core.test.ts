@@ -351,3 +351,11 @@ test("주요 평가: 근거 2건 이상, 코드가 준 숫자만 허용, 문장 
   assert.deepEqual(unknownPercents("28.4% 와 79%", "28.4% 79.0%"), []);
   assert.deepEqual(unknownPercents("50%", "28.4%"), ["50"]);
 });
+
+import { stripR } from "../src/lib/interpret";
+test("근거 번호 지우기: 잘린 번호 목록과 비중 표현도 정리", () => {
+  assert.equal(stripR("재미를 느낍니다. (R1, R2, R3, R"), "재미를 느낍니다.");
+  assert.equal(stripR("불만이 있습니다 (R4, R5)."), "불만이 있습니다.");
+  assert.equal(stripR("많은 유저들이 버그를 말합니다."), "유저들은 버그를 말합니다.");
+  assert.ok(!/,,/.test(stripR("좋습니다. (" + "R1, ".repeat(40))));
+});

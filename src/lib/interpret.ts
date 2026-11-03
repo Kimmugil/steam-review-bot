@@ -120,8 +120,8 @@ export function buildPrompt(gameName: string, stats: Stats, news: NewsItem[], sa
 [작성 항목]
 - one_liner: 한 줄 요약 (60자 이내, 이모지 없이)
 - headline: 전체 결론 2~3문장. 유저가 무엇을 좋아하고 무엇에 불만인지를 주제로 말하고, 언어나 플레이타임에 따라 평가가 갈리면 그 이유(그 리뷰들이 직접 말한 것)를 함께 써라. 언어 이름과 긍정률을 나열하지 마라. 숫자는 꼭 필요할 때 1개까지.
-- key_points: 이 리포트의 주요 평가 3~5개, 중요한 순. title 은 결론 한 줄(30자 안팎), body 는 그 결론의 이유 1~2문장(표본 리뷰가 직접 말한 것), review_ids 는 그 근거 리뷰 2~8개. [코드가 찾아낸 눈에 띄는 사실]과 [특별히 살펴볼 언어]의 사실은 하나씩 항목으로 다루되, title 에 사실을, body 에 그 차이가 왜 생기는지를 그 언어·구간 리뷰가 말한 이유로 써라(이유가 표본에서 보이지 않으면 "표본에서 뚜렷한 이유는 보이지 않는다"고 써라). 남는 자리는 가장 큰 호평·불만 주제로 채워라. 숫자는 [통계]·[코드가 찾아낸 눈에 띄는 사실]·[특별히 살펴볼 언어]에 있는 값만 그대로, 항목당 2개까지. 문장 안에 R번호를 쓰지 마라.
-- themes: 표본에서 보이는 주제 최대 8개 (label 짧게, polarity, summary 1~2문장, review_ids)
+- key_points: 이 리포트의 주요 평가 3~5개, 중요한 순. title 은 결론 한 줄(30자 안팎), body 는 그 결론의 이유 1~2문장(표본 리뷰가 직접 말한 것), review_ids 는 그 근거 리뷰 2건 이상(가장 잘 보여 주는 것 위주로 8개 안팎). [코드가 찾아낸 눈에 띄는 사실]과 [특별히 살펴볼 언어]의 사실은 하나씩 항목으로 다루되, title 에 사실을, body 에 그 차이가 왜 생기는지를 그 언어·구간 리뷰가 말한 이유로 써라(이유가 표본에서 보이지 않으면 "표본에서 뚜렷한 이유는 보이지 않는다"고 써라). 남는 자리는 가장 큰 호평·불만 주제로 채워라. 숫자는 [통계]·[코드가 찾아낸 눈에 띄는 사실]·[특별히 살펴볼 언어]에 있는 값만 그대로, 항목당 2개까지. title·body 문장 안에는 R번호나 번호 목록을 절대 쓰지 마라(근거는 review_ids 에만).
+- themes: 표본에서 보이는 주제 최대 8개 (label 짧게, polarity, summary 1~2문장, review_ids). themes 의 review_ids 에는 그 주제를 언급한 표본 리뷰 번호를 개수 제한 없이 빠짐없이 모두 적어라(수십 건이어도 된다). 주제 비중을 코드가 이 개수로 계산하므로 일부만 적으면 비중이 틀린다. 다른 항목의 '최대 8개' 제한은 themes 에는 적용되지 않는다.
 - language_notes: 언어마다 그 언어 리뷰가 무엇을 좋아하고 무엇에 불만인지, 다른 언어와 다른 점. 긍정률·비중 같은 숫자는 화면에 이미 있으니 쓰지 마라. [특별히 살펴볼 언어]는 가장 먼저, 다른 언어와 긍정률이 왜 다른지를 그 언어 리뷰어가 직접 언급한 이유로만 설명해라(이유가 표본에서 뚜렷하지 않으면 그렇게 쓰고 지어내지 마라. 전체 기간에서 뽑은 표본이면 그 사실을 한 마디 덧붙여라) (review_ids 는 그 언어 리뷰만, 최대 8개) (language_code 는 아래 표본 제목에 적힌 language_code 값을 그대로 써라)
 - segment_notes: 플레이타임 구간(q1~q4, 이 게임 리뷰어의 사분위)별 특징. 표본 구간 분포: ${segCounts}. 5건 미만인 구간은 쓰지 마라. review_ids 는 그 구간 라벨이 붙은 리뷰만, 최대 8개만 써라(다른 구간 리뷰를 섞지 마라). 구간 이름은 "초보/고인물" 같은 표현이 아니라 시간 범위로 불러라.
 - change_notes: [통계]의 '변화' 줄이 '해석해도 된다'일 때만 직전 기간 대비 변화를 해석 (0~3개). 그 외에는 빈 배열.
@@ -204,7 +204,7 @@ export function buildFocusPrompt(gameName: string, stats: Stats, samples: Sample
 - 그 언어 리뷰어가 표본에서 직접 언급한 이유만 써라. 근거 번호(R12 같은)로 뒷받침하고, 한 이유는 서로 다른 리뷰 2건 이상이 말한 것만 써라.
 - 언급되지 않은 이유(문화 차이, 지역 서비스 문제 등)를 네가 추측해서 붙이지 마라. 배경지식으로 사실을 보충하지 마라.
 - 표본에서 뚜렷한 이유가 확인되지 않으면 "표본에서 뚜렷한 이유가 확인되지 않는다"고 써라.
-- 긍정률이 낮은 언어는 '불만의 내용'을, 높은 언어는 '호평의 내용'을 중심으로 쓰고, 다른 언어와 구분되는 점을 한 마디 덧붙여라.
+- 긍정률이 낮은 언어는 '불만의 내용'을, 높은 언어는 '호평의 내용'을 중심으로 써라. 너는 다른 언어의 리뷰를 보지 못했으니 "다른 언어보다 많다", "두드러진다" 같은 비교는 쓰지 마라.
 - 전체 기간에서 뽑은 표본이라고 표시된 언어는 마지막에 "최근 변화를 반영하지 않을 수 있다"는 말을 붙여라.
 - 숫자는 아래에 있는 값만 그대로 써라. 새 숫자를 만들지 마라. 마크다운 기호와 이모지는 쓰지 마라. 국가가 아니라 '언어' 기준으로 써라(예: 중국어(간체) 리뷰).
 - language_code 는 각 언어 제목에 적힌 값을 그대로 써라. summary 문장 안에는 R번호를 쓰지 말고, 근거 번호는 review_ids 에만 적어라.
@@ -248,7 +248,12 @@ const parseId = (x: unknown): number | null => {
 export const stripEmoji = (x: string) => x.replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]/gu, "").replace(/ {2,}/g, " ");
 const str = (x: unknown, max = 600) => stripEmoji(String(x ?? "").replace(/\*\*/g, "")).trim().slice(0, max);
 /** 문장 속 근거 번호(R12 등)는 화면에서 지저분하니 지운다 (근거는 review_ids 로 따로 연결됨) */
-const stripR = (x: string) => x.replace(/\s*\(\s*R\d+(?:\s*[,·]\s*R\d+)*\s*\)/g, "").replace(/\s*\bR\d+\b/g, "").replace(/\s{2,}/g, " ").trim();
+export const stripR = (x: string) => x
+  .replace(/\s*\bR\d+\b/g, "")
+  .replace(/\s*\(\s*[,·\sR]*(?:\)|$)/g, "")         // 번호를 지우고 남은 빈 괄호, 잘려서 닫히지 않은 괄호 (끝에 잘린 'R' 포함)
+  .replace(/\s*[,·](?:\s*[,·])+/g, "")
+  .replace(/(많은|대부분의|대다수의) (유저|사용자|플레이어|리뷰어)들?(이|은|는)/g, "$2들은")
+  .replace(/\s{2,}/g, " ").trim();
 /** 글 속 퍼센트 숫자 중 코드가 준 숫자에 없는 것 (AI가 숫자를 지어냈는지 확인) */
 export function unknownPercents(text: string, allowed: string): string[] {
   const ok = new Set([...allowed.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((m) => String(Number(m[1]))));
@@ -277,7 +282,7 @@ export function finalizeAi(raw: AiRaw, samples: SampleReview[], model: string, s
     if (rids.length < 2) { emptyThemes++; continue; }
     const posShare = rids.filter((n) => byN.get(n)!.voted_up).length / rids.length;
     themes.push({
-      label: str(t.label, 40), summary: str(t.summary),
+      label: str(t.label, 40), summary: stripR(str(t.summary)),
       // 주제의 성격(좋았던 점/아쉬운 점)은 AI가 판단한다. 근거 리뷰의 추천 비율은 따로 계산해 보여 준다
       // (불만을 말한 리뷰도 대부분 '추천'일 수 있어서, 둘을 섞으면 오해가 생긴다)
       polarity: t.polarity === "positive" || t.polarity === "negative" ? t.polarity : "mixed",

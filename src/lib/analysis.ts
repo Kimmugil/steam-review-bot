@@ -57,8 +57,11 @@ export async function runAnalysis(id: string, log: (m: string) => void = console
     const { reviews, info: sampleInfo } = await collectSample(row.app_id, plan, windowTotals, stats.data_notes, Math.random, boost);
     stats.sample = sampleInfo;
     lap(`표본 ${reviews.length}건 (${sampleInfo.languages.length}개 언어)`);
-    if (reviews.length) {
-      const sp = (100 * reviews.filter((r) => r.voted_up).length) / reviews.length;
+    // 일부러 더 뽑은 언어(주목 언어·한국어)는 빼고 비교 (그 언어들 때문에 표본 비율이 달라지는 건 의도한 것)
+    const boosted = new Set(boost.map((b) => b.code));
+    const plain = reviews.filter((r) => !boosted.has(r.lang));
+    if (plain.length >= 50) {
+      const sp = (100 * plain.filter((r) => r.voted_up).length) / plain.length;
       if (stats.recent.rate != null && Math.abs(sp - stats.recent.rate) > 5)
         stats.data_notes.push(`표본의 긍정 비율(${sp.toFixed(0)}%)이 실제 분석 기간 긍정률(${stats.recent.rate.toFixed(0)}%)과 달라, 표본 안에서의 주제 비중은 실제 비중과 다를 수 있습니다.`);
     }
